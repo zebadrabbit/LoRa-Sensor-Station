@@ -117,3 +117,29 @@ SensorInfo* getSensorByIndex(uint8_t index) {
 SystemStats* getStats() {
   return &stats;
 }
+
+void checkSensorTimeouts() {
+  uint32_t now = millis();
+  
+  for (int i = 0; i < MAX_SENSORS; i++) {
+    if (sensors[i].active) {
+      uint32_t timeSinceLastSeen = now - sensors[i].lastSeen;
+      
+      // Sensor timeout threshold: 3x the longest transmit interval (300s * 3 = 900s = 15 minutes)
+      if (timeSinceLastSeen > 900000) {
+        Serial.printf("WARNING: Sensor #%d has timed out (last seen %lu seconds ago)\n", 
+                     sensors[i].sensorId, timeSinceLastSeen / 1000);
+      }
+    }
+  }
+}
+
+bool isSensorTimedOut(uint8_t sensorId) {
+  SensorInfo* sensor = getSensorInfo(sensorId);
+  if (sensor == NULL) {
+    return false;
+  }
+  
+  uint32_t timeSinceLastSeen = millis() - sensor->lastSeen;
+  return (timeSinceLastSeen > 900000);  // 15 minutes
+}

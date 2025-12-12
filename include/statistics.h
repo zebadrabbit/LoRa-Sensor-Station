@@ -44,6 +44,8 @@ void updateSensorInfo(const SensorData& data, int16_t rssi, int8_t snr);
 uint8_t getActiveSensorCount();
 SensorInfo* getSensorInfo(uint8_t sensorId);
 SensorInfo* getSensorByIndex(uint8_t index);
+void checkSensorTimeouts();
+bool isSensorTimedOut(uint8_t sensorId);
 
 // Get statistics
 SystemStats* getStats();

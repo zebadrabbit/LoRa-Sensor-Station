@@ -1,0 +1,225 @@
+# Changelog
+
+All notable changes to the LoRa Sensor Station project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [2.0.0] - 2025-12-12
+
+### Added - WiFi Captive Portal & Configuration System
+
+#### WiFi Captive Portal
+- **Zero-configuration setup**: First boot automatically starts AP mode with captive portal
+- **Dual-mode configuration**: Separate paths for Sensor Client and Base Station setup
+- **QR Code display**: OLED shows scannable QR code (http://10.8.4.1) for instant portal access
+- **Responsive web interface**: Mobile-friendly HTML with gradient styling
+- **AP credentials**: Unique SSID per device (LoRa-Sensor-XXXX / LoRa-Base-XXXX), password: "configure"
+- **Custom IP scheme**: Changed from 192.168.4.1 to 10.8.4.1 for better QR code scanning
+
+#### Configuration Storage (NVS)
+- **Persistent storage**: Device mode, sensor config, WiFi credentials saved to ESP32 NVS
+- **Three device modes**: UNCONFIGURED, SENSOR, BASE_STATION
+- **Sensor configuration**: Sensor ID (1-255), location name (31 chars), transmit interval (15/30/60/300s)
+- **Base station configuration**: WiFi SSID, password with connection testing before save
+- **First-boot detection**: Automatic portal startup on unconfigured devices
+- **Factory reset**: 5-second button hold clears all config and restarts portal
+
+#### Sensor Client Configuration
+- **Sensor ID assignment**: Unique identifier (1-255) for each sensor
+- **Location naming**: Human-readable location field (max 31 characters)
+- **Dynamic transmit intervals**: User-selectable intervals (15s, 30s, 60s, 300s)
+- **Web form validation**: Real-time validation with error messages
+- **Configuration preview**: Shows settings before confirmation
+
+#### Base Station Configuration
+- **WiFi network scanning**: Displays available networks with signal strength (RSSI)
+- **Password entry**: Support for WPA/WPA2 secured networks
+- **Open network support**: Password field optional for open WiFi networks
+- **Connection testing**: Validates WiFi credentials (20 attempts) before saving
+- **Fallback to AP**: Failed connection returns to portal for reconfiguration
+- **WiFi timeout mitigation**: Scan timeout set to 300ms to prevent ESP32 watchdog crashes
+
+#### User Interface Enhancements
+- **Portrait mode QR code**: Display rotates 90° for better QR code visibility
+- **Inverse headers**: All display pages now have inverse (white on black) header bars
+- **Improved layout**: QR code properly positioned with "AP Pass: configure" text
+- **Clear button feedback**: Visual confirmation of factory reset process
+
+### Added - Advanced Button Controls
+
+#### Multi-Click Detection System
+- **Single click** (screen off): Wake display
+- **Single click** (screen on): Cycle to next page
+- **Double click** (screen on): Reboot device
+- **Triple click** (screen on): Send immediate ping (sensors only)
+- **5-second hold** (screen on): Factory reset and return to AP mode
+- **Debouncing**: 50ms debounce with 400ms multi-click detection window
+- **Hold detection**: Distinguishes between quick clicks and long holds
+
+### Added - Sensor Health Monitoring
+
+#### Timeout Detection System
+- **Automatic timeout tracking**: Base station monitors when each sensor last reported
+- **Configurable timeout threshold**: 15 minutes (3x longest transmit interval)
+- **Periodic checks**: Base station checks sensor health every 30 seconds
+- **Serial logging**: Warnings logged when sensors time out
+- **API for alerts**: `isSensorTimedOut()` function ready for future alert integration
+- **Active sensor management**: Sensors automatically marked inactive after timeout
+
+#### Immediate Ping Feature
+- **Manual connectivity test**: Triple-click button triggers immediate transmission
+- **Bypasses interval timer**: Sends data immediately regardless of schedule
+- **Visual feedback**: "Sending Ping..." message on OLED display
+- **Battery indication**: Shows current battery level during ping
+
+### Added - Base Station Battery Monitoring
+- **New battery status page**: 5th page added to base station display cycle (5/5)
+- **Real-time monitoring**: Voltage, percentage, and charging status
+- **Power outage readiness**: Monitors backup battery for emergency operation
+- **Visual battery icon**: Graphical representation of battery level
+- **Charging indicator**: Displays "Charging" or "Discharging" status
+
+### Enhanced - Display System
+
+#### Signal Graph Improvements
+- **Boundary constraints**: Graph lines now properly stay within borders
+- **Layout optimization**: Reduced graph height to prevent text overflow
+- **Label positioning**: Adjusted Y-axis labels (moved from Y=56/57 to Y=52)
+- **Page indicator fix**: Moved text to prevent overlap with page numbers
+- **X-axis labels**: Shortened "-20dBm" to "-20" for better spacing
+
+#### Display Page Updates
+- **Base station pages**: 
+  1. Status (1/5) - WiFi, sensor count, last RX
+  2. Active Sensors (2/5) - Up to 4 sensors with details
+  3. Statistics (3/5) - RX packets, success rate
+  4. Signal History (4/5) - RSSI graph
+  5. **Battery Status (5/5)** - NEW: Voltage, level, charging state
+  
+- **Sensor pages**: (unchanged)
+  1. Status (1/3) - Uptime, last TX
+  2. TX Statistics (2/3) - Success rate
+  3. Battery Status (3/3) - Battery info
+
+### Enhanced - WiFi Status Display
+- **Dynamic WiFi indicator**: Base station now correctly shows WiFi connection status
+- **Fixed detection logic**: Removed hardcoded WIFI_SSID check, now uses WiFi.status()
+- **Real-time updates**: WiFi icon reflects actual connection state
+
+### Technical Improvements
+
+#### Libraries Added
+- **ESP Async WebServer 1.2.3**: Non-blocking web server for captive portal
+- **DNSServer 2.0.0**: DNS redirect for captive portal detection
+- **QRCode 0.0.1**: QR code generation for OLED display
+- **Preferences 2.0.0**: ESP32 NVS access for persistent storage
+
+#### Code Architecture
+- **New modules**:
+  - `config_storage.h/.cpp`: NVS management and device configuration
+  - `wifi_portal.h/.cpp`: Complete captive portal implementation
+- **Enhanced modules**:
+  - `display_control.h/.cpp`: Added button handling, QR display, ping functions
+  - `statistics.h/.cpp`: Added sensor timeout tracking functions
+  - `main.cpp`: Refactored for dynamic configuration and mode detection
+
+#### Memory Usage
+- **Base Station**: 849,253 bytes (25.4% flash)
+- **Sensor**: 852,457 bytes (25.5% flash)
+- **RAM**: ~47KB used (14.4% of 320KB)
+
+### Fixed
+
+#### Critical Fixes
+- **Watchdog timer crash**: Fixed ESP32 task watchdog timeout during WiFi network scanning
+  - Root cause: Blocking WiFi.scanNetworks() prevented async_tcp task from yielding
+  - Solution: Added 300ms per-channel timeout parameter to WiFi.scanNetworks()
+  - Impact: Captive portal now stable when selecting base station mode
+
+#### Display Fixes
+- **QR code screen clearing**: Fixed persistent "First Boot" text visible after rotation
+  - Solution: Clear buffer before rotation, fill black background, then draw QR
+  - Result: Clean QR code display with proper text positioning
+
+- **Signal graph overflow**: Fixed graph lines and text running off screen edges
+  - Y boundaries: Map values to (1, height-1) instead of (0, height)
+  - Layout: Adjusted graph position and height for proper fit
+  - Text positioning: Moved labels to Y=52 to fit within 64-pixel display
+
+- **QR code overlap**: Text "Scan to connect" no longer overlaps QR code
+  - Solution: Rotated display 90° to portrait mode (64x128)
+  - Result: QR code fits comfortably with text below
+
+### Changed
+
+#### Configuration Changes
+- **Dynamic sensor intervals**: Removed hardcoded SENSOR_INTERVAL, now user-configurable
+- **Dynamic sensor IDs**: Removed hardcoded SENSOR_ID, now configured via portal
+- **WiFi credentials**: Removed hardcoded WIFI_SSID/WIFI_PASSWORD, now portal-configured
+- **IP address scheme**: Changed AP IP from 192.168.4.1 to 10.8.4.1
+
+#### Behavioral Changes
+- **First boot behavior**: Devices now start in AP mode instead of attempting to operate
+- **Factory reset**: Reduced hold time from 10 seconds to 5 seconds
+- **Button responsiveness**: Improved click detection with proper debouncing
+- **Display rotation**: QR code page now uses portrait orientation
+
+### Documentation
+
+#### Updated Files
+- **README.md**: Updated to reflect new WiFi configuration system
+- **FEATURES.md**: Marked WiFi configuration features as completed
+- **CHANGELOG.md**: Created comprehensive change log (this file)
+
+#### Code Comments
+- Added detailed comments for WiFi scan timeout fix
+- Documented button state machine logic
+- Explained QR code display rotation reasoning
+
+---
+
+## [1.0.0] - 2025-12-09
+
+### Initial Release
+
+#### Core Features
+- LoRa communication between base station and sensors
+- Multi-page OLED display with automatic cycling
+- Temperature monitoring via thermistor
+- Battery voltage and percentage monitoring
+- Real-time statistics tracking
+- LED status indicators
+- User button for display wake/page cycling
+
+#### Hardware Support
+- Heltec WiFi LoRa 32 V3 (ESP32-S3)
+- SX1262 LoRa radio (868MHz EU868)
+- SSD1306 128x64 OLED display
+- WS2812 NeoPixel LED
+- 10kΩ NTC thermistor
+
+#### Base Station Features
+- 4-page cycling display
+- Tracks up to 10 sensors
+- RSSI history graph
+- RX statistics
+- Sensor list with battery levels
+
+#### Sensor Node Features
+- 3-page cycling display
+- Configurable transmission intervals
+- TX statistics tracking
+- Battery status display
+- Automatic LED feedback
+
+---
+
+## Version History
+
+- **2.0.0** (2025-12-12): WiFi captive portal, dynamic configuration, advanced button controls
+- **1.0.0** (2025-12-09): Initial release with basic LoRa communication
+
+---
+
+*For detailed feature roadmap, see [FEATURES.md](FEATURES.md)*

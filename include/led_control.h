@@ -8,6 +8,7 @@ void initLED();
 
 // LED control functions
 void setLED(uint32_t color, uint8_t brightness = 255);
+void setLEDColor(uint8_t red, uint8_t green, uint8_t blue, uint8_t brightness = 255);
 void blinkLED(uint32_t color, int times = 1, int delayMs = 100);
 
 // LED color definitions

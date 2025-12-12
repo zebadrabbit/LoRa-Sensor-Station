@@ -16,6 +16,12 @@ void setLED(uint32_t color, uint8_t brightness) {
   strip.show();
 }
 
+void setLEDColor(uint8_t red, uint8_t green, uint8_t blue, uint8_t brightness) {
+  strip.setBrightness(brightness);
+  strip.setPixelColor(0, strip.Color(red, green, blue));
+  strip.show();
+}
+
 void blinkLED(uint32_t color, int times, int delayMs) {
   uint8_t originalBrightness = strip.getBrightness();
   for (int i = 0; i < times; i++) {
