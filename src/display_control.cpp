@@ -481,18 +481,24 @@ void displaySensorPage() {
       display.setColor(WHITE);
       display.fillRect(0, 0, 128, 11);
       display.setColor(BLACK);
-      display.drawString(0, 0, "SENSOR #" + String(SENSOR_ID));
+      display.drawString(0, 0, "SENSOR STATUS");
       display.setColor(WHITE);
       
       SensorConfig config = configStorage.getSensorConfig();
-      display.drawString(0, 12, "Interval: " + String(config.transmitInterval) + "s");
       
+      // Display sensor ID and network ID on same line
+      display.drawString(0, 12, "ID: " + String(config.sensorId) + "  Net: " + String(config.networkId));
+      
+      // Display transmit interval
+      display.drawString(0, 24, "Interval: " + String(config.transmitInterval) + "s");
+      
+      // Display uptime
       uint32_t uptime = millis() / 1000;
-      display.drawString(0, 24, "Uptime: " + String(uptime) + "s");
+      display.drawString(0, 36, "Uptime: " + String(uptime) + "s");
       
       if (stats->lastTxTime > 0) {
         uint32_t secAgo = (millis() - stats->lastTxTime) / 1000;
-        display.drawString(0, 36, "Last TX: " + String(secAgo) + "s ago");
+        display.drawString(0, 48, "Last TX: " + String(secAgo) + "s");
       }
       
       display.drawString(110, 54, "1/3");

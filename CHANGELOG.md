@@ -5,6 +5,45 @@ All notable changes to the LoRa Sensor Station project will be documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.12.2] - 2025-12-14
+
+### Added - Display Enhancements & UX Improvements
+
+#### Sensor Display Enhancement
+- **Sensor identification display**: First status page (1/3) now shows sensor ID and network ID
+- **Display format**: "ID: 123  Net: 12345" for easy identification
+- **Header update**: Changed from "SENSOR #X" to "SENSOR STATUS"
+- **Configuration-based**: Uses actual config values instead of hardcoded constants
+
+#### UX Consistency
+- **Dashboard width**: Standardized from 1400px to 800px (matches all config pages)
+- **Alerts page width**: Standardized to 800px (was 900px)
+- **Client configuration page**: Fixed titles and labels
+  - Changed "🔧 Sensor Configuration" to "📝 Client Configuration"
+  - Changed "Active Sensors" to "Active Clients"
+  - Changed "← Dashboard" to "← Back"
+  - Updated help text for consistency
+
+#### Performance Optimization
+- **Alerts page to LittleFS**: Moved 20KB alerts.html from embedded code to filesystem
+- **Memory freed**: ~20KB firmware size reduction
+- **Route change**: `/alerts` now serves from `LittleFS.send("/alerts.html")`
+- **Maintenance benefit**: HTML can be edited without firmware recompilation
+
+### Fixed - Bug Resolutions
+
+#### JavaScript Errors
+- **/sensors page**: Fixed syntax error in saveSensor() error handler (missing quote)
+- **Character corruption**: Cleaned up multiple corrupted emojis and special characters
+- **Degree symbols**: Fixed `&larr;°C` corruption that broke raw string literals
+- **showMessage() calls**: Fixed corrupted prefixes in JavaScript alerts
+
+#### Validation & Testing
+- **Network Pairing Phase 1**: Fully tested and validated
+- **Network isolation**: Confirmed different Network IDs reject packets correctly
+- **All pages loading**: Verified dashboard, alerts, MQTT, sensors pages render correctly
+- **Memory stability**: Base station 42.9% flash / 33.1% RAM (stable)
+
 ## [2.1.1] - 2025-12-12
 
 ### Added - WiFi Information Display Page

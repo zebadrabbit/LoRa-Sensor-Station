@@ -2,7 +2,19 @@
 
 ## Version History
 
-### v2.12.1 (December 13, 2025) - Current Version
+### v2.12.2 (December 14, 2025) - Current Version
+
+- ✅ Sensor display shows ID + Network ID (first status page)
+- ✅ Dashboard width standardized to 800px (matches all config pages)
+- ✅ Alerts page moved to LittleFS filesystem (improved performance)
+- ✅ Client configuration page title/labels corrected
+- ✅ /sensors page JavaScript syntax errors fixed
+- ✅ Network Pairing Phase 1 fully tested and validated
+- ✅ Consistent page widths across all web interfaces
+- ✅ Memory optimization (large HTML moved to filesystem)
+
+### v2.12.1 (December 13, 2025)
+
 - ✅ Base station captive portal WiFi scan removed (watchdog timeout fix)
 - ✅ Manual SSID entry for base station configuration
 - ✅ Improved success page with countdown timer
@@ -14,6 +26,7 @@
 - ✅ Confirmation dialog before forgetting clients
 
 ### v2.12.0 (December 13, 2025)
+
 - ✅ Network Pairing & Security (Phase 1)
 - ✅ Network ID (1-65535) user-configurable field
 - ✅ LoRa sync word calculation: 0x12 + (networkId % 244)
@@ -24,6 +37,7 @@
 - ✅ Code quality tools: clang-format, cppcheck, clang-tidy
 
 ### v2.11.0 (December 13, 2025)
+
 - ✅ LittleFS filesystem implementation (fixed memory exhaustion)
 - ✅ Separate HTML/CSS/JS files (~7.5KB compressed)
 - ✅ Streaming from flash (zero RAM usage for web files)
@@ -39,6 +53,7 @@
 - ✅ System ready for multi-sensor expansion
 
 ### v2.10.0 (December 13, 2025)
+
 - ✅ Remote Configuration via LoRa (SET_INTERVAL command)
 - ✅ Command retry system (3 attempts, 10s timeout)
 - ✅ Piggyback ACK in telemetry headers (2 bytes)
@@ -50,7 +65,9 @@
 - ✅ Network pairing feature added to roadmap
 
 ### v3.0.0 - Mesh Network Support ✅ IN PROGRESS (2025-01-13)
+
 **Status:** Core implementation complete, testing needed
+
 - [x] AODV-like reactive routing protocol
 - [x] Mesh packet structures (5 types: DATA, RREQ, RREP, RERR, BEACON)
 - [x] Route discovery via flooding
@@ -65,6 +82,7 @@
 - [ ] Web dashboard mesh status page
 
 **Configuration Options:**
+
 - Sensor nodes: meshEnabled (default: **false**), meshForwarding (default: true)
 - Base station: meshEnabled (default: **false**)
 - **Mesh is disabled by default** for backward compatibility
@@ -73,6 +91,7 @@
 - Only processes mesh packets when meshEnabled=true
 
 **Architecture:**
+
 - Transparent to application layer (sensors just send to base station)
 - Self-organizing topology via neighbor beacons
 - Self-healing routes (rediscovery on timeout)
@@ -80,6 +99,7 @@
 - Link quality tracking via RSSI
 
 **Flash Usage:**
+
 - Sensor: 33.3% (1,114,257 bytes)
 - Base Station: 42.8% (1,429,617 bytes)
 
@@ -88,7 +108,9 @@
 ## 🔴 High Priority - Core Functionality
 
 ### Remote Configuration
+
 - [x] **LoRa Remote Configuration** ✅ COMPLETED v2.10.0
+
   - Remote interval adjustment via LoRa ✅
   - Command queueing with sequence numbers ✅
   - Piggyback ACK in telemetry packets ✅
@@ -98,30 +120,35 @@
   - HTTP API for command sending ✅
   - Command status tracking and reporting ✅
   - No WiFi required on sensors ✅
-  
+
   **API Endpoint:**
+
   ```
   POST http://[base-ip]/api/remote-config/interval
   Body: {"id": 1, "interval": 30}
   ```
-  
+
   **Command Flow:**
+
   1. HTTP POST to base station API
   2. Command queued and sent immediately (sensor always listening)
   3. Sensor receives, processes, saves ACK status
   4. Sensor sends immediate telemetry with ACK
   5. Base receives ACK → command cleared (or retries up to 3x)
-  
+
   **Still TODO for Full Remote Config:**
+
   - [ ] Additional command types (location, thresholds, mesh config)
   - [ ] Web UI for remote configuration
   - [ ] Command history logging
   - [ ] Batch commands (multiple sensors)
 
 ### WiFi Configuration & Management
+
 - [x] **Captive Portal for WiFi Setup** ✅ COMPLETED v2.0.0
-  
+
   **Sensor Client Path:** ✅ IMPLEMENTED
+
   1. Device boots in AP mode (SSID: "LoRa-Sensor-XXXX") ✅
   2. User connects phone/laptop to AP (password: "configure") ✅
   3. Captive portal automatically opens (DNS redirect) ✅
@@ -132,8 +159,9 @@
   5. Save → Device stores config in NVS ✅
   6. Device reboots into sensor mode (LoRa only, no WiFi) ✅
   7. Display shows sensor status with configured settings ✅
-  
+
   **Base Station Path:** ✅ IMPLEMENTED
+
   1. Device boots in AP mode (SSID: "LoRa-Base-XXXX") ✅
   2. User connects phone/laptop to AP (password: "configure") ✅
   3. Captive portal automatically opens (DNS redirect) ✅
@@ -146,8 +174,9 @@
      - Success: Save to NVS, reboot to base station mode ✅
      - Failure: Show error, allow retry ✅
   6. Base station runs WiFi + LoRa, displays IP address ✅
-  
+
   **Common Features:** ✅ IMPLEMENTED
+
   - Responsive HTML/CSS (mobile-friendly) ✅
   - DNS redirect for captive portal detection ✅
   - QR code display (portrait mode, 90° rotation) ✅
@@ -157,6 +186,7 @@
   - Display shows QR code and AP credentials ✅
 
 - [x] **Web Dashboard** ✅ COMPLETED v2.1.0
+
   - Real-time sensor data dashboard ✅
   - Auto-refresh (5-second intervals) ✅
   - Responsive mobile-friendly design ✅
@@ -164,19 +194,22 @@
   - Export data as CSV/JSON ✅
   - Color-coded status indicators ✅
   - System statistics display ✅
-  
+
   **Still TODO for Full Dashboard:**
+
   - [x] Historical data graphs (hourly/daily/weekly) ✅ COMPLETED v2.7.0
   - [x] WebSocket for live updates (currently polling) ✅ COMPLETED v2.6.0
   - [x] Alert configuration interface ✅ COMPLETED v2.3.0
   - [ ] Configuration page for runtime settings
   - [ ] OTA firmware update interface
   - [ ] Network diagnostics page
-  
+
   **Note:** Base station now serves live dashboard at http://[IP]/ showing real-time sensor data with auto-refresh.
 
 ### Alerts & Notifications
+
 - [x] **Microsoft Teams Integration** ✅ COMPLETED v2.3.0
+
   - Webhook configuration via web interface ✅
   - Alert on temperature thresholds ✅
   - Alert on battery low (<20%) ✅
@@ -186,14 +219,16 @@
   - Rate limiting to prevent spam ✅
 
 - [x] **Email Notifications** ✅ COMPLETED v2.5.0
+
   - SMTP configuration (Gmail, Outlook, etc.) ✅
   - HTML formatted email alerts ✅
   - Multiple recipient support (comma-separated) ✅
   - Test email functionality ✅
   - TLS/STARTTLS support ✅
   - Dual-channel alerts (Teams + Email) ✅
-  
+
   **Still TODO for Email:**
+
   - [ ] Attachment support (logs, graphs)
   - [ ] Email digest (daily/weekly summaries)
 
@@ -205,7 +240,9 @@
   - Delivery confirmation
 
 ### Data Logging & Storage
+
 - [x] **MQTT Publishing** ✅ COMPLETED v2.8.0
+
   - MQTT broker connection with authentication ✅
   - Individual topic publishing per metric ✅
   - Combined JSON state topic ✅
@@ -225,7 +262,9 @@
 ## 🟡 Medium Priority - Enhanced Features
 
 ### Power Management
+
 - [ ] **Deep Sleep Mode**
+
   - Configurable sleep intervals for sensors
   - Wake on button press
   - Wake on timer for transmission
@@ -241,7 +280,9 @@
   - Optimal charging algorithms
 
 ### Advanced Sensor Features
+
 - [x] **Sensor Health Monitoring** ✅ COMPLETED v2.0.0
+
   - Automatic timeout detection (15-minute threshold) ✅
   - Periodic health checks (every 30 seconds) ✅
   - Serial logging for offline sensors ✅
@@ -249,6 +290,7 @@
   - Configurable timeout based on transmission interval ✅
 
 - [ ] **Multi-Sensor Support**
+
   - Support for 20+ sensors (currently 10) ✅
   - Sensor grouping/zones
   - Sensor priority levels
@@ -257,6 +299,7 @@
   - Advanced sensor health scoring
 
 - [x] **Modular Sensor Architecture** ✅ COMPLETED v2.9.0 Phase 1
+
   - Abstract ISensor interface ✅
   - SensorManager for multi-sensor coordination ✅
   - Variable-length packet support (up to 16 values) ✅
@@ -264,8 +307,9 @@
   - Backward compatible with legacy packets ✅
   - JST connector pin assignments ✅
   - I2C bus scanning with auto-detection ✅
-  
+
   **Still TODO for Full Sensor Support:**
+
   - [ ] BME680 (temp/humidity/pressure/gas) - Phase 2
   - [ ] BH1750 light sensor - Phase 2
   - [ ] INA219 current/power sensor - Phase 2
@@ -284,7 +328,9 @@
   - Calibration history/versioning
 
 ### Display Enhancements
+
 - [x] **Enhanced Display System** ✅ COMPLETED v2.0.0
+
   - Inverse headers (white-on-black title bars) ✅
   - Fixed signal graph boundaries ✅
   - Base station: 5 pages (Status/Sensors/Stats/Signal/Battery) ✅
@@ -295,6 +341,7 @@
   - Multi-click button controls ✅
 
 - [ ] **Customizable Display Pages** 🔵 FUTURE
+
   - User-configurable page layout
   - Show/hide specific pages
   - Adjustable refresh rates per page
@@ -310,14 +357,24 @@
   - Min/max/average indicators
 
 ### Network & Communication
-- [ ] **Network Pairing & Security** ⭐ HIGH PRIORITY
-  - Unique network ID (prevent interference from other LoRa networks)
-  - Device pairing/authentication
-  - Encrypted payloads (AES-128)
-  - Whitelist of allowed sensor IDs
-  - Network ID configuration in captive portal
-  - Sync word customization per network
-  - Reject packets from unknown networks
+
+- [x] **Network Pairing & Security (Phase 1)** ✅ COMPLETED v2.12.0, TESTED v2.12.2
+
+  - Network ID (1-65535) user-configurable ✅
+  - LoRa sync word calculation: 0x12 + (networkId % 244) ✅
+  - Hardware filtering via Radio.SetSyncWord() ✅
+  - Software validation: networkId in packet headers ✅
+  - Captive portal Network ID configuration ✅
+  - NVS persistence ✅
+  - Sensor display shows ID + Network ID ✅
+  - **Fully tested and validated** ✅
+
+  **Phase 2 - TODO:**
+
+  - [ ] Encrypted payloads (AES-128)
+  - [ ] Whitelist of allowed sensor IDs
+  - [ ] Device pairing/authentication
+  - [ ] Reject packets from unknown networks (beyond sync word)
 
 - [ ] **Mesh Network Support**
   - Sensor-to-sensor relay capability
@@ -326,10 +383,10 @@
   - Automatic route optimization
   - Network health monitoring
 
-
 ## 🟢 Low Priority - Nice-to-Have Features
 
 ### Security
+
 - [ ] **Authentication & Authorization**
   - Password-protected web interface
   - API key authentication
@@ -339,7 +396,9 @@
   - Encrypted LoRa communications
 
 ### Automation & Integration
+
 - [x] **Home Assistant Integration** ✅ COMPLETED v2.8.0
+
   - MQTT auto-discovery ✅
   - Entity creation for each sensor ✅
   - Temperature/battery/RSSI sensors ✅
@@ -347,6 +406,7 @@
   - Proper device classes and units ✅
 
 - [ ] **IFTTT Integration**
+
   - Webhook triggers
   - Applet creation guides
   - Multi-condition triggers
@@ -360,7 +420,9 @@
   - Rule testing/simulation
 
 ### Diagnostics & Maintenance
+
 - [ ] **Advanced Diagnostics**
+
   - Packet error rate (PER) tracking
   - Link quality index (LQI)
   - Time on air calculations
@@ -376,7 +438,9 @@
   - Factory reset option
 
 ### User Experience
+
 - [ ] **Mobile App**
+
   - Native iOS/Android apps
   - Push notifications
   - Real-time monitoring
@@ -391,7 +455,9 @@
   - Voice alerts
 
 ### Data Analysis
+
 - [ ] **Analytics Dashboard**
+
   - Sensor uptime statistics
   - Battery life predictions
   - Temperature patterns/anomalies
@@ -408,6 +474,7 @@
 ## 🔵 Future Considerations
 
 ### Hardware Expansion
+
 - [ ] GPS location tracking for mobile sensors
 - [ ] External antenna support
 - [ ] Multiple radio support (868/915/433 MHz)
@@ -415,12 +482,14 @@
 - [ ] Waterproof enclosure designs
 
 ### Protocol Support
+
 - [ ] BLE mesh for local sensors
 - [ ] Zigbee gateway mode
 - [ ] Z-Wave compatibility
 - [ ] Matter protocol support
 
 ### Advanced Features
+
 - [ ] Time-series database optimization
 - [ ] Edge computing/local AI processing
 - [ ] Blockchain logging (immutable audit trail)
@@ -432,6 +501,7 @@
 ## ✅ Completed Sprint - WiFi Captive Portal Implementation (v2.0.0)
 
 ### Phase 1: Core Captive Portal ✅ COMPLETED
+
 - [x] Create AP mode initialization
 - [x] Implement DNS server for captive portal redirect
 - [x] Build responsive HTML portal page
@@ -439,6 +509,7 @@
 - [x] NVS storage for configuration
 
 ### Phase 2: Sensor Client Configuration ✅ COMPLETED
+
 - [x] Sensor ID input and validation (1-255)
 - [x] Location/name text field
 - [x] Transmission interval selector (15s/30s/60s/300s)
@@ -446,6 +517,7 @@
 - [x] Display configuration on OLED
 
 ### Phase 3: Base Station Configuration ✅ COMPLETED
+
 - [x] WiFi network scanning (300ms timeout)
 - [x] Network list presentation in portal
 - [x] Password input handling (open network support)
@@ -454,6 +526,7 @@
 - [x] Display IP address on OLED
 
 ### Phase 4: Enhanced Features ✅ COMPLETED
+
 - [x] Factory reset via button hold (5 seconds)
 - [x] LED status indicators
 - [x] QR code for easy AP connection (portrait mode)
@@ -467,6 +540,7 @@
 - [x] Field testing completed
 
 ### Phase 5: Documentation ✅ COMPLETED
+
 - [x] Comprehensive CHANGELOG.md
 - [x] Updated README.md with setup guide
 - [x] Captive portal instructions
@@ -478,6 +552,7 @@
 ## 🔵 Current Focus - Phase 3: Advanced Features
 
 ### Recently Completed (v2.9.0 Phase 1):
+
 - [x] Modular Sensor Architecture ✅
 - [x] Abstract ISensor interface (12 sensor types) ✅
 - [x] SensorManager with I2C auto-detection ✅
@@ -486,20 +561,19 @@
 - [x] Backward compatible packet handling ✅
 
 ### Next Priority Options:
+
 1. **I2C Sensor Implementations** (Medium effort, high value) ⭐ RECOMMENDED
    - [ ] BME680 environmental sensor (temp/humidity/pressure/gas) - Phase 2
    - [ ] BH1750 light intensity sensor - Phase 2
    - [ ] INA219 current/power monitoring - Phase 2
    - [ ] Web sensor configuration interface - Phase 6
    - Ready architecture, just need concrete implementations
-   
 2. **Runtime Configuration Page** (Medium effort, high value)
    - [ ] Adjust transmission intervals without reset
    - [ ] Change sensor location names
    - [ ] Modify alert thresholds
    - [ ] WiFi network changes
    - [ ] LoRa parameters tuning
-   
 3. **Cloud Data Storage** (Medium effort, medium value)
    - [ ] InfluxDB integration via MQTT
    - [ ] ThingSpeak direct publishing
@@ -507,12 +581,14 @@
    - [ ] Advanced analytics and queries
 
 **Shelved/Deferred:**
+
 - ❌ Deep Sleep - Lab use with constant power, not needed
 - ❌ SD Card Logging - No SD card reader available
 - ❌ SMS Alerts - Deferred for later
 - ❌ OTA Firmware Updates - USB updates preferred for now
 
 ### Planned Features:
+
 - [ ] Full web server on base station (beyond captive portal) ✅ BASIC VERSION DONE
 - [ ] Real-time sensor dashboard with live charts ✅ DONE (polling)
 - [ ] Historical data graphs (hourly/daily/weekly)
@@ -526,35 +602,60 @@
 
 ## Implementation Priority Matrix
 
-| Feature Category | Complexity | Impact | Priority | Status |
-|-----------------|------------|--------|----------|--------|
-| WiFi Captive Portal | Medium | High | ⭐⭐⭐⭐⭐ | ✅ Completed v2.0.0 |
-| Sensor Health Monitoring | Low | High | ⭐⭐⭐⭐⭐ | ✅ Completed v2.0.0 |
-| Display Enhancements | Low | Medium | ⭐⭐⭐⭐ | ✅ Completed v2.0.0 |
-| Multi-Click Buttons | Low | Medium | ⭐⭐⭐⭐ | ✅ Completed v2.0.0 |
-| Web Dashboard (Basic) | Medium | High | ⭐⭐⭐⭐⭐ | ✅ Completed v2.1.0 |
-| Teams Notifications | Low | High | ⭐⭐⭐⭐⭐ | ✅ Completed v2.3.0 |
-| Email Alerts | Low | High | ⭐⭐⭐⭐⭐ | ✅ Completed v2.5.0 |
-| WebSocket Live Updates | Low | Medium | ⭐⭐⭐⭐ | ✅ Completed v2.6.0 |
-| In-Memory Historical Data | Medium | High | ⭐⭐⭐⭐ | ✅ Completed v2.7.0 |
-| MQTT Publishing | Low | High | ⭐⭐⭐⭐⭐ | ✅ Completed v2.8.0 |
-| Home Assistant Integration | Low | High | ⭐⭐⭐⭐⭐ | ✅ Completed v2.8.0 |
-| Modular Sensor Architecture | Medium | High | ⭐⭐⭐⭐⭐ | ✅ Completed v2.9.0 |
-| Remote LoRa Configuration | Medium | High | ⭐⭐⭐⭐⭐ | ✅ Completed v2.10.0 |
-| **Network Pairing/Security** | **Medium** | **High** | **⭐⭐⭐⭐⭐** | **🔵 NEXT RECOMMENDED** |
-| **Additional Sensor Types** | **Low** | **High** | **⭐⭐⭐⭐⭐** | **🔵 ALTERNATIVE** |
-| **Runtime Config Web UI** | **Low** | **Medium** | **⭐⭐⭐⭐** | **🔵 ALTERNATIVE** |
-| Deep Sleep Mode | Medium | High | ⭐⭐⭐⭐ | ⚪ Shelved (lab use, not remote) |
-| OTA Firmware Updates | Medium | High | ⭐⭐⭐⭐⭐ | ⚪ Shelved (USB preferred) |
-| SMS Alerts (Twilio) | Low | Medium | ⭐⭐⭐ | ⚪ Shelved (deferred) |
-| SD Card Logging | Low | Medium | ⭐⭐⭐⭐ | ⚪ Shelved (no hardware) |
-| Mobile App | Very High | Medium | ⭐⭐ | ⚪ Future |
+| Feature Category             | Complexity | Impact     | Priority       | Status                           |
+| ---------------------------- | ---------- | ---------- | -------------- | -------------------------------- |
+| WiFi Captive Portal          | Medium     | High       | ⭐⭐⭐⭐⭐     | ✅ Completed v2.0.0              |
+| Sensor Health Monitoring     | Low        | High       | ⭐⭐⭐⭐⭐     | ✅ Completed v2.0.0              |
+| Display Enhancements         | Low        | Medium     | ⭐⭐⭐⭐       | ✅ Completed v2.0.0              |
+| Multi-Click Buttons          | Low        | Medium     | ⭐⭐⭐⭐       | ✅ Completed v2.0.0              |
+| Web Dashboard (Basic)        | Medium     | High       | ⭐⭐⭐⭐⭐     | ✅ Completed v2.1.0              |
+| Teams Notifications          | Low        | High       | ⭐⭐⭐⭐⭐     | ✅ Completed v2.3.0              |
+| Email Alerts Phase 1\*\*     | **Medium** | **High**   | **⭐⭐⭐⭐⭐** | **✅ Completed v2.12.0**         |
+| **Network Pairing Phase 2**  | Low        | High       | ⭐⭐⭐⭐⭐     | ✅ Completed v2.5.0              |
+| WebSocket Live Updates       | Low        | Medium     | ⭐⭐⭐⭐       | ✅ Completed v2.6.0              |
+| In-Memory Historical Data    | Medium     | High       | ⭐⭐⭐⭐       | ✅ Completed v2.7.0              |
+| MQTT Publishing              | Low        | High       | ⭐⭐⭐⭐⭐     | ✅ Completed v2.8.0              |
+| Home Assistant Integration   | Low        | High       | ⭐⭐⭐⭐⭐     | ✅ Completed v2.8.0              |
+| Modular Sensor Architecture  | Medium     | High       | ⭐⭐⭐⭐⭐     | ✅ Completed v2.9.0              |
+| Remote LoRa Configuration    | Medium     | High       | ⭐⭐⭐⭐⭐     | ✅ Completed v2.10.0             |
+| **Network Pairing/Security** | **Medium** | **High**   | **⭐⭐⭐⭐⭐** | **🔵 NEXT RECOMMENDED**          |
+| **Additional Sensor Types**  | **Low**    | **High**   | **⭐⭐⭐⭐⭐** | **🔵 ALTERNATIVE**               |
+| **Runtime Config Web UI**    | **Low**    | **Medium** | **⭐⭐⭐⭐**   | **🔵 ALTERNATIVE**               |
+| Deep Sleep Mode              | Medium     | High       | ⭐⭐⭐⭐       | ⚪ Shelved (lab use, not remote) |
+| OTA Firmware Updates         | Medium     | High       | ⭐⭐⭐⭐⭐     | ⚪ Shelved (USB preferred)       |
+| SMS Alerts (Twilio)          | Low        | Medium     | ⭐⭐⭐         | ⚪ Shelved (deferred)            |
+| SD Card Logging              | Low        | Medium     | ⭐⭐⭐⭐       | ⚪ Shelved (no hardware)         |
+| Mobile App                   | Very High  | Medium     | ⭐⭐           | ⚪ Future                        |
 
 ---
 
 ## Detailed Version History
 
+2.2 (December 14, 2025) - CURRENT
+
+- ✅ Display Enhancement: Sensor status page (1/3) shows sensor ID and network ID
+- ✅ UX Consistency: All web pages standardized to 800px width
+- ✅ Performance: Alerts page moved from embedded HTML to LittleFS
+- ✅ Bug Fixes: JavaScript syntax errors in /sensors page
+- ✅ Terminology: Client configuration page labels corrected
+- ✅ Network Pairing Phase 1: Fully tested and validated
+- ✅ Memory Optimization: ~20KB freed by moving HTML to filesystem
+
+### v2.12.1 (December 13, 2025)
+
+- ✅ Base station captive portal watchdog fix
+- ✅ Dashboard "Forget" button for inactive clients
+- ✅ Client location display improvements
+
+### v2.12.0 (December 13, 2025)
+
+- ✅ Network Pairing Phase 1 implementation
+- ✅ Code quality tools setup
+
+### v2.10.0 (December 13, 2025)
+
 ### v2.10.0 (December 13, 2025) - CURRENT
+
 - ✅ Remote Configuration via LoRa (SET_INTERVAL command)
 - ✅ Command retry system (3 attempts, 10s timeout)
 - ✅ Piggyback ACK in telemetry headers
@@ -564,6 +665,7 @@
 - ✅ Base station dashboard fix
 
 ### v2.9.0 (December 13, 2025)
+
 - ✅ Modular sensor architecture with abstract ISensor interface
 - ✅ SensorManager class for multi-sensor coordination
 - ✅ Variable-length MultiSensorPacket (up to 16 values)
@@ -574,6 +676,7 @@
 - ✅ Sensor library dependencies prepared for Phase 2-5
 
 ### v2.8.0 (December 13, 2025)
+
 - ✅ MQTT Publishing with PubSubClient
 - ✅ Home Assistant auto-discovery
 - ✅ Individual + JSON state topics
@@ -583,19 +686,23 @@
 - ✅ Connection statistics and testing
 
 ### v2.7.0 (December 13, 2025)
+
 - ✅ Historical data graphs with Chart.js
 - ✅ Multiple time ranges (1h/6h/12h/24h/7d/30d)
 - ✅ Interactive graph hover tooltips
 - ✅ Temperature history visualization
 
 ### v2.6.0 (December 13, 2025)
+
 - ✅ WebSocket real-time updates
 - ✅ Instant sensor data push to browsers
 
 ### v2.11.0 Notes:
+
 **Problem:** Base station rebooting after restoring full dashboard HTML (730-line string exhausting ESP32 RAM ~20KB+)
 
-**Solution:** 
+**Solution:**
+
 - Migrated to LittleFS filesystem with separate HTML/CSS/JS files
 - Fixed fundamental architecture flaw: conflating clients (devices) with sensors (probes)
 - Proper separation: ClientInfo tracks device telemetry (battery/RSSI/charging), PhysicalSensor tracks readings
@@ -604,12 +711,14 @@
 - Dashboard shows only available data (hides empty charts)
 
 **Impact:**
+
 - RAM: 33.1% (108424 bytes) - stable
 - Flash: 42.9% (1433941 bytes)
 - No crashes after hours of operation
 - System ready for DS18B20 temperature sensor and future multi-sensor support
 
 ### v2.5.0 (December 12, 2025)
+
 - ✅ Email notifications via SMTP
 - ✅ HTML formatted email alerts
 - ✅ SMTP configuration (server, port, credentials, TLS)
@@ -618,12 +727,14 @@
 - ✅ Multiple recipient support
 
 ### v2.4.0 (December 12, 2025)
+
 - ✅ Client terminology updates (Sensor → Client)
 - ✅ Client inactivity timeout configuration
 - ✅ Visual dashboard warnings for inactive clients
 - ✅ Configurable timeout thresholds
 
 ### v2.3.0 (December 12, 2025)
+
 - ✅ Microsoft Teams webhook integration
 - ✅ Alert configuration via web interface
 - ✅ Temperature threshold alerts
@@ -633,12 +744,14 @@
 - ✅ Test webhook functionality
 
 ### v2.2.0 (December 12, 2025)
+
 - ✅ Alerts page and configuration system
 - ✅ Temperature threshold settings
 - ✅ Client inactivity detection
 - ✅ Alert enable/disable controls
 
 ### v2.1.0 (December 12, 2025)
+
 - ✅ Web dashboard with real-time sensor monitoring
 - ✅ Auto-refresh system (5-second intervals)
 - ✅ API endpoints (JSON sensor data, statistics)
@@ -647,6 +760,7 @@
 - ✅ Color-coded status indicators
 
 ### v2.0.0 (December 12, 2025)
+
 - ✅ WiFi captive portal with QR codes
 - ✅ Dynamic configuration (no hardcoded values)
 - ✅ Multi-click button system (5 actions)
@@ -657,6 +771,7 @@
 - ✅ Comprehensive documentation
 
 ### v1.0.0 (December 9, 2025)
+
 - ✅ Basic LoRa communication (sensors → base station)
 - ✅ Temperature and battery monitoring
 - ✅ OLED display with multi-page cyclingWebSocket Updates or OTA Firmware
@@ -666,9 +781,8 @@
 
 ---10.0 (production)  
 **Status**: v2.11.0 - Architecture Refactor Complete + Multi-Sensor Ready  
-**Environment**: Lab deployment with constant power, JST connector-based sensor expansion
+**Environment**: Lab Phase 2** ⭐ HIGHEST PRIORITY - Encryption (AES-128), whitelist, enhanced security 2. **Additional Sensor Types** - DS18B20 temperature (hardware arriving), BME680 environmental, BH1750 light 3. **Runtimapabilities:\*\*
 
-**System Capabilities:**
 - ✅ Real-time sensor monitoring via WebSocket
 - ✅ Historical data visualization (Chart.js)
 - ✅ MQTT publishing with Home Assistant integration
@@ -685,6 +799,7 @@
 - ✅ Independent history tracking (device vs sensors)
 
 **Recommended Next Steps (Lab Use):**
+
 1. **Network Pairing & Security** ⭐ HIGHEST PRIORITY - Prevent interference from other LoRa networks, unique network ID, device authentication
 2. **Additional Sensor Types** - BME680 environmental, BH1750 light, INA219 power monitoring, DS18B20 temperature
 3. **Remote Config Web UI** - Web interface for all remote commands (interval, location, thresholds, restart)
