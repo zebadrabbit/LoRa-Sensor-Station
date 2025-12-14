@@ -7,6 +7,7 @@
 #include "sensor_interface.h"
 #include "mesh_routing.h"
 #include "config_storage.h"
+#include "security.h"
 #ifdef BASE_STATION
 #include "mqtt_client.h"
 #include "remote_config.h"
@@ -101,13 +102,36 @@ void setLoRaIdle(bool idle) {
 
 void sendSensorData(const SensorData& data) {
   Serial.println("Transmitting...");
-  Serial.printf("Packet size: %d bytes\n", sizeof(SensorData));
   
   recordTxAttempt();
   
   Radio.Sleep();
   delay(10);
-  Radio.Send((uint8_t*)&data, sizeof(SensorData));
+  
+  // Check if encryption is enabled
+  if (securityManager.isEncryptionEnabled()) {
+    Serial.println("🔐 Encrypting packet...");
+    EncryptedPacket encryptedPkt;
+    uint16_t encLen = securityManager.encryptPacket(
+      (const uint8_t*)&data, 
+      sizeof(SensorData),
+      &encryptedPkt,
+      data.sensorId,
+      data.networkId
+    );
+    
+    if (encLen > 0) {
+      Serial.printf("Encrypted packet size: %d bytes\n", encLen);
+      Radio.Send((uint8_t*)&encryptedPkt, encLen);
+    } else {
+      Serial.println("❌ Encryption failed!");
+      return;
+    }
+  } else {
+    Serial.printf("Packet size: %d bytes (unencrypted)\n", sizeof(SensorData));
+    Radio.Send((uint8_t*)&data, sizeof(SensorData));
+  }
+  
   lora_idle = false;
 }
 
@@ -345,7 +369,81 @@ void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr) {
       }
     }
     
-    // Check if it's a legacy packet
+    // Check if it's an encrypted packet first
+    if (size >= sizeof(EncryptedPacket) && payload[0] == 0xE0) {
+      Serial.println("🔐 Encrypted packet detected, decrypting...");
+      
+      EncryptedPacket* encPkt = (EncryptedPacket*)payload;
+      uint8_t decrypted[256];
+      uint16_t decLen = securityManager.decryptPacket(encPkt, decrypted, sizeof(decrypted));
+      
+      if (decLen > 0) {
+        Serial.printf("✅ Decryption successful! (%d bytes)\n", decLen);
+        
+        // Check if decrypted data is legacy SensorData
+        if (decLen == sizeof(SensorData)) {
+          SensorData received;
+          memcpy(&received, decrypted, sizeof(SensorData));
+          
+          // Validate decrypted packet
+          if (received.syncWord == SYNC_WORD && validateChecksum(&received)) {
+            Serial.println("\n=== ENCRYPTED LEGACY PACKET RECEIVED ===");
+            updateSensorInfo(received, rssi, snr);
+            
+            // Publish to MQTT
+            SensorInfo* sensor = getSensorInfo(received.sensorId);
+            if (sensor != NULL) {
+              mqttClient.publishSensorData(
+                received.sensorId,
+                sensor->location,
+                received.temperature,
+                received.batteryPercent,
+                rssi,
+                snr
+              );
+              
+              static bool discoveryPublished[256] = {false};
+              if (!discoveryPublished[received.sensorId]) {
+                mqttClient.publishHomeAssistantDiscovery(received.sensorId, sensor->location);
+                discoveryPublished[received.sensorId] = true;
+              }
+            }
+            
+            if (wifiPortal.isDashboardActive()) {
+              pendingWebSocketBroadcast = true;
+            }
+            
+            Serial.printf("Sensor ID: %d\n", received.sensorId);
+            Serial.printf("Temperature: %.2f°C\n", received.temperature);
+            Serial.printf("Battery Voltage: %.2fV\n", received.batteryVoltage);
+            Serial.printf("Battery Percent: %d%%\n", received.batteryPercent);
+            Serial.printf("RSSI: %d dBm, SNR: %d dB\n", rssi, snr);
+            Serial.println("====================\n");
+            
+            if (received.batteryPercent > 80) {
+              blinkLED(getColorGreen(), 1, 200);
+            } else if (received.batteryPercent > 50) {
+              blinkLED(getColorYellow(), 1, 200);
+            } else if (received.batteryPercent > 20) {
+              blinkLED(getColorOrange(), 2, 200);
+            } else {
+              blinkLED(getColorRed(), 3, 200);
+            }
+            setLED(getColorGreen());
+          } else {
+            Serial.println("❌ Decrypted packet validation failed!");
+          }
+        }
+      } else {
+        Serial.println("❌ Decryption failed or packet rejected!");
+      }
+      
+      Radio.Rx(0);
+      lora_idle = true;
+      return;
+    }
+    
+    // Check if it's a legacy packet (unencrypted)
     if (size == sizeof(SensorData)) {
       SensorData received;
       memcpy(&received, payload, sizeof(SensorData));
@@ -354,7 +452,7 @@ void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr) {
       if (received.syncWord == SYNC_WORD && 
           received.networkId == currentNetworkId && 
           validateChecksum(&received)) {
-        Serial.println("\n=== LEGACY PACKET RECEIVED ===");
+        Serial.println("\n=== LEGACY PACKET RECEIVED (UNENCRYPTED) ===");
         updateSensorInfo(received, rssi, snr);
         
         // Publish to MQTT

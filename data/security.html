@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security Configuration</title>
+    <link rel="stylesheet" href="/style.css">
+    <style>
+        .security-status {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .status-card {
+            flex: 1;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .status-enabled {
+            background: #d4edda;
+            border: 2px solid #28a745;
+        }
+        .status-disabled {
+            background: #f8d7da;
+            border: 2px solid #dc3545;
+        }
+        .status-card h3 {
+            margin: 0 0 10px 0;
+            font-size: 1.2em;
+        }
+        .status-card .status-icon {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+        .config-section {
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .config-section h2 {
+            margin-top: 0;
+            color: #333;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+        }
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+            margin-left: 10px;
+        }
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider {
+            background-color: #28a745;
+        }
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+        .whitelist-container {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            margin-top: 15px;
+        }
+        .whitelist-device {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background: #f8f9fa;
+            margin-bottom: 8px;
+            border-radius: 4px;
+        }
+        .whitelist-device span {
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+        .add-device-form {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .add-device-form input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1em;
+        }
+        .danger-zone {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 30px;
+        }
+        .danger-zone h3 {
+            color: #856404;
+            margin-top: 0;
+        }
+        .alert {
+            padding: 12px 20px;
+            margin-bottom: 15px;
+            border-radius: 4px;
+            display: none;
+        }
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 Security Configuration</h1>
+        
+        <div id="alertBox" class="alert"></div>
+        
+        <!-- Security Status Overview -->
+        <div class="security-status">
+            <div class="status-card" id="encryptionStatus">
+                <div class="status-icon">🔒</div>
+                <h3>Encryption</h3>
+                <p id="encryptionStatusText">Loading...</p>
+            </div>
+            <div class="status-card" id="whitelistStatus">
+                <div class="status-icon">📋</div>
+                <h3>Whitelist</h3>
+                <p id="whitelistStatusText">Loading...</p>
+            </div>
+        </div>
+        
+        <!-- Encryption Configuration -->
+        <div class="config-section">
+            <h2>Encryption Settings</h2>
+            <p>Enable AES-128 encryption for all LoRa packets. When enabled, only devices with the shared encryption key can communicate.</p>
+            
+            <label style="display: flex; align-items: center; margin-top: 15px;">
+                <strong>Enable Encryption:</strong>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="encryptionToggle" onchange="updateEncryption()">
+                    <span class="slider"></span>
+                </label>
+            </label>
+            
+            <div class="danger-zone" style="margin-top: 20px;">
+                <h3>🔑 Encryption Key</h3>
+                <p>Current encryption key (32 hex characters). Copy this key to configure all sensors in your network.</p>
+                <div style="display: flex; gap: 10px; align-items: center; margin: 10px 0;">
+                    <input type="text" id="keyDisplay" readonly style="flex: 1; font-family: monospace; padding: 8px; border: 1px solid #ccc; border-radius: 4px; background: #f5f5f5;">
+                    <button onclick="copyKey()" class="btn btn-secondary" style="white-space: nowrap;">📋 Copy</button>
+                </div>
+                
+                <h3 style="margin-top: 20px;">Set Custom Key</h3>
+                <p>Enter a 32-character hex key (or generate a new random one below).</p>
+                <div style="display: flex; gap: 10px; margin: 10px 0;">
+                    <input type="text" id="keyInput" placeholder="Enter 32 hex characters (0-9, A-F)" maxlength="32" style="flex: 1; font-family: monospace; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                    <button onclick="setCustomKey()" class="btn btn-primary" style="white-space: nowrap;">Set Key</button>
+                </div>
+                
+                <h3 style="margin-top: 20px;">⚠️ Generate New Random Key</h3>
+                <p><strong>Warning:</strong> This will generate a completely new random key. All sensors must be reconfigured with the new key!</p>
+                <button onclick="generateNewKey()" class="btn btn-warning">Generate New Key</button>
+            </div>
+        </div>
+        
+        <!-- Whitelist Configuration -->
+        <div class="config-section">
+            <h2>Device Whitelist</h2>
+            <p>Control which sensor devices are allowed to communicate with this base station. When enabled, only whitelisted device IDs will be accepted.</p>
+            
+            <label style="display: flex; align-items: center; margin-top: 15px;">
+                <strong>Enable Whitelist:</strong>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="whitelistToggle" onchange="updateWhitelist()">
+                    <span class="slider"></span>
+                </label>
+            </label>
+            
+            <div style="margin-top: 25px;">
+                <h3>Whitelisted Devices (<span id="deviceCount">0</span>/32)</h3>
+                <div class="whitelist-container" id="whitelistContainer">
+                    <div class="empty-state">No devices whitelisted</div>
+                </div>
+                
+                <div class="add-device-form">
+                    <input type="number" id="deviceIdInput" placeholder="Device ID (1-255)" min="1" max="255">
+                    <button onclick="addDevice()" class="btn btn-primary">Add Device</button>
+                </div>
+                
+                <div class="btn-group">
+                    <button onclick="clearWhitelist()" class="btn btn-danger">Clear All Devices</button>
+                    <button onclick="loadWhitelist()" class="btn btn-secondary">Refresh List</button>
+                </div>
+            </div>
+        </div>
+        
+        <div style="margin-top: 30px;">
+            <button onclick="window.location.href='/'" class="btn btn-secondary">← Back to Dashboard</button>
+        </div>
+    </div>
+    
+    <script>
+        let currentConfig = {};
+        
+        // Load configuration on page load
+        window.onload = function() {
+            loadConfig();
+            loadWhitelist();
+        };
+        
+        function showAlert(message, type) {
+            const alertBox = document.getElementById('alertBox');
+            alertBox.textContent = message;
+            alertBox.className = 'alert alert-' + type;
+            alertBox.style.display = 'block';
+            setTimeout(() => {
+                alertBox.style.display = 'none';
+            }, 5000);
+        }
+        
+        async function loadConfig() {
+            try {
+                const response = await fetch('/api/security/config');
+                const config = await response.json();
+                currentConfig = config;
+                
+                // Update UI
+                document.getElementById('encryptionToggle').checked = config.encryptionEnabled;
+                document.getElementById('whitelistToggle').checked = config.whitelistEnabled;
+                
+                // Update status cards
+                updateStatusCards();
+                
+                // Load and display current encryption key
+                loadKey();
+            } catch (error) {
+                showAlert('Failed to load configuration: ' + error.message, 'error');
+            }
+        }
+        
+        function updateStatusCards() {
+            const encCard = document.getElementById('encryptionStatus');
+            const encText = document.getElementById('encryptionStatusText');
+            const wlCard = document.getElementById('whitelistStatus');
+            const wlText = document.getElementById('whitelistStatusText');
+            
+            if (currentConfig.encryptionEnabled) {
+                encCard.className = 'status-card status-enabled';
+                encText.textContent = 'Enabled';
+            } else {
+                encCard.className = 'status-card status-disabled';
+                encText.textContent = 'Disabled';
+            }
+            
+            if (currentConfig.whitelistEnabled) {
+                wlCard.className = 'status-card status-enabled';
+                wlText.textContent = 'Enabled';
+            } else {
+                wlCard.className = 'status-card status-disabled';
+                wlText.textContent = 'Disabled';
+            }
+        }
+        
+        async function updateEncryption() {
+            const enabled = document.getElementById('encryptionToggle').checked;
+            
+            try {
+                const response = await fetch('/api/security/config', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        encryptionEnabled: enabled,
+                        whitelistEnabled: currentConfig.whitelistEnabled
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.status === 'success') {
+                    currentConfig.encryptionEnabled = enabled;
+                    updateStatusCards();
+                    showAlert('Encryption ' + (enabled ? 'enabled' : 'disabled'), 'success');
+                } else {
+                    throw new Error(result.message || 'Failed to update');
+                }
+            } catch (error) {
+                showAlert('Failed to update encryption: ' + error.message, 'error');
+                document.getElementById('encryptionToggle').checked = currentConfig.encryptionEnabled;
+            }
+        }
+        
+        async function updateWhitelist() {
+            const enabled = document.getElementById('whitelistToggle').checked;
+            
+            try {
+                const response = await fetch('/api/security/config', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        encryptionEnabled: currentConfig.encryptionEnabled,
+                        whitelistEnabled: enabled
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.status === 'success') {
+                    currentConfig.whitelistEnabled = enabled;
+                    updateStatusCards();
+                    showAlert('Whitelist ' + (enabled ? 'enabled' : 'disabled'), 'success');
+                } else {
+                    throw new Error(result.message || 'Failed to update');
+                }
+            } catch (error) {
+                showAlert('Failed to update whitelist: ' + error.message, 'error');
+                document.getElementById('whitelistToggle').checked = currentConfig.whitelistEnabled;
+            }
+        }
+        
+        async function loadWhitelist() {
+            try {
+                const response = await fetch('/api/security/whitelist');
+                const data = await response.json();
+                
+                document.getElementById('deviceCount').textContent = data.count;
+                
+                const container = document.getElementById('whitelistContainer');
+                
+                if (data.count === 0) {
+                    container.innerHTML = '<div class="empty-state">No devices whitelisted</div>';
+                } else {
+                    container.innerHTML = '';
+                    data.devices.forEach(deviceId => {
+                        const div = document.createElement('div');
+                        div.className = 'whitelist-device';
+                        div.innerHTML = `
+                            <span>Device ID: ${deviceId}</span>
+                            <button onclick="removeDevice(${deviceId})" class="btn btn-danger btn-sm">Remove</button>
+                        `;
+                        container.appendChild(div);
+                    });
+                }
+            } catch (error) {
+                showAlert('Failed to load whitelist: ' + error.message, 'error');
+            }
+        }
+        
+        async function addDevice() {
+            const input = document.getElementById('deviceIdInput');
+            const deviceId = parseInt(input.value);
+            
+            if (!deviceId || deviceId < 1 || deviceId > 255) {
+                showAlert('Please enter a valid device ID (1-255)', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/security/whitelist', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({deviceId: deviceId})
+                });
+                
+                const result = await response.json();
+                if (result.status === 'success') {
+                    showAlert('Device ' + deviceId + ' added to whitelist', 'success');
+                    input.value = '';
+                    loadWhitelist();
+                } else {
+                    throw new Error(result.message || 'Failed to add device');
+                }
+            } catch (error) {
+                showAlert('Failed to add device: ' + error.message, 'error');
+            }
+        }
+        
+        async function removeDevice(deviceId) {
+            if (!confirm('Remove device ' + deviceId + ' from whitelist?')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/security/whitelist/' + deviceId, {
+                    method: 'DELETE'
+                });
+                
+                const result = await response.json();
+                if (result.status === 'success') {
+                    showAlert('Device ' + deviceId + ' removed from whitelist', 'success');
+                    loadWhitelist();
+                } else {
+                    throw new Error(result.message || 'Failed to remove device');
+                }
+            } catch (error) {
+                showAlert('Failed to remove device: ' + error.message, 'error');
+            }
+        }
+        
+        async function clearWhitelist() {
+            if (!confirm('Clear ALL devices from whitelist? This cannot be undone!')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/security/whitelist', {
+                    method: 'DELETE'
+                });
+                
+                const result = await response.json();
+                if (result.status === 'success') {
+                    showAlert('Whitelist cleared', 'success');
+                    loadWhitelist();
+                } else {
+                    throw new Error(result.message || 'Failed to clear whitelist');
+                }
+            } catch (error) {
+                showAlert('Failed to clear whitelist: ' + error.message, 'error');
+            }
+        }
+        
+        async function generateNewKey() {
+            if (!confirm('Generate new encryption key? ALL SENSORS WILL NEED TO BE RECONFIGURED!')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/security/generate-key', {
+                    method: 'POST'
+                });
+                
+                const result = await response.json();
+                if (result.status === 'success') {
+                    showAlert('New encryption key generated! Copy the key below to configure sensors.', 'success');
+                    // Display the new key
+                    if (result.key) {
+                        document.getElementById('keyDisplay').value = result.key;
+                    }
+                } else {
+                    throw new Error(result.message || 'Failed to generate key');
+                }
+            } catch (error) {
+                showAlert('Failed to generate key: ' + error.message, 'error');
+            }
+        }
+        
+        async function loadKey() {
+            try {
+                const response = await fetch('/api/security/key');
+                const result = await response.json();
+                if (result.key) {
+                    document.getElementById('keyDisplay').value = result.key;
+                }
+            } catch (error) {
+                console.error('Failed to load key:', error);
+            }
+        }
+        
+        function copyKey() {
+            const keyDisplay = document.getElementById('keyDisplay');
+            keyDisplay.select();
+            document.execCommand('copy');
+            showAlert('Encryption key copied to clipboard!', 'success');
+        }
+        
+        async function setCustomKey() {
+            const keyInput = document.getElementById('keyInput');
+            const key = keyInput.value.toUpperCase().trim();
+            
+            // Validate key format (32 hex characters)
+            if (!/^[0-9A-F]{32}$/.test(key)) {
+                showAlert('Invalid key format. Must be exactly 32 hex characters (0-9, A-F)', 'error');
+                return;
+            }
+            
+            if (!confirm('Set this custom encryption key? Make sure you have copied it - you will need it for all sensors!')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/security/key', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ key: key })
+                });
+                
+                const result = await response.json();
+                if (result.status === 'success') {
+                    showAlert('Encryption key updated! Configure all sensors with this key.', 'success');
+                    document.getElementById('keyDisplay').value = key;
+                    keyInput.value = '';
+                } else {
+                    throw new Error(result.message || 'Failed to set key');
+                }
+            } catch (error) {
+                showAlert('Failed to set key: ' + error.message, 'error');
+            }
+        }
+    </script>
+</body>
+</html>

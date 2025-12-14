@@ -2,6 +2,7 @@
 #include "config.h"
 #include "statistics.h"
 #include "config_storage.h"
+#include "security.h"
 #include <Wire.h>
 #include <WiFi.h>
 #include "HT_SSD1306Wire.h"
@@ -487,7 +488,11 @@ void displaySensorPage() {
       SensorConfig config = configStorage.getSensorConfig();
       
       // Display sensor ID and network ID on same line
-      display.drawString(0, 12, "ID: " + String(config.sensorId) + "  Net: " + String(config.networkId));
+      String idLine = "ID: " + String(config.sensorId) + "  Net: " + String(config.networkId);
+      if (securityManager.isEncryptionEnabled()) {
+        idLine += " [E]";
+      }
+      display.drawString(0, 12, idLine);
       
       // Display transmit interval
       display.drawString(0, 24, "Interval: " + String(config.transmitInterval) + "s");

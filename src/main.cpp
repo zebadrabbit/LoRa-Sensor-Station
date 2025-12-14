@@ -11,6 +11,7 @@
 #include "wifi_portal.h"
 #include "alerts.h"
 #include "mesh_routing.h"
+#include "security.h"
 #ifdef BASE_STATION
 #include "mqtt_client.h"
 #include "sensor_config.h"
@@ -55,6 +56,12 @@ void setup() {
   
   // Initialize configuration storage
   configStorage.begin();
+  
+  // Initialize security module
+  Serial.println("\n=== Initializing Security Module ===");
+  securityManager.begin();
+  Serial.printf("Encryption: %s\n", securityManager.isEncryptionEnabled() ? "ENABLED" : "DISABLED");
+  Serial.printf("Whitelist: %s\n", securityManager.isWhitelistEnabled() ? "ENABLED" : "DISABLED");
   
   // Check if this is first boot or if we need configuration
   if (configStorage.isFirstBoot()) {

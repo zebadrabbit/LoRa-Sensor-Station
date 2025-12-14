@@ -2,7 +2,23 @@
 
 ## Version History
 
-### v2.12.2 (December 14, 2025) - Current Version
+### v2.13.0 (December 14, 2025) - Current Version
+
+- ✅ Network Pairing Phase 2: Encryption & Whitelisting
+- ✅ AES-128-CBC encryption using ESP32 mbedTLS (hardware-accelerated)
+- ✅ Random IV generation per packet (16 bytes)
+- ✅ HMAC-based message authentication (8-byte)
+- ✅ Replay attack prevention (sequence numbers + 100-packet sliding window)
+- ✅ Device whitelist (up to 32 devices, NVS-persisted)
+- ✅ Security management web UI (/security)
+- ✅ Encryption key management (view, copy, generate, set custom)
+- ✅ 9 security API endpoints (config, whitelist, key management)
+- ✅ Sensor configuration with encryption key field
+- ✅ Display security indicator ([E] when encryption enabled)
+- ✅ Backward compatible (encrypted/unencrypted devices coexist)
+- ✅ Zero external dependencies (uses ESP32 framework mbedTLS)
+
+### v2.12.2 (December 14, 2025)
 
 - ✅ Sensor display shows ID + Network ID (first status page)
 - ✅ Dashboard width standardized to 800px (matches all config pages)
@@ -358,7 +374,9 @@
 
 ### Network & Communication
 
-- [x] **Network Pairing & Security (Phase 1)** ✅ COMPLETED v2.12.0, TESTED v2.12.2
+- [x] **Network Pairing & Security** ✅ COMPLETED
+
+  **Phase 1** - ✅ COMPLETED v2.12.0, TESTED v2.12.2
 
   - Network ID (1-65535) user-configurable ✅
   - LoRa sync word calculation: 0x12 + (networkId % 244) ✅
@@ -369,12 +387,19 @@
   - Sensor display shows ID + Network ID ✅
   - **Fully tested and validated** ✅
 
-  **Phase 2 - TODO:**
+  **Phase 2** - ✅ COMPLETED v2.13.0
 
-  - [ ] Encrypted payloads (AES-128)
-  - [ ] Whitelist of allowed sensor IDs
-  - [ ] Device pairing/authentication
-  - [ ] Reject packets from unknown networks (beyond sync word)
+  - AES-128-CBC encryption with mbedTLS ✅
+  - Random IV generation per packet ✅
+  - HMAC authentication (8-byte) ✅
+  - Replay attack prevention (sequence numbers) ✅
+  - Device whitelist (up to 32 devices) ✅
+  - Security management web UI (/security) ✅
+  - Encryption key management (view/copy/generate/set) ✅
+  - Sensor configuration with encryption key ✅
+  - Display security indicator ([E]) ✅
+  - Backward compatible (encrypted + unencrypted coexist) ✅
+  - **Fully tested and validated** ✅
 
 - [ ] **Mesh Network Support**
   - Sensor-to-sensor relay capability
@@ -387,13 +412,14 @@
 
 ### Security
 
-- [ ] **Authentication & Authorization**
-  - Password-protected web interface
-  - API key authentication
-  - User roles (admin, viewer)
-  - Session management
-  - HTTPS/TLS support
-  - Encrypted LoRa communications
+- [x] **Authentication & Authorization** ✅ PARTIAL (Encryption implemented v2.13.0)
+
+  - Encrypted LoRa communications ✅
+  - Password-protected web interface (TODO)
+  - API key authentication (TODO)
+  - User roles (admin, viewer) (TODO)
+  - Session management (TODO)
+  - HTTPS/TLS support (TODO)
 
 ### Automation & Integration
 

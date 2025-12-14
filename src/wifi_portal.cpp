@@ -1,7 +1,8 @@
-﻿#include "wifi_portal.h"
+#include "wifi_portal.h"
 #include "led_control.h"
 #include "statistics.h"
 #include "alerts.h"
+#include "security.h"
 #ifdef BASE_STATION
 #include "mqtt_client.h"
 #include "sensor_config.h"
@@ -201,20 +202,20 @@ String WiFiPortal::generateMainPage() {
 </head>
 <body>
     <div class="container">
-        <h1>ðŸŽ¯ LoRa Sensor Station</h1>
+        <h1>🎯 LoRa Sensor Station</h1>
         <p class="subtitle">Choose your device mode</p>
         
         <form action="/mode" method="POST">
             <div class="mode-card" onclick="this.querySelector('input').checked=true">
                 <input type="radio" name="mode" value="sensor" style="display:none">
-                <h3>ðŸ“¡ Sensor Client</h3>
+                <h3>📡 Sensor Client</h3>
                 <p>Configure as a remote sensor node that transmits temperature and battery data to the base station.</p>
                 <button type="submit" class="btn" onclick="this.form.mode.value='sensor'">Configure as Sensor</button>
             </div>
             
             <div class="mode-card" onclick="this.querySelector('input').checked=true">
                 <input type="radio" name="mode" value="base" style="display:none">
-                <h3>ðŸ  Base Station</h3>
+                <h3>🏠 Base Station</h3>
                 <p>Configure as the central hub that receives data from all sensors and provides web interface.</p>
                 <button type="submit" class="btn" onclick="this.form.mode.value='base'">Configure as Base Station</button>
             </div>
@@ -324,7 +325,7 @@ String WiFiPortal::generateSensorConfigPage() {
             <div class="form-group">
                 <label for="networkId">Network ID (1-65535)</label>
                 <input type="number" id="networkId" name="networkId" min="1" max="65535" value="12345" required>
-                <p class="help-text">ðŸ”’ All devices in the same network must use the same Network ID</p>
+                <p class="help-text">🔒 All devices in the same network must use the same Network ID</p>
             </div>
             
             <div class="form-group">
@@ -338,7 +339,13 @@ String WiFiPortal::generateSensorConfigPage() {
                 <p class="help-text">How often to send data to base station</p>
             </div>
             
-            <button type="submit" class="btn">ðŸ’¾ Save & Reboot</button>
+            <div class="form-group">
+                <label for="encryptionKey">Encryption Key (Optional)</label>
+                <input type="text" id="encryptionKey" name="encryptionKey" maxlength="32" placeholder="32 hex characters (leave empty to disable)" style="font-family: monospace;">
+                <p class="help-text">32-character hex key from base station security settings. Leave empty for no encryption.</p>
+            </div>
+            
+            <button type="submit" class="btn">Save & Reboot</button>
         </form>
     </div>
 </body>
@@ -440,7 +447,7 @@ String WiFiPortal::generateBaseStationConfigPage() {
 </head>
 <body>
     <div class="container">
-        <h1>ðŸ  Base Station Configuration</h1>
+        <h1>🏠 Base Station Configuration</h1>
         <form action="/base" method="POST" id="wifiForm">
             <div class="form-group">
                 <label for="ssid">WiFi Network Name (SSID)</label>
@@ -457,10 +464,10 @@ String WiFiPortal::generateBaseStationConfigPage() {
             <div class="form-group">
                 <label for="networkId">Network ID (1-65535)</label>
                 <input type="number" id="networkId" name="networkId" min="1" max="65535" value="12345" required>
-                <p class="help-text">ðŸ”’ Must match all client devices in your network</p>
+                <p class="help-text">🔒 Must match all client devices in your network</p>
             </div>
             
-            <button type="submit" class="btn">ðŸ”Œ Connect & Configure</button>
+            <button type="submit" class="btn">🔌 Connect & Configure</button>
         </form>
         
         <div class="status" id="status">
@@ -536,7 +543,7 @@ String WiFiPortal::generateSuccessPage(const String& message) {
 </head>
 <body>
     <div class="container">
-        <div class="success-icon">…</div>
+        <div class="success-icon">�</div>
         <h1>Setup Complete!</h1>
         <p>)rawliteral" + message + R"rawliteral(</p>
         <div class="countdown" id="countdown">3</div>
@@ -556,7 +563,7 @@ String WiFiPortal::generateSuccessPage(const String& message) {
             
             if (seconds <= 0) {
                 clearInterval(interval);
-                countdownEl.textContent = 'ðŸ”„';
+                countdownEl.textContent = '🔄';
                 statusEl.textContent = 'Device is rebooting...';
             }
         }, 1000);
@@ -596,6 +603,45 @@ void WiFiPortal::handleSensorConfig(AsyncWebServerRequest *request) {
         config.transmitInterval = request->getParam("interval", true)->value().toInt();
         config.networkId = request->getParam("networkId", true)->value().toInt();
         config.configured = true;
+        
+        // Handle encryption key if provided
+        if (request->hasParam("encryptionKey", true)) {
+            String keyStr = request->getParam("encryptionKey", true)->value();
+            keyStr.trim();
+            keyStr.toUpperCase();
+            
+            if (keyStr.length() == 32) {
+                // Valid key provided - parse and set it
+                uint8_t key[16];
+                bool validHex = true;
+                for (int i = 0; i < 16; i++) {
+                    String byteStr = keyStr.substring(i*2, i*2+2);
+                    char* endPtr;
+                    long val = strtol(byteStr.c_str(), &endPtr, 16);
+                    if (*endPtr != '\0' || val < 0 || val > 255) {
+                        validHex = false;
+                        break;
+                    }
+                    key[i] = (uint8_t)val;
+                }
+                
+                if (validHex) {
+                    securityManager.setKey(key);
+                    securityManager.setEncryptionEnabled(true);
+                    securityManager.saveConfig();
+                    Serial.println("Encryption key configured and enabled");
+                } else {
+                    Serial.println("Invalid hex key format - encryption not enabled");
+                }
+            } else if (keyStr.length() > 0) {
+                Serial.println("Invalid key length (must be 32 hex characters) - encryption not enabled");
+            } else {
+                // Empty key - disable encryption
+                securityManager.setEncryptionEnabled(false);
+                securityManager.saveConfig();
+                Serial.println("No encryption key provided - encryption disabled");
+            }
+        }
         
         // Save configuration
         configStorage.setSensorConfig(config);
@@ -868,6 +914,15 @@ void WiFiPortal::setupDashboard() {
         }
     });
     
+    // Security configuration page
+    webServer.on("/security", HTTP_GET, [](AsyncWebServerRequest *request) {
+        if (LittleFS.exists("/security.html")) {
+            request->send(LittleFS, "/security.html", "text/html");
+        } else {
+            request->send(404, "text/plain", "Security page not found");
+        }
+    });
+    
     // Alerts API endpoints
     webServer.on("/api/alerts/config", HTTP_GET, [this](AsyncWebServerRequest *request) {
         request->send(200, "application/json", generateAlertsConfigJSON());
@@ -963,6 +1018,197 @@ void WiFiPortal::setupDashboard() {
     webServer.on("/api/remote-config/queue-status", HTTP_GET, [this](AsyncWebServerRequest *request) {
         request->send(200, "application/json", generateCommandQueueJSON());
     });
+    
+    // ============================================================================
+    // SECURITY API ENDPOINTS
+    // ============================================================================
+    
+    // Get security configuration
+    webServer.on("/api/security/config", HTTP_GET, [](AsyncWebServerRequest *request) {
+        SecurityConfig config = securityManager.getConfig();
+        String json = "{";
+        json += "\"encryptionEnabled\":" + String(config.encryptionEnabled ? "true" : "false") + ",";
+        json += "\"whitelistEnabled\":" + String(config.whitelistEnabled ? "true" : "false") + ",";
+        json += "\"sequenceNumber\":" + String(config.sequenceNumber);
+        json += "}";
+        request->send(200, "application/json", json);
+    });
+    
+    // Update security configuration
+    webServer.on("/api/security/config", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL,
+        [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+            String body = String((char*)data).substring(0, len);
+            Serial.printf("Security config update: %s\n", body.c_str());
+            
+            // Parse JSON
+            int encIdx = body.indexOf("\"encryptionEnabled\":");
+            int wlIdx = body.indexOf("\"whitelistEnabled\":");
+            
+            if (encIdx != -1) {
+                bool encEnabled = body.indexOf("true", encIdx) != -1;
+                securityManager.setEncryptionEnabled(encEnabled);
+                Serial.printf("Encryption %s\n", encEnabled ? "ENABLED" : "DISABLED");
+            }
+            
+            if (wlIdx != -1) {
+                bool wlEnabled = body.indexOf("true", wlIdx) != -1;
+                securityManager.setWhitelistEnabled(wlEnabled);
+                Serial.printf("Whitelist %s\n", wlEnabled ? "ENABLED" : "DISABLED");
+            }
+            
+            if (securityManager.saveConfig()) {
+                request->send(200, "application/json", "{\"status\":\"success\"}");
+            } else {
+                request->send(500, "application/json", "{\"status\":\"error\",\"message\":\"Failed to save config\"}");
+            }
+        });
+    
+    // Get whitelist
+    webServer.on("/api/security/whitelist", HTTP_GET, [](AsyncWebServerRequest *request) {
+        uint8_t whitelist[MAX_WHITELIST_SIZE];
+        uint8_t count = securityManager.getWhitelist(whitelist, MAX_WHITELIST_SIZE);
+        
+        String json = "{\"count\":" + String(count) + ",\"devices\":[";
+        for (uint8_t i = 0; i < count; i++) {
+            if (i > 0) json += ",";
+            json += String(whitelist[i]);
+        }
+        json += "]}";
+        request->send(200, "application/json", json);
+    });
+    
+    // Add device to whitelist
+    webServer.on("/api/security/whitelist", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL,
+        [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+            String body = String((char*)data).substring(0, len);
+            Serial.printf("Whitelist add: %s\n", body.c_str());
+            
+            // Parse device ID from JSON: {"deviceId": 123}
+            int idIdx = body.indexOf("\"deviceId\":");
+            if (idIdx != -1) {
+                int numStart = idIdx + 11;
+                int commaIdx = body.indexOf(',', numStart);
+                int braceIdx = body.indexOf('}', numStart);
+                int numEnd = (commaIdx != -1 && commaIdx < braceIdx) ? commaIdx : braceIdx;
+                String idStr = body.substring(numStart, numEnd);
+                uint8_t deviceId = idStr.toInt();
+                
+                if (securityManager.addToWhitelist(deviceId)) {
+                    if (securityManager.saveConfig()) {
+                        Serial.printf("? Device %d added to whitelist\n", deviceId);
+                        request->send(200, "application/json", "{\"status\":\"success\"}");
+                    } else {
+                        request->send(500, "application/json", "{\"status\":\"error\",\"message\":\"Failed to save\"}");
+                    }
+                } else {
+                    request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Whitelist full or duplicate\"}");
+                }
+            } else {
+                request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Invalid request\"}");
+            }
+        });
+    
+    // Remove device from whitelist
+    webServer.on("^\\/api\\/security\\/whitelist\\/([0-9]+)$", HTTP_DELETE, [](AsyncWebServerRequest *request) {
+        String deviceIdStr = request->pathArg(0);
+        uint8_t deviceId = deviceIdStr.toInt();
+        
+        if (securityManager.removeFromWhitelist(deviceId)) {
+            if (securityManager.saveConfig()) {
+                Serial.printf("? Device %d removed from whitelist\n", deviceId);
+                request->send(200, "application/json", "{\"status\":\"success\"}");
+            } else {
+                request->send(500, "application/json", "{\"status\":\"error\",\"message\":\"Failed to save\"}");
+            }
+        } else {
+            request->send(404, "application/json", "{\"status\":\"error\",\"message\":\"Device not found\"}");
+        }
+    });
+    
+    // Clear entire whitelist
+    webServer.on("/api/security/whitelist", HTTP_DELETE, [](AsyncWebServerRequest *request) {
+        securityManager.clearWhitelist();
+        if (securityManager.saveConfig()) {
+            Serial.println("? Whitelist cleared");
+            request->send(200, "application/json", "{\"status\":\"success\"}");
+        } else {
+            request->send(500, "application/json", "{\"status\":\"error\",\"message\":\"Failed to save\"}");
+        }
+    });
+    
+    // Get encryption key
+    webServer.on("/api/security/key", HTTP_GET, [](AsyncWebServerRequest *request) {
+        uint8_t key[16];
+        securityManager.getKey(key);
+        
+        // Convert to hex string
+        String hexKey = "";
+        for (int i = 0; i < 16; i++) {
+            char hex[3];
+            sprintf(hex, "%02X", key[i]);
+            hexKey += hex;
+        }
+        
+        String json = "{\"key\":\"" + hexKey + "\"}";
+        request->send(200, "application/json", json);
+    });
+    
+    // Set encryption key from hex string
+    webServer.on("/api/security/key", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL, 
+    [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+        String body = String((char*)data);
+        
+        // Parse hex key from JSON
+        int keyStart = body.indexOf("\"key\"") + 7;
+        int keyEnd = body.indexOf("\"", keyStart);
+        String hexKey = body.substring(keyStart, keyEnd);
+        
+        // Validate hex key (must be 32 hex characters = 16 bytes)
+        if (hexKey.length() != 32) {
+            request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Key must be 32 hex characters\"}");
+            return;
+        }
+        
+        // Convert hex string to bytes
+        uint8_t key[16];
+        for (int i = 0; i < 16; i++) {
+            String byteStr = hexKey.substring(i*2, i*2+2);
+            key[i] = (uint8_t)strtol(byteStr.c_str(), NULL, 16);
+        }
+        
+        securityManager.setKey(key);
+        if (securityManager.saveConfig()) {
+            Serial.println("?? Encryption key updated");
+            request->send(200, "application/json", "{\"status\":\"success\",\"message\":\"Key updated\"}");
+        } else {
+            request->send(500, "application/json", "{\"status\":\"error\",\"message\":\"Failed to save\"}");
+        }
+    });
+    
+    // Generate new encryption key
+    webServer.on("/api/security/generate-key", HTTP_POST, [](AsyncWebServerRequest *request) {
+        securityManager.generateKey();
+        if (securityManager.saveConfig()) {
+            // Get the new key to return it
+            uint8_t key[16];
+            securityManager.getKey(key);
+            
+            // Convert to hex string
+            String hexKey = "";
+            for (int i = 0; i < 16; i++) {
+                char hex[3];
+                sprintf(hex, "%02X", key[i]);
+                hexKey += hex;
+            }
+            
+            Serial.println("?? New encryption key generated");
+            String json = "{\"status\":\"success\",\"message\":\"New key generated\",\"key\":\"" + hexKey + "\"}";
+            request->send(200, "application/json", json);
+        } else {
+            request->send(500, "application/json", "{\"status\":\"error\",\"message\":\"Failed to save\"}");
+        }
+    });
+    
     #endif // BASE_STATION
     
     // Handle favicon.ico with 404 (instead of 500 error)
@@ -1208,12 +1454,12 @@ String WiFiPortal::generateDashboardPage() {
 <body>
     <div class="container">
         <div class="header">
-            <h1>ðŸŽ¯ LoRa Sensor Dashboard</h1>
+            <h1>🎯 LoRa Sensor Dashboard</h1>
             <p>Real-time monitoring and data visualization</p>
             <div class="header-stats">
                 <div class="header-stat">
                     <div class="header-stat-label">Connection</div>
-                    <div class="header-stat-value" id="wsStatus" style="font-size: 14px;">ðŸ”µ Connecting...</div>
+                    <div class="header-stat-value" id="wsStatus" style="font-size: 14px;">🔵 Connecting...</div>
                 </div>
                 <div class="header-stat">
                     <div class="header-stat-label">Active Clients</div>
@@ -1237,14 +1483,14 @@ String WiFiPortal::generateDashboardPage() {
         <div class="grid">
             <div class="card" style="grid-column: 1 / -1;">
                 <div class="card-title">
-                    ðŸ“¡ Active Clients
+                    📡 Active Clients
                     <div style="margin-left: auto; font-size: 12px; color: #999;">
                         Auto-refresh: <span id="countdown">5</span>s
                     </div>
                 </div>
                 <div id="sensorList">
                     <div class="empty-state">
-                        <div class="empty-state-icon">ðŸ“­</div>
+                        <div class="empty-state-icon">📭</div>
                         <p>No clients detected yet</p>
                         <p style="font-size: 12px; margin-top: 10px;">Waiting for client data...</p>
                     </div>
@@ -1252,43 +1498,43 @@ String WiFiPortal::generateDashboardPage() {
             </div>
             
             <div class="card">
-                <div class="card-title">ðŸ’¾ Data Export</div>
+                <div class="card-title">💾 Data Export</div>
                 <p style="color: #666; margin-bottom: 15px; font-size: 14px;">
                     Download sensor data for analysis
                 </p>
                 <div class="export-buttons">
-                    <a href="/export/csv" class="btn" download>ðŸ“„ Export CSV</a>
-                    <a href="/export/json" class="btn btn-secondary" download>ðŸ“‹ Export JSON</a>
+                    <a href="/export/csv" class="btn" download>📄 Export CSV</a>
+                    <a href="/export/json" class="btn btn-secondary" download>📋 Export JSON</a>
                 </div>
             </div>
             
             <div class="card">
-                <div class="card-title">ðŸ”” Alerts & Notifications</div>
+                <div class="card-title">🔔 Alerts & Notifications</div>
                 <p style="color: #666; margin-bottom: 15px; font-size: 14px;">
                     Configure Teams notifications and thresholds
                 </p>
                 <div class="export-buttons">
-                    <a href="/alerts" class="btn">&larr;š™ï¸ Configure Alerts</a>
+                    <a href="/alerts" class="btn">&larr;��️ Configure Alerts</a>
                 </div>
             </div>
             
             <div class="card">
-                <div class="card-title">ðŸ·ï¸ Sensor Configuration</div>
+                <div class="card-title">🏷️ Sensor Configuration</div>
                 <p style="color: #666; margin-bottom: 15px; font-size: 14px;">
                     Set friendly names and locations for your sensors
                 </p>
                 <div class="export-buttons">
-                    <a href="/sensors" class="btn">&larr;š™ï¸ Configure Sensors</a>
+                    <a href="/sensors" class="btn">&larr;��️ Configure Sensors</a>
                 </div>
             </div>
             
             <div class="card">
-                <div class="card-title">ðŸ“¡ MQTT Publishing</div>
+                <div class="card-title">📡 MQTT Publishing</div>
                 <p style="color: #666; margin-bottom: 15px; font-size: 14px;">
                     Configure MQTT broker and Home Assistant integration
                 </p>
                 <div class="export-buttons">
-                    <a href="/mqtt" class="btn">&larr;š™ï¸ Configure MQTT</a>
+                    <a href="/mqtt" class="btn">&larr;��️ Configure MQTT</a>
                 </div>
             </div>
         </div>
@@ -1296,7 +1542,7 @@ String WiFiPortal::generateDashboardPage() {
         <!-- Historical Data Graphs -->
         <div class="card" style="margin-bottom: 20px;">
             <div class="card-title">
-                ðŸ“ˆ Historical Data - Select Client
+                📈 Historical Data - Select Client
             </div>
             <div style="margin-bottom: 20px;">
                 <label for="sensorSelect" style="display: block; margin-bottom: 8px; font-weight: 600;">Client:</label>
@@ -1316,17 +1562,17 @@ String WiFiPortal::generateDashboardPage() {
         
         <div class="grid">
             <div class="card" style="grid-column: 1 / -1;">
-                <div class="card-title">ðŸŒ¡ï¸ Temperature History</div>
+                <div class="card-title">🌡️ Temperature History</div>
                 <canvas id="tempChart" style="max-height: 300px;"></canvas>
             </div>
             
             <div class="card" style="grid-column: 1 / -1;">
-                <div class="card-title">ðŸ”‹ Battery History</div>
+                <div class="card-title">🔋 Battery History</div>
                 <canvas id="battChart" style="max-height: 300px;"></canvas>
             </div>
             
             <div class="card" style="grid-column: 1 / -1;">
-                <div class="card-title">ðŸ“¶ Signal Strength (RSSI)</div>
+                <div class="card-title">📶 Signal Strength (RSSI)</div>
                 <canvas id="rssiChart" style="max-height: 300px;"></canvas>
             </div>
         </div>
@@ -1424,7 +1670,7 @@ String WiFiPortal::generateDashboardPage() {
         function updateConnectionStatus(connected) {
             const statusEl = document.getElementById('wsStatus');
             if (statusEl) {
-                statusEl.textContent = connected ? 'ðŸŸ¢ Live' : 'ðŸ”´ Reconnecting...';
+                statusEl.textContent = connected ? '🟢 Live' : '🔴 Reconnecting...';
                 statusEl.style.color = connected ? '#10b981' : '#ef4444';
             }
         }
@@ -1479,7 +1725,7 @@ String WiFiPortal::generateDashboardPage() {
             if (sensors.length === 0) {
                 container.innerHTML = `
                     <div class="empty-state">
-                        <div class="empty-state-icon">ðŸ“­</div>
+                        <div class="empty-state-icon">📭</div>
                         <p>No clients detected yet</p>
                         <p style="font-size: 12px; margin-top: 10px;">Waiting for client data...</p>
                     </div>
@@ -1506,7 +1752,7 @@ String WiFiPortal::generateDashboardPage() {
                 // Add warning banner for inactive clients
                 const warningBanner = isInactive ? `
                     <div style="background: #fff3cd; border: 2px solid #ffc107; border-radius: 6px; padding: 10px; margin-bottom: 10px;">
-                        <span style="color: #856404; font-weight: 600;">&larr;š ï¸ Client Inactive</span>
+                        <span style="color: #856404; font-weight: 600;">&larr;��️ Client Inactive</span>
                         <span style="color: #856404; font-size: 12px; margin-left: 8px;">No data received for ${Math.floor(sensor.ageSeconds / 60)} minutes</span>
                     </div>
                 ` : '';
@@ -1520,10 +1766,10 @@ String WiFiPortal::generateDashboardPage() {
                                 <span class="status-indicator ${statusClass}"></span>
                                 <span class="sensor-id" style="font-size: 16px; font-weight: 600;">${sensor.location || 'Client #' + sensor.id}</span>
                                 <span style="background: ${batteryColor}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">
-                                    ðŸ”‹ ${sensor.battery}%
+                                    🔋 ${sensor.battery}%
                                 </span>
                                 <span style="background: ${signalColor}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">
-                                    ðŸ“¡ ${sensor.rssi} dBm
+                                    📡 ${sensor.rssi} dBm
                                 </span>
                             </div>
                             <div style="display: flex; align-items: center; gap: 10px;">
@@ -1531,7 +1777,7 @@ String WiFiPortal::generateDashboardPage() {
                                 <button onclick="forgetClient(${sensor.id}, '${sensor.location || 'Client #' + sensor.id}')" 
                                         style="background: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: background 0.3s;"
                                         onmouseover="this.style.background='#dc2626'" onmouseout="this.style.background='#ef4444'">
-                                    ðŸ—‘ï¸ Forget
+                                    🗑️ Forget
                                 </button>
                             </div>
                         </div>
@@ -1544,8 +1790,8 @@ String WiFiPortal::generateDashboardPage() {
                                 <div style="display: flex; flex-direction: column; gap: 6px;">
                                     ${sensor.temperature > -127 ? `
                                         <div style="background: #f3f4f6; padding: 8px 12px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
-                                            <span style="font-size: 13px; color: #374151;">ðŸŒ¡ï¸ Temperature Sensor</span>
-                                            <span style="font-size: 14px; font-weight: 600; color: #1f2937;">${sensor.temperature}&larr;°C</span>
+                                            <span style="font-size: 13px; color: #374151;">🌡️ Temperature Sensor</span>
+                                            <span style="font-size: 14px; font-weight: 600; color: #1f2937;">${sensor.temperature}&larr;�C</span>
                                         </div>
                                     ` : ''}
                                 </div>
@@ -1644,7 +1890,7 @@ String WiFiPortal::generateDashboardPage() {
             }
         });
         
-        tempChart = new Chart(document.getElementById('tempChart'), chartConfig('Temperature', '#ef4444', '&larr;°C'));
+        tempChart = new Chart(document.getElementById('tempChart'), chartConfig('Temperature', '#ef4444', '&larr;�C'));
         battChart = new Chart(document.getElementById('battChart'), chartConfig('Battery', '#10b981', '%'));
         rssiChart = new Chart(document.getElementById('rssiChart'), chartConfig('RSSI', '#3b82f6', ' dBm'));
         
@@ -1660,7 +1906,7 @@ String WiFiPortal::generateDashboardPage() {
                 const option = document.createElement('option');
                 option.value = sensor.id;
                 const label = sensor.location || ('Client ' + sensor.id);
-                option.textContent = label + ' (' + sensor.temperature + '&larr;°C)';
+                option.textContent = label + ' (' + sensor.temperature + '&larr;�C)';
                 select.appendChild(option);
             });
             
@@ -1824,21 +2070,21 @@ String WiFiPortal::generateHistoryJSON(uint8_t sensorId, uint32_t timeRange) {
     // Return client telemetry history (battery/RSSI over time)
     ClientHistory* history = getClientHistory(sensorId);
     
-    Serial.printf("ðŸ“ˆ API /api/history: clientId=%d, history=%p\n", sensorId, history);
+    Serial.printf("📈 API /api/history: clientId=%d, history=%p\n", sensorId, history);
     
     if (history == NULL || history->count == 0) {
-        Serial.printf("ðŸ“ˆ History %s (count=%d)\n", 
+        Serial.printf("📈 History %s (count=%d)\n", 
                      history == NULL ? "is NULL" : "has zero count",
                      history ? history->count : 0);
         return "{\"error\":\"No data available\",\"data\":[]}";
     }
     
-    Serial.printf("ðŸ“ˆ History found: count=%d, index=%d\n", history->count, history->index);
+    Serial.printf("📈 History found: count=%d, index=%d\n", history->count, history->index);
     
     uint32_t currentTime = millis() / 1000;
     uint32_t cutoffTime = (timeRange > 0) ? (currentTime - timeRange) : 0;
     
-    Serial.printf("ðŸ“ˆ Time filtering: current=%u, range=%u, cutoff=%u\n", 
+    Serial.printf("📈 Time filtering: current=%u, range=%u, cutoff=%u\n", 
                  currentTime, timeRange, cutoffTime);
     
     String json = "{\"sensorId\":" + String(sensorId) + ",\"data\":[";
@@ -1854,12 +2100,12 @@ String WiFiPortal::generateHistoryJSON(uint8_t sensorId, uint32_t timeRange) {
         uint16_t idx = (startIdx + i) % HISTORY_SIZE;
         ClientDataPoint* point = &history->data[idx];
         
-        Serial.printf("ðŸ“ˆ Point[%d]: ts=%u, batt=%d%%, rssi=%d dBm, charging=%s\n",
+        Serial.printf("📈 Point[%d]: ts=%u, batt=%d%%, rssi=%d dBm, charging=%s\n",
                      idx, point->timestamp, point->battery, point->rssi, point->charging ? "YES" : "NO");
         
         // Skip if outside time range
         if (timeRange > 0 && point->timestamp < cutoffTime) {
-            Serial.printf("ðŸ“ˆ SKIPPED (ts %u < cutoff %u)\n", point->timestamp, cutoffTime);
+            Serial.printf("📈 SKIPPED (ts %u < cutoff %u)\n", point->timestamp, cutoffTime);
             skipped++;
             continue;
         }
@@ -1877,7 +2123,7 @@ String WiFiPortal::generateHistoryJSON(uint8_t sensorId, uint32_t timeRange) {
         json += "}";
     }
     
-    Serial.printf("ðŸ“ˆ Result: included=%d, skipped=%d, total=%d\n", included, skipped, count);
+    Serial.printf("📈 Result: included=%d, skipped=%d, total=%d\n", included, skipped, count);
     
     json += "]}";
     return json;
@@ -2213,7 +2459,7 @@ String WiFiPortal::generateAlertsPage() {
         <p class="subtitle">Configure Microsoft Teams notifications and alert thresholds</p>
         
         <div class="nav-links">
-            <a href="/">&larr;† Back to Dashboard</a>
+            <a href="/">&larr;�� Back to Dashboard</a>
         </div>
         
         <div id="messageBox" class="alert hidden"></div>
@@ -2280,7 +2526,7 @@ String WiFiPortal::generateAlertsPage() {
                         <label for="emailTLS">Use TLS/STARTTLS</label>
                     </div>
                 </div>
-                <button type="button" class="btn btn-test" onclick="testEmail()">ðŸ“§ Send Test Email</button>
+                <button type="button" class="btn btn-test" onclick="testEmail()">📧 Send Test Email</button>
             </div>
             
             <!-- Temperature Thresholds -->
@@ -2288,11 +2534,11 @@ String WiFiPortal::generateAlertsPage() {
                 <h2>Temperature Thresholds</h2>
                 <div class="threshold-row">
                     <div class="form-group">
-                        <label for="tempLow">Low Temperature (°C)</label>
+                        <label for="tempLow">Low Temperature (�C)</label>
                         <input type="number" id="tempLow" name="tempLow" step="0.1" value="10.0">
                     </div>
                     <div class="form-group">
-                        <label for="tempHigh">High Temperature (°C)</label>
+                        <label for="tempHigh">High Temperature (�C)</label>
                         <input type="number" id="tempHigh" name="tempHigh" step="0.1" value="30.0">
                     </div>
                 </div>
@@ -2347,7 +2593,7 @@ String WiFiPortal::generateAlertsPage() {
                 </div>
             </div>
             
-            <button type="submit" class="btn btn-primary">ðŸ’¾ Save Configuration</button>
+            <button type="submit" class="btn btn-primary">💾 Save Configuration</button>
             <button type="button" class="btn btn-secondary" onclick="location.href='/'">Cancel</button>
         </form>
     </div>
@@ -3210,7 +3456,7 @@ String WiFiPortal::generateSensorNamesPage() {
                 const result = await response.json();
                 
                 if (result.success) {
-                    showMessage('“ ' + result.message, 'success');
+                    showMessage('� ' + result.message, 'success');
                     setTimeout(() => location.reload(), 1500);
                 } else {
                     showMessage('Failed: ' + result.message, 'error');
