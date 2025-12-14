@@ -25,6 +25,9 @@ WiFiPortal::WiFiPortal() : webServer(80), portalActive(false), dashboardActive(f
 void WiFiPortal::startPortal() {
     Serial.println("Starting WiFi Captive Portal...");
     
+    // Disable task watchdog for WiFi operations (re-enabled after)
+    disableCore0WDT();
+    
     // Get MAC address for unique SSID
     uint8_t mac[6];
     WiFi.macAddress(mac);
@@ -59,6 +62,9 @@ void WiFiPortal::startPortal() {
     // Setup web server routes
     setupWebServer();
     webServer.begin();
+    
+    // Re-enable watchdog
+    enableCore0WDT();
     
     portalActive = true;
 }
@@ -312,7 +318,7 @@ String WiFiPortal::generateSensorConfigPage() {
             <div class="form-group">
                 <label for="location">Location / Name</label>
                 <input type="text" id="location" name="location" maxlength="31" placeholder="e.g., Living Room, Garage" required>
-                <p class="help-text">Descriptive name for the sensor location</p>
+                <p class="help-text">Descriptive name for the client location</p>
             </div>
             
             <div class="form-group">
@@ -342,25 +348,8 @@ String WiFiPortal::generateSensorConfigPage() {
 }
 
 String WiFiPortal::generateBaseStationConfigPage() {
-    // Scan for WiFi networks with timeout
-    String networkOptions = "";
-    
-    // Start async scan
-    int n = WiFi.scanNetworks(false, false, false, 300);
-    
-    if (n > 0) {
-        for (int i = 0; i < n && i < 20; i++) {
-            String ssid = WiFi.SSID(i);
-            int rssi = WiFi.RSSI(i);
-            String security = (WiFi.encryptionType(i) == WIFI_AUTH_OPEN) ? "🔓" : "🔒";
-            
-            networkOptions += "<option value=\"" + ssid + "\">";
-            networkOptions += security + " " + ssid + " (" + String(rssi) + " dBm)";
-            networkOptions += "</option>";
-        }
-    } else {
-        networkOptions = "<option value=\"\">No networks found - enter manually</option>";
-    }
+    // Note: WiFi scanning removed to prevent async_tcp watchdog timeout
+    // Users will manually enter WiFi SSID (can add async scan via JavaScript later)
     
     String html = R"rawliteral(<!DOCTYPE html>
 <html>
@@ -454,22 +443,15 @@ String WiFiPortal::generateBaseStationConfigPage() {
         <h1>🏠 Base Station Configuration</h1>
         <form action="/base" method="POST" id="wifiForm">
             <div class="form-group">
-                <label for="ssid">WiFi Network</label>
-                <select id="ssid" name="ssid" required>
-                    <option value="">Select a network...</option>
-)rawliteral";
-    
-    html += networkOptions;
-    
-    html += R"rawliteral(
-                </select>
-                <p class="help-text">Available networks (refreshed on page load)</p>
+                <label for="ssid">WiFi Network Name (SSID)</label>
+                <input type="text" id="ssid" name="ssid" required placeholder="Enter WiFi network name">
+                <p class="help-text">Enter the exact name of your WiFi network</p>
             </div>
             
             <div class="form-group">
                 <label for="password">WiFi Password</label>
-                <input type="password" id="password" name="password">
-                <p class="help-text">Enter the password for the selected network</p>
+                <input type="password" id="password" name="password" placeholder="Enter WiFi password">
+                <p class="help-text">Leave empty for open networks</p>
             </div>
             
             <div class="form-group">
@@ -543,26 +525,39 @@ String WiFiPortal::generateSuccessPage(const String& message) {
             font-size: 48px;
             color: #667eea;
             font-weight: bold;
+            margin-top: 20px;
+        }
+        .status-message {
+            color: #999;
+            font-size: 14px;
+            margin-top: 10px;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="success-icon">✅</div>
-        <h1>Configuration Saved!</h1>
+        <h1>Setup Complete!</h1>
         <p>)rawliteral" + message + R"rawliteral(</p>
         <div class="countdown" id="countdown">3</div>
+        <p class="status-message" id="status">Device will reboot in <span id="seconds">3</span> seconds...</p>
     </div>
     
     <script>
         let seconds = 3;
         const countdownEl = document.getElementById('countdown');
+        const statusEl = document.getElementById('status');
+        const secondsEl = document.getElementById('seconds');
+        
         const interval = setInterval(() => {
             seconds--;
             countdownEl.textContent = seconds;
+            secondsEl.textContent = seconds;
+            
             if (seconds <= 0) {
                 clearInterval(interval);
-                countdownEl.textContent = 'Rebooting...';
+                countdownEl.textContent = '🔄';
+                statusEl.textContent = 'Device is rebooting...';
             }
         }, 1000);
     </script>
@@ -800,6 +795,20 @@ void WiFiPortal::setupDashboard() {
     // API endpoints - MUST be registered BEFORE serveStatic!
     webServer.on("/api/sensors", HTTP_GET, [this](AsyncWebServerRequest *request) {
         request->send(200, "application/json", generateSensorsJSON());
+    });
+    
+    // Delete/forget a client
+    webServer.on("^\\/api\\/clients\\/([0-9]+)$", HTTP_DELETE, [](AsyncWebServerRequest *request) {
+        String clientIdStr = request->pathArg(0);
+        uint8_t clientId = clientIdStr.toInt();
+        
+        bool success = forgetClient(clientId);
+        
+        String response = success ? 
+            "{\"success\":true,\"message\":\"Client forgotten\"}" : 
+            "{\"success\":false,\"error\":\"Client not found\"}";
+        
+        request->send(success ? 200 : 404, "application/json", response);
     });
     
     webServer.on("/api/stats", HTTP_GET, [this](AsyncWebServerRequest *request) {
@@ -1328,6 +1337,26 @@ String WiFiPortal::generateDashboardPage() {
         let currentTimeRange = 'all';
         let inactivityTimeoutMinutes = 15;  // Default, will be loaded from config
         
+        // Forget/remove client
+        function forgetClient(clientId, clientName) {
+            if (confirm(`Are you sure you want to forget client "${clientName}" (ID: ${clientId})?\n\nThis will remove all history and data for this client.`)) {
+                fetch(`/api/clients/${clientId}`, { method: 'DELETE' })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            alert(`Client "${clientName}" has been forgotten.`);
+                            updateDashboard();
+                        } else {
+                            alert('Failed to forget client: ' + (data.error || 'Unknown error'));
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error forgetting client:', error);
+                        alert('Failed to forget client.');
+                    });
+            }
+        }
+        
         // WebSocket connection
         let ws = null;
         let wsReconnectTimer = null;
@@ -1483,7 +1512,7 @@ String WiFiPortal::generateDashboardPage() {
                     <div class="sensor-item" style="${isInactive ? 'border: 2px solid #ffc107; background: #fff9e6;' : ''}">
                         ${warningBanner}
                         <div class="sensor-header" style="border-bottom: 2px solid #e5e7eb; padding-bottom: 12px; margin-bottom: 12px;">
-                            <div style="display: flex; align-items: center; gap: 12px;">
+                            <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
                                 <span class="status-indicator ${statusClass}"></span>
                                 <span class="sensor-id" style="font-size: 16px; font-weight: 600;">${sensor.location || 'Client #' + sensor.id}</span>
                                 <span style="background: ${batteryColor}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">
@@ -1493,7 +1522,14 @@ String WiFiPortal::generateDashboardPage() {
                                     📡 ${sensor.rssi} dBm
                                 </span>
                             </div>
-                            <span class="sensor-time">${sensor.age}</span>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <span class="sensor-time">${sensor.age}</span>
+                                <button onclick="forgetClient(${sensor.id}, '${sensor.location || 'Client #' + sensor.id}')" 
+                                        style="background: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: background 0.3s;"
+                                        onmouseover="this.style.background='#dc2626'" onmouseout="this.style.background='#ef4444'">
+                                    🗑️ Forget
+                                </button>
+                            </div>
                         </div>
                         
                         <div style="padding-left: 28px;">

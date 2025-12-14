@@ -114,6 +114,7 @@ bool isClientTimedOut(uint8_t clientId);
 void setClientLocation(uint8_t clientId, const char* location);
 const char* getClientLocation(uint8_t clientId);
 ClientHistory* getClientHistory(uint8_t clientId);
+bool forgetClient(uint8_t clientId);
 
 // Sensor tracking (base station only)
 void updateSensorReading(uint8_t clientId, uint8_t sensorIndex, uint8_t type, float value);

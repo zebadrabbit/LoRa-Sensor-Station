@@ -195,6 +195,26 @@ ClientHistory* getClientHistory(uint8_t clientId) {
   return NULL;
 }
 
+bool forgetClient(uint8_t clientId) {
+  ClientInfo* client = getClientInfo(clientId);
+  if (client != NULL) {
+    // Mark client as inactive and clear data
+    client->active = false;
+    memset(client, 0, sizeof(ClientInfo));
+    
+    // Also clear all sensors associated with this client
+    for (int i = 0; i < MAX_SENSORS; i++) {
+      if (sensors[i].active && sensors[i].clientId == clientId) {
+        sensors[i].active = false;
+        memset(&sensors[i], 0, sizeof(PhysicalSensor));
+      }
+    }
+    
+    return true;
+  }
+  return false;
+}
+
 // ============================================================================
 // SENSOR TRACKING
 // ============================================================================

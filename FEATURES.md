@@ -2,7 +2,28 @@
 
 ## Version History
 
-### v2.11.0 (December 13, 2025) - Current Version
+### v2.12.1 (December 13, 2025) - Current Version
+- ✅ Base station captive portal WiFi scan removed (watchdog timeout fix)
+- ✅ Manual SSID entry for base station configuration
+- ✅ Improved success page with countdown timer
+- ✅ "Setup Complete" message with device rebooting status
+- ✅ Dashboard "Forget" button for removing inactive clients
+- ✅ API endpoint: DELETE /api/clients/{id} for client removal
+- ✅ Client location display fixed (shows configured name)
+- ✅ Sensor config help text updated ("client location" vs "sensor location")
+- ✅ Confirmation dialog before forgetting clients
+
+### v2.12.0 (December 13, 2025)
+- ✅ Network Pairing & Security (Phase 1)
+- ✅ Network ID (1-65535) user-configurable field
+- ✅ LoRa sync word calculation: 0x12 + (networkId % 244)
+- ✅ Hardware filtering via Radio.SetSyncWord()
+- ✅ Software validation: networkId in packet headers
+- ✅ Captive portal Network ID field (sensor + base station)
+- ✅ NVS storage for network configuration
+- ✅ Code quality tools: clang-format, cppcheck, clang-tidy
+
+### v2.11.0 (December 13, 2025)
 - ✅ LittleFS filesystem implementation (fixed memory exhaustion)
 - ✅ Separate HTML/CSS/JS files (~7.5KB compressed)
 - ✅ Streaming from flash (zero RAM usage for web files)
