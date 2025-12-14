@@ -316,6 +316,12 @@ String WiFiPortal::generateSensorConfigPage() {
             </div>
             
             <div class="form-group">
+                <label for="networkId">Network ID (1-65535)</label>
+                <input type="number" id="networkId" name="networkId" min="1" max="65535" value="12345" required>
+                <p class="help-text">🔒 All devices in the same network must use the same Network ID</p>
+            </div>
+            
+            <div class="form-group">
                 <label for="interval">Transmission Interval</label>
                 <select id="interval" name="interval" required>
                     <option value="15">Every 15 seconds</option>
@@ -466,6 +472,12 @@ String WiFiPortal::generateBaseStationConfigPage() {
                 <p class="help-text">Enter the password for the selected network</p>
             </div>
             
+            <div class="form-group">
+                <label for="networkId">Network ID (1-65535)</label>
+                <input type="number" id="networkId" name="networkId" min="1" max="65535" value="12345" required>
+                <p class="help-text">🔒 Must match all client devices in your network</p>
+            </div>
+            
             <button type="submit" class="btn">🔌 Connect & Configure</button>
         </form>
         
@@ -579,13 +591,15 @@ void WiFiPortal::handleModeSelection(AsyncWebServerRequest *request) {
 void WiFiPortal::handleSensorConfig(AsyncWebServerRequest *request) {
     if (request->hasParam("sensorId", true) && 
         request->hasParam("location", true) && 
-        request->hasParam("interval", true)) {
+        request->hasParam("interval", true) &&
+        request->hasParam("networkId", true)) {
         
         SensorConfig config;
         config.sensorId = request->getParam("sensorId", true)->value().toInt();
         strncpy(config.location, request->getParam("location", true)->value().c_str(), sizeof(config.location) - 1);
         config.location[sizeof(config.location) - 1] = '\0';
         config.transmitInterval = request->getParam("interval", true)->value().toInt();
+        config.networkId = request->getParam("networkId", true)->value().toInt();
         config.configured = true;
         
         // Save configuration
@@ -596,6 +610,7 @@ void WiFiPortal::handleSensorConfig(AsyncWebServerRequest *request) {
         Serial.printf("  ID: %d\n", config.sensorId);
         Serial.printf("  Location: %s\n", config.location);
         Serial.printf("  Interval: %d seconds\n", config.transmitInterval);
+        Serial.printf("  Network ID: %d\n", config.networkId);
         
         // Send success page
         String message = "Sensor ID " + String(config.sensorId) + " configured.<br>Device will reboot and start transmitting data.";
@@ -610,16 +625,18 @@ void WiFiPortal::handleSensorConfig(AsyncWebServerRequest *request) {
 }
 
 void WiFiPortal::handleBaseStationConfig(AsyncWebServerRequest *request) {
-    if (request->hasParam("ssid", true) && request->hasParam("password", true)) {
+    if (request->hasParam("ssid", true) && request->hasParam("password", true) && request->hasParam("networkId", true)) {
         BaseStationConfig config;
         strncpy(config.ssid, request->getParam("ssid", true)->value().c_str(), sizeof(config.ssid) - 1);
         config.ssid[sizeof(config.ssid) - 1] = '\0';
         strncpy(config.password, request->getParam("password", true)->value().c_str(), sizeof(config.password) - 1);
         config.password[sizeof(config.password) - 1] = '\0';
+        config.networkId = request->getParam("networkId", true)->value().toInt();
         config.configured = true;
         
         Serial.println("Testing WiFi connection...");
         Serial.printf("  SSID: %s\n", config.ssid);
+        Serial.printf("  Network ID: %d\n", config.networkId);
         
         // Test connection
         WiFi.mode(WIFI_STA);

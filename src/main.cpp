@@ -255,6 +255,7 @@ void loop() {
       if (readings.size() == 1 && readings[0].type == VALUE_TEMPERATURE) {
         // Legacy format for backward compatibility
         sensorData.syncWord = SYNC_WORD;
+        sensorData.networkId = sensorConfig.networkId;
         sensorData.sensorId = sensorConfig.sensorId;
         sensorData.temperature = readings[0].value;
         sensorData.batteryVoltage = readBatteryVoltage();
@@ -285,6 +286,7 @@ void loop() {
         // Multi-sensor format
         MultiSensorPacket packet;
         packet.header.syncWord = 0xABCD;  // Sync word for multi-sensor packets
+        packet.header.networkId = sensorConfig.networkId;
         packet.header.packetType = PACKET_MULTI_SENSOR;
         packet.header.sensorId = sensorConfig.sensorId;
         packet.header.valueCount = min((int)readings.size(), MAX_VALUES_PER_PACKET);
@@ -348,6 +350,7 @@ void loop() {
       #else
       // Legacy sensor reading for base station (shouldn't be reached)
       sensorData.syncWord = SYNC_WORD;
+      sensorData.networkId = sensorConfig.networkId;
       sensorData.sensorId = sensorConfig.sensorId;
       sensorData.temperature = readThermistor();
       sensorData.batteryVoltage = readBatteryVoltage();

@@ -18,6 +18,7 @@
 
 static RadioEvents_t RadioEvents;
 static bool lora_idle = true;
+static uint16_t currentNetworkId = 0;  // Current network ID for validation
 
 #ifdef BASE_STATION
 static bool pendingWebSocketBroadcast = false;  // Flag to trigger broadcast from main loop
@@ -31,9 +32,26 @@ uint8_t lastCommandAckStatus = 0;     // Status of last command (0=success, non-
 static bool pendingAckSend = false;   // Flag to send immediate telemetry with ACK
 #endif
 
+// Calculate LoRa sync word from network ID
+// Maps network ID (1-65535) to valid sync word range (0x12-0xFF)
+uint8_t calculateSyncWord(uint16_t networkId) {
+    return 0x12 + (networkId % 244);  // 0x12 to 0xFF (244 values)
+}
+
 // Extern declarations
 
 void initLoRa() {
+  // Load network ID from configuration
+  #ifdef BASE_STATION
+    BaseStationConfig config = configStorage.getBaseStationConfig();
+    currentNetworkId = config.networkId;
+  #elif defined(SENSOR_NODE)
+    SensorConfig config = configStorage.getSensorConfig();
+    currentNetworkId = config.networkId;
+  #endif
+  
+  uint8_t syncWord = calculateSyncWord(currentNetworkId);
+  
   RadioEvents.TxDone = OnTxDone;
   RadioEvents.RxDone = OnRxDone;
   RadioEvents.TxTimeout = OnTxTimeout;
@@ -42,6 +60,10 @@ void initLoRa() {
   
   Radio.Init(&RadioEvents);
   Radio.SetChannel(RF_FREQUENCY);
+  
+  // Set hardware sync word for network isolation (SX1262 specific)
+  // Note: SX1262 uses 2-byte sync word, we use the calculated byte twice
+  Radio.SetSyncWord((syncWord << 8) | syncWord);
   
   Radio.SetTxConfig(
     MODEM_LORA, TX_OUTPUT_POWER, 0, LORA_BANDWIDTH,
@@ -61,9 +83,11 @@ void initLoRa() {
     Serial.println("Base station ready - listening for sensors...");
     Serial.printf("Frequency: %d Hz\n", RF_FREQUENCY);
     Serial.printf("Bandwidth: %d, SF: %d, CR: %d\n", LORA_BANDWIDTH, LORA_SPREADING_FACTOR, LORA_CODINGRATE);
+    Serial.printf("Network ID: %d (Sync Word: 0x%02X)\n", currentNetworkId, syncWord);
     Serial.printf("Expected packet size: %d bytes\n", sizeof(SensorData));
   #elif defined(SENSOR_NODE)
     Serial.println("Sensor node ready - preparing to send data...");
+    Serial.printf("Network ID: %d (Sync Word: 0x%02X)\n", currentNetworkId, syncWord);
   #endif
 }
 
@@ -172,7 +196,9 @@ void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr) {
             SensorData received;
             memcpy(&received, dataPayload, sizeof(SensorData));
             
-            if (received.syncWord == SYNC_WORD && validateChecksum(&received)) {
+            if (received.syncWord == SYNC_WORD && 
+                received.networkId == currentNetworkId && 
+                validateChecksum(&received)) {
               Serial.println("\n=== MESH-ROUTED LEGACY PACKET ===");
               Serial.printf("Via %d hops from node %d\n", meshHdr->hopCount, meshHdr->sourceId);
               updateSensorInfo(received, rssi, snr);
@@ -224,13 +250,16 @@ void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr) {
             MultiSensorPacket received;
             memcpy(&received, dataPayload, dataSize);
             
-            if (received.header.packetType == PACKET_MULTI_SENSOR && validateMultiSensorChecksum(&received)) {
+            if (received.header.packetType == PACKET_MULTI_SENSOR && 
+                received.header.networkId == currentNetworkId && 
+                validateMultiSensorChecksum(&received)) {
               Serial.println("\n=== MESH-ROUTED MULTI-SENSOR PACKET ===");
               Serial.printf("Via %d hops from node %d\n", meshHdr->hopCount, meshHdr->sourceId);
               
               // Process as normal multi-sensor packet...
               SensorData legacyData;
               legacyData.syncWord = SYNC_WORD;
+              legacyData.networkId = received.header.networkId;
               legacyData.sensorId = received.header.sensorId;
               legacyData.batteryVoltage = 0.0f;
               legacyData.batteryPercent = received.header.batteryPercent;
@@ -321,8 +350,10 @@ void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr) {
       SensorData received;
       memcpy(&received, payload, sizeof(SensorData));
       
-      // Validate legacy packet
-      if (received.syncWord == SYNC_WORD && validateChecksum(&received)) {
+      // Validate legacy packet (sync word, network ID, and checksum)
+      if (received.syncWord == SYNC_WORD && 
+          received.networkId == currentNetworkId && 
+          validateChecksum(&received)) {
         Serial.println("\n=== LEGACY PACKET RECEIVED ===");
         updateSensorInfo(received, rssi, snr);
         
@@ -407,6 +438,7 @@ void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr) {
       
       // Validate multi-sensor packet
       if (received.header.syncWord == 0xABCD && 
+          received.header.networkId == currentNetworkId && 
           received.header.packetType == PACKET_MULTI_SENSOR && 
           receivedChecksum == expectedChecksum) {
         Serial.println("\n=== MULTI-SENSOR PACKET RECEIVED ===");
@@ -417,6 +449,7 @@ void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr) {
         // Create temporary SensorData for updateSensorInfo (backward compatibility)
         SensorData legacyData;
         legacyData.syncWord = SYNC_WORD;
+        legacyData.networkId = received.header.networkId;
         legacyData.sensorId = received.header.sensorId;
         legacyData.batteryVoltage = 0.0f;  // Not in multi-sensor header
         legacyData.batteryPercent = received.header.batteryPercent;

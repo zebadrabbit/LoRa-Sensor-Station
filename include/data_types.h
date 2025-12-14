@@ -8,6 +8,7 @@
 // Maintained for backward compatibility
 struct SensorData {
   uint16_t syncWord;        // Packet validation
+  uint16_t networkId;       // Network ID for pairing (v2.11+)
   uint8_t sensorId;         // Client identifier (device with multiple sensors)
   float temperature;        // Temperature in Celsius
   float batteryVoltage;     // Battery voltage
@@ -33,6 +34,7 @@ enum PacketType {
  */
 struct MultiSensorHeader {
     uint16_t syncWord;      // 0xABCD for validation
+    uint16_t networkId;     // Network ID for pairing (v2.11+)
     uint8_t packetType;     // PacketType enum
     uint8_t sensorId;       // Node ID (which device is sending)
     uint8_t valueCount;     // Number of sensor values in this packet
