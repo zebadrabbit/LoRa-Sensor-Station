@@ -9,6 +9,9 @@ This project implements a LoRa-based sensor network with:
 - **Sensor Nodes**: Transmit temperature and battery status at configurable intervals
 - **WiFi Captive Portal**: Easy setup without hardcoded credentials
 - **Dynamic Configuration**: All settings configurable via web interface
+- **Real-time Web Dashboard**: WebSocket-based live monitoring with historical graphs
+- **MQTT Publishing**: Home Assistant integration with auto-discovery
+- **Dual-Channel Alerts**: Teams webhooks and email notifications
 - **Advanced Button Controls**: Multi-click detection with immediate ping functionality
 - **Sensor Health Monitoring**: Automatic timeout detection and alerting
 
@@ -25,7 +28,28 @@ Both devices feature OLED displays with automatic page cycling, inverse headers,
 
 ## Features
 
-### 🆕 WiFi Captive Portal (v2.0)
+### � Web Dashboard & Monitoring (v2.1-v2.8)
+- **Real-time Dashboard**: Live sensor monitoring at http://[base-station-ip]/
+- **WebSocket Updates**: Instant data push (no polling delay)
+- **Historical Graphs**: Chart.js visualization for temperature, battery, RSSI trends
+- **Data Export**: CSV and JSON download for analysis
+- **Configurable Alerts**: Teams webhooks and email notifications
+- **MQTT Publishing**: Publish to any MQTT broker
+- **Home Assistant Integration**: Auto-discovery with proper device classes
+- **Web-Based Configuration**: All settings accessible via browser
+
+### 📡 MQTT Publishing (v2.8.0)
+- **Flexible Broker Connection**: Any MQTT broker with authentication support
+- **Individual Topics**: Separate topics for temperature, battery, RSSI, SNR
+- **JSON State Topic**: Combined data for compatibility
+- **Home Assistant Auto-Discovery**: Creates entities automatically
+- **QoS Support**: Configurable Quality of Service (0, 1, 2)
+- **Auto-Reconnect**: Exponential backoff (5s → 5min)
+- **Web Configuration**: Easy setup at http://[base-station-ip]/mqtt
+- **Connection Testing**: Test broker connection before saving
+- **Statistics Tracking**: Monitor publishes, failures, reconnects
+
+### 📧 Alerts & Notifications (v2.3-v2.5)
 - **Zero-configuration setup**: No hardcoded WiFi credentials required
 - **First-boot automatic AP mode**: Device creates WiFi access point on first power-up
 - **QR code display**: Scan to instantly connect (http://10.8.4.1)
@@ -308,22 +332,57 @@ Both devices implement a 5-minute display timeout:
 2. Check GPIO 0 connection
 3. Try different click speeds (multi-click timeout is 400ms)
 
-## Future Enhancements (Phase 2)
+## Current Capabilities
 
-- [ ] Web dashboard for base station with live charts
-- [ ] Teams/Email/SMS notifications for sensor alerts
-- [ ] Cloud data logging (InfluxDB, MQTT)
-- [ ] OTA firmware updates via web interface
-- [ ] Deep sleep mode for sensors (extended battery life)
-- [ ] SD card logging on base station
-- [ ] Mobile app for remote monitoring
-- [ ] Multi-base-station mesh networking
+**✅ Real-Time Monitoring**
+- Live sensor dashboard with WebSocket updates
+- Historical data visualization (temperature, battery, RSSI)
+- Up to 10 concurrent sensors
+- 5-second refresh with instant updates
+
+**✅ Alerts & Notifications**
+- Microsoft Teams webhooks
+- Email notifications (SMTP)
+- Configurable thresholds
+- Rate limiting to prevent spam
+
+**✅ Data Integration**
+- MQTT publishing to any broker
+- Home Assistant auto-discovery
+- CSV/JSON data export
+- REST API endpoints
+
+**✅ Configuration**
+- Zero-configuration WiFi setup
+- Web-based settings (no code changes)
+- Factory reset capability
+- Persistent NVS storage
+
+## Future Enhancements
+
+See [FEATURES.md](FEATURES.md) for detailed roadmap.
+
+**Recommended Next Steps:**
+- [ ] Additional sensor types (DHT22, BME680, BH1750, INA219)
+- [ ] Runtime configuration page (intervals, thresholds)
+- [ ] Cloud data storage (InfluxDB via MQTT)
+- [ ] OTA firmware updates
+- [ ] Advanced analytics and predictions
 
 ## Version History
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
-**Current Version**: 2.0.0 (December 2025)
+**Current Version**: v2.8.0 (December 2025)
+
+**Major Releases:**
+- v2.8.0: MQTT Publishing with Home Assistant integration
+- v2.7.0: Historical data graphs with Chart.js
+- v2.6.0: WebSocket live updates
+- v2.5.0: Email notifications
+- v2.3.0: Teams webhook alerts
+- v2.1.0: Web dashboard
+- v2.0.0: WiFi captive portal
 
 ## License
 
@@ -339,4 +398,4 @@ Created for IoT sensor monitoring applications using Heltec LoRa V3 hardware.
 
 ---
 
-**Last Updated**: December 12, 2025
+**Last Updated**: December 13, 2025

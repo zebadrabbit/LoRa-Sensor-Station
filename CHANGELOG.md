@@ -5,6 +5,44 @@ All notable changes to the LoRa Sensor Station project will be documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.1] - 2025-12-12
+
+### Added - WiFi Information Display Page
+
+#### Base Station Display Enhancement
+- **6th display page**: Added WiFi information page showing network details
+- **IP address display**: Shows web dashboard IP address for easy access
+- **SSID display**: Displays connected WiFi network name (truncated if > 16 chars)
+- **Signal strength**: Real-time RSSI (signal strength in dBm)
+- **Connection status**: WiFi connected/disconnected indicator
+- **WiFi status icon**: Visual indicator of connection state
+- **Page indicators updated**: All pages now show X/6 instead of X/5
+
+## [2.1.0] - 2025-12-12
+
+### Added - Web Dashboard & Real-Time Monitoring
+
+#### Web Dashboard
+- **Real-time sensor monitoring**: Live dashboard at http://[BASE_STATION_IP]/
+- **Auto-refresh system**: Updates every 5 seconds using JavaScript polling
+- **Responsive design**: Mobile-friendly layout with color-coded status indicators
+- **Sensor cards**: Individual cards for each sensor with color-coded status (green/yellow/red)
+- **Status indicators**: Green (online), Yellow (stale), Red (offline) based on last seen time
+- **Battery monitoring**: Visual battery percentage display for each sensor
+- **Last seen timestamps**: Shows time since last update for each sensor
+
+#### API Endpoints
+- **/api/sensors**: JSON endpoint for sensor data retrieval
+- **/api/stats**: JSON endpoint for system statistics
+- **Sensor information**: ID, location, temperature, battery level, last seen time
+- **Timeout status**: API includes timeout status for each sensor
+
+#### Data Export
+- **/export/csv**: Download sensor data in CSV format
+- **/export/json**: Download complete sensor data in JSON format
+- **Filename formatting**: Timestamped exports (sensors_YYYYMMDD_HHMMSS.csv/json)
+- **Complete data**: Exports include all sensor details and statistics
+
 ## [2.0.0] - 2025-12-12
 
 ### Added - WiFi Captive Portal & Configuration System

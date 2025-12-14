@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LoRa Sensor Dashboard</title>
+    <link rel="stylesheet" href="/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎯 LoRa Sensor Dashboard</h1>
+            <p>Real-time monitoring and data visualization</p>
+            <div class="header-stats">
+                <div class="header-stat">
+                    <div class="header-stat-label">Connection</div>
+                    <div class="header-stat-value" id="wsStatus">🔵 Connecting...</div>
+                </div>
+                <div class="header-stat">
+                    <div class="header-stat-label">Active Clients</div>
+                    <div class="header-stat-value" id="activeSensorCount">0</div>
+                </div>
+                <div class="header-stat">
+                    <div class="header-stat-label">Total Packets</div>
+                    <div class="header-stat-value" id="totalPackets">0</div>
+                </div>
+                <div class="header-stat">
+                    <div class="header-stat-label">Success Rate</div>
+                    <div class="header-stat-value" id="successRate">0%</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="grid">
+            <div class="card" style="grid-column: 1 / -1;">
+                <div class="card-title">
+                    📡 Active Clients
+                    <div style="margin-left: auto; font-size: 12px; color: #999;">
+                        Auto-refresh: <span id="countdown">5</span>s
+                    </div>
+                </div>
+                <div id="sensorList">
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📭</div>
+                        <p>No clients detected yet</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-title">💾 Data Export</div>
+                <p>Download sensor data for analysis</p>
+                <div class="export-buttons">
+                    <a href="/export/csv" class="btn">📄 CSV</a>
+                    <a href="/export/json" class="btn btn-secondary">📋 JSON</a>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-title">🔔 Alerts</div>
+                <p>Configure notifications</p>
+                <div class="export-buttons">
+                    <a href="/alerts" class="btn">⚙️ Alerts</a>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-title">🏷️ Sensors</div>
+                <p>Set names and locations</p>
+                <div class="export-buttons">
+                    <a href="/sensors" class="btn">⚙️ Sensors</a>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-title">📡 MQTT</div>
+                <p>Home Assistant integration</p>
+                <div class="export-buttons">
+                    <a href="/mqtt" class="btn">⚙️ MQTT</a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-title">📈 Historical Data</div>
+            <label for="sensorSelect">Client:</label>
+            <select id="sensorSelect">
+                <option value="">-- Select --</option>
+            </select>
+            
+            <label for="timeRange">Time Range:</label>
+            <div class="time-buttons">
+                <button class="time-btn active" data-range="all">All</button>
+                <button class="time-btn" data-range="1h">1h</button>
+                <button class="time-btn" data-range="6h">6h</button>
+                <button class="time-btn" data-range="24h">24h</button>
+            </div>
+        </div>
+        
+        <div class="grid">
+            <div class="card" style="grid-column: 1 / -1;">
+                <div class="card-title">🌡️ Temperature</div>
+                <canvas id="tempChart" style="max-height: 300px;"></canvas>
+            </div>
+            
+            <div class="card" style="grid-column: 1 / -1;">
+                <div class="card-title">🔋 Battery</div>
+                <canvas id="battChart" style="max-height: 300px;"></canvas>
+            </div>
+            
+            <div class="card" style="grid-column: 1 / -1;">
+                <div class="card-title">📶 Signal (RSSI)</div>
+                <canvas id="rssiChart" style="max-height: 300px;"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <script src="/dashboard.js"></script>
+</body>
+</html>

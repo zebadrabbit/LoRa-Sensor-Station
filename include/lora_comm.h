@@ -22,4 +22,13 @@ void OnRxError();
 void sendSensorData(const SensorData& data);
 void enterRxMode();
 
+#ifdef BASE_STATION
+void handlePendingWebSocketBroadcast();  // Handle WebSocket broadcast from main loop
+void checkCommandRetries();  // Check for commands that need retry
+#endif
+
+#ifdef SENSOR_NODE
+bool shouldSendImmediateAck();  // Check if immediate ACK telemetry should be sent
+#endif
+
 #endif // LORA_COMM_H

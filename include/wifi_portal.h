@@ -17,8 +17,14 @@ public:
     // Stop portal and connect to WiFi (for base station)
     bool connectToWiFi(const char* ssid, const char* password);
     
+    // Start web dashboard (base station mode)
+    void startDashboard();
+    
     // Check if portal is running
     bool isPortalActive();
+    
+    // Check if dashboard is running
+    bool isDashboardActive();
     
     // Process DNS and web server requests
     void handleClient();
@@ -26,13 +32,24 @@ public:
     // Get current AP IP address
     String getAPIP();
     
+    // WebSocket broadcast for real-time updates
+    void broadcastSensorUpdate();
+    
+    // Public JSON generators (used by WebSocket)
+    String generateSensorsJSON();
+    String generateStatsJSON();
+    
 private:
     DNSServer dnsServer;
     AsyncWebServer webServer;
     bool portalActive;
+    bool dashboardActive;
     
     // Setup web server routes
     void setupWebServer();
+    
+    // Setup dashboard routes (base station)
+    void setupDashboard();
     
     // HTML page handlers
     String generateMainPage();
@@ -40,10 +57,30 @@ private:
     String generateBaseStationConfigPage();
     String generateSuccessPage(const String& message);
     
+    // Dashboard page handlers
+    String generateDashboardPage();
+    String generateHistoryJSON(uint8_t sensorId, uint32_t timeRange);
+    String generateAlertsPage();
+    String generateAlertsConfigJSON();
+    String generateMQTTPage();
+    String generateMQTTConfigJSON();
+    String generateSensorNamesPage();
+    String generateSensorNamesJSON();
+    
     // Handle form submissions
     void handleModeSelection(AsyncWebServerRequest *request);
     void handleSensorConfig(AsyncWebServerRequest *request);
     void handleBaseStationConfig(AsyncWebServerRequest *request);
+    void handleAlertsConfigUpdate(AsyncWebServerRequest *request, uint8_t *data, size_t len);
+    void handleMQTTConfigUpdate(AsyncWebServerRequest *request, uint8_t *data, size_t len);
+    void handleSensorNameUpdate(AsyncWebServerRequest *request, uint8_t *data, size_t len);
+    void handleRemoteSetInterval(AsyncWebServerRequest *request, uint8_t *data, size_t len);
+    void handleRemoteRestart(AsyncWebServerRequest *request, uint8_t *data, size_t len);
+    void handleRemoteGetConfig(AsyncWebServerRequest *request, uint8_t *data, size_t len);
+    String generateCommandQueueJSON();
+    
+    // Alert testing
+    bool testTeamsWebhook();
 };
 
 // Global instance

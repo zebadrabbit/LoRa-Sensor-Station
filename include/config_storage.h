@@ -16,6 +16,8 @@ struct SensorConfig {
     uint8_t sensorId;
     char location[32];
     uint16_t transmitInterval;  // seconds
+    bool meshEnabled;           // Enable mesh networking
+    bool meshForwarding;        // Allow packet forwarding (relay mode)
     bool configured;
 };
 
@@ -23,6 +25,7 @@ struct SensorConfig {
 struct BaseStationConfig {
     char ssid[32];
     char password[64];
+    bool meshEnabled;           // Enable mesh networking
     bool configured;
 };
 

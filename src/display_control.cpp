@@ -23,7 +23,7 @@ static bool factoryResetTriggered = false;
 static bool immediatePingRequested = false;
 
 #ifdef BASE_STATION
-  #define NUM_PAGES 5  // Status, Sensors, Statistics, Signal Graph, Battery
+  #define NUM_PAGES 6  // Status, Sensors, Statistics, Signal Graph, Battery, WiFi Info
 #else
   #define NUM_PAGES 3  // Status, Statistics, Battery
 #endif
@@ -334,7 +334,7 @@ void displayBaseStationPage() {
         display.drawString(0, 36, "Last RX: Never");
       }
       
-      display.drawString(110, 54, "1/5");
+      display.drawString(110, 54, "1/6");
       break;
     }
     
@@ -364,7 +364,7 @@ void displayBaseStationPage() {
         }
       }
       
-      display.drawString(110, 54, "2/5");
+      display.drawString(110, 54, "2/6");
       break;
     }
     
@@ -383,7 +383,7 @@ void displayBaseStationPage() {
         (stats->totalRxPackets * 100) / (stats->totalRxPackets + stats->totalRxInvalid) : 0;
       display.drawString(0, 36, "Success: " + String(rxSuccess) + "%");
       
-      display.drawString(110, 54, "3/5");
+      display.drawString(110, 54, "3/6");
       break;
     }
     
@@ -399,7 +399,7 @@ void displayBaseStationPage() {
       
       display.drawString(0, 52, "-120");
       display.drawString(90, 52, "-20");
-      display.drawString(110, 52, "4/5");
+      display.drawString(110, 52, "4/6");
       break;
     }
     
@@ -422,7 +422,45 @@ void displayBaseStationPage() {
         drawBatteryIcon(batteryPercent, 90, 26);
       #endif
       
-      display.drawString(110, 54, "5/5");
+      display.drawString(110, 54, "5/6");
+      break;
+    }
+    
+    case 5: {
+      display.setFont(ArialMT_Plain_10);
+      display.setColor(WHITE);
+      display.fillRect(0, 0, 128, 11);
+      display.setColor(BLACK);
+      display.drawString(0, 0, "WIFI INFO");
+      display.setColor(WHITE);
+      
+      bool wifiConnected = (WiFi.status() == WL_CONNECTED);
+      
+      if (wifiConnected) {
+        // Display IP address
+        String ipStr = WiFi.localIP().toString();
+        display.drawString(0, 14, "IP: " + ipStr);
+        
+        // Display WiFi SSID (truncate if too long)
+        String ssid = WiFi.SSID();
+        if (ssid.length() > 16) {
+          ssid = ssid.substring(0, 13) + "...";
+        }
+        display.drawString(0, 26, "SSID: " + ssid);
+        
+        // Display signal strength
+        int32_t rssi = WiFi.RSSI();
+        display.drawString(0, 38, "Signal: " + String(rssi) + " dBm");
+        
+        // Display WiFi status icon
+        drawWifiStatus(true, 110, 38);
+      } else {
+        display.drawString(0, 20, "WiFi: Not");
+        display.drawString(0, 32, "Connected");
+        drawWifiStatus(false, 110, 38);
+      }
+      
+      display.drawString(110, 54, "6/6");
       break;
     }
   }
@@ -446,12 +484,15 @@ void displaySensorPage() {
       display.drawString(0, 0, "SENSOR #" + String(SENSOR_ID));
       display.setColor(WHITE);
       
+      SensorConfig config = configStorage.getSensorConfig();
+      display.drawString(0, 12, "Interval: " + String(config.transmitInterval) + "s");
+      
       uint32_t uptime = millis() / 1000;
-      display.drawString(0, 12, "Uptime: " + String(uptime) + "s");
+      display.drawString(0, 24, "Uptime: " + String(uptime) + "s");
       
       if (stats->lastTxTime > 0) {
         uint32_t secAgo = (millis() - stats->lastTxTime) / 1000;
-        display.drawString(0, 24, "Last TX: " + String(secAgo) + "s ago");
+        display.drawString(0, 36, "Last TX: " + String(secAgo) + "s ago");
       }
       
       display.drawString(110, 54, "1/3");
