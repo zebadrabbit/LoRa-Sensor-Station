@@ -4,12 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LoRa Sensor Dashboard</title>
-    <link rel="stylesheet" href="/style.css">
+    <link rel="stylesheet" href="/pico-custom.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
     <div class="container">
-        <div class="header">
+        <header>
             <h1>🎯 LoRa Sensor Dashboard</h1>
             <p>Real-time monitoring and data visualization</p>
             <div class="header-stats">
@@ -30,49 +30,47 @@
                     <div class="header-stat-value" id="successRate">0%</div>
                 </div>
             </div>
-        </div>
+        </header>
         
-        <div class="grid">
-            <div class="card" style="grid-column: 1 / -1;">
-                <div class="card-title">
-                    📡 Active Clients
-                    <div style="margin-left: auto; display: flex; align-items: center; gap: 15px;">
-                        <div style="font-size: 12px; color: #999;">
-                            Zone Filter:
-                            <select id="zoneFilter" style="padding: 4px 8px; border-radius: 4px; border: 1px solid #ddd; font-size: 12px;">
-                                <option value="">All Zones</option>
-                            </select>
-                        </div>
-                        <div style="font-size: 12px; color: #999;">
-                            Auto-refresh: <span id="countdown">5</span>s
-                        </div>
+        <article style="grid-column: 1 / -1;">
+            <header>
+                <h2>📡 Active Clients</h2>
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <div style="font-size: 12px; color: #999;">
+                        Zone Filter:
+                        <select id="zoneFilter" style="padding: 4px 8px; border-radius: 4px; border: 1px solid #ddd; font-size: 12px;">
+                            <option value="">All Zones</option>
+                        </select>
+                    </div>
+                    <div style="font-size: 12px; color: #999;">
+                        Auto-refresh: <span id="countdown">5</span>s
                     </div>
                 </div>
-                <div id="sensorList">
-                    <div class="empty-state">
-                        <div class="empty-state-icon">📭</div>
-                        <p>No clients detected yet</p>
-                    </div>
+            </header>
+            <div id="sensorList">
+                <div class="empty-state">
+                    <div class="empty-state-icon">📭</div>
+                    <p>No clients detected yet</p>
                 </div>
             </div>
-            
-            <div class="card">
-                <div class="card-title">⚙️ Quick Actions</div>
-                <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px;">
-                    <a href="/export/csv" class="btn btn-secondary" style="flex: 1; min-width: 120px;">📄 CSV</a>
-                    <a href="/export/json" class="btn btn-secondary" style="flex: 1; min-width: 120px;">📋 JSON</a>
-                    <a href="/alerts" class="btn btn-secondary" style="flex: 1; min-width: 120px;">🔔 Alerts</a>
-                    <a href="/sensors" class="btn btn-secondary" style="flex: 1; min-width: 120px;">🏷️ Sensors</a>
-                    <a href="/mqtt" class="btn btn-secondary" style="flex: 1; min-width: 120px;">📡 MQTT</a>
-                    <a href="/security" class="btn btn-secondary" style="flex: 1; min-width: 120px;">🔐 Security</a>
-                    <a href="/lora-settings" class="btn btn-secondary" style="flex: 1; min-width: 120px;">📻 LoRa</a>
-                    <a href="/runtime-config" class="btn btn-secondary" style="flex: 1; min-width: 120px;">⚙️ Config</a>
-                </div>
-            </div>
-        </div>
+        </article>
         
-        <div class="card">
-            <div class="card-title">📈 Historical Data</div>
+        <article>
+            <header><h2>⚙️ Quick Actions</h2></header>
+            <div class="quick-actions">
+                <a href="/export/csv" class="btn secondary">📄 CSV</a>
+                <a href="/export/json" class="btn secondary">📋 JSON</a>
+                <a href="/alerts" class="btn secondary">🔔 Alerts</a>
+                <a href="/sensors" class="btn secondary">🏷️ Sensors</a>
+                <a href="/mqtt" class="btn secondary">📡 MQTT</a>
+                <a href="/security" class="btn secondary">🔐 Security</a>
+                <a href="/lora-settings" class="btn secondary">📻 LoRa</a>
+                <a href="/runtime-config" class="btn secondary">⚙️ Config</a>
+            </div>
+        </article>
+        
+        <article>
+            <header><h2>📈 Historical Data</h2></header>
             <label for="sensorSelect">Client:</label>
             <select id="sensorSelect">
                 <option value="">-- Select --</option>
@@ -85,13 +83,59 @@
                 <button class="time-btn" data-range="6h">6h</button>
                 <button class="time-btn" data-range="24h">24h</button>
             </div>
-        </div>
+        </article>
         
         <div class="grid">
-            <div class="card" style="grid-column: 1 / -1;">
-                <div class="card-title">🌡️ Temperature</div>
+            <article style="grid-column: 1 / -1;">
+                <header><h2>🌡️ Temperature</h2></header>
                 <canvas id="tempChart" style="max-height: 300px;"></canvas>
-            </div>
+            </article>
+            
+            <article style="grid-column: 1 / -1;">
+                <header><h2>💧 Humidity</h2></header>
+                <canvas id="humidityChart" style="max-height: 300px;"></canvas>
+            </article>
+            
+            <article style="grid-column: 1 / -1;">
+                <header><h2>🌪️ Pressure</h2></header>
+                <canvas id="pressureChart" style="max-height: 300px;"></canvas>
+            </article>
+            
+            <article style="grid-column: 1 / -1;">
+                <header><h2>💨 Gas Resistance</h2></header>
+                <canvas id="gasChart" style="max-height: 300px;"></canvas>
+            </article>
+            
+            <article style="grid-column: 1 / -1;">
+                <header><h2>💡 Light Intensity</h2></header>
+                <canvas id="lightChart" style="max-height: 300px;"></canvas>
+            </article>
+            
+            <article style="grid-column: 1 / -1;">
+                <header><h2>⚡ Voltage</h2></header>
+                <canvas id="voltageChart" style="max-height: 300px;"></canvas>
+            </article>
+            
+            <article style="grid-column: 1 / -1;">
+                <header><h2>🔌 Current</h2></header>
+                <canvas id="currentChart" style="max-height: 300px;"></canvas>
+            </article>
+            
+            <article style="grid-column: 1 / -1;">
+                <header><h2>⚙️ Power</h2></header>
+                <canvas id="powerChart" style="max-height: 300px;"></canvas>
+            </article>
+            
+            <article style="grid-column: 1 / -1;">
+                <header><h2>🔋 Battery</h2></header>
+                <canvas id="battChart" style="max-height: 300px;"></canvas>
+            </article>
+            
+            <article style="grid-column: 1 / -1;">
+                <header><h2>📶 Signal (RSSI)</h2></header>
+                <canvas id="rssiChart" style="max-height: 300px;"></canvas>
+            </article>
+        </div>
             
             <div class="card" style="grid-column: 1 / -1;">
                 <div class="card-title">� Humidity</div>
