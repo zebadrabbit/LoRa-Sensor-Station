@@ -341,6 +341,20 @@ String WiFiPortal::generateSensorConfigPage() {
             </div>
             
             <div class="form-group">
+                <label for="clientType">Client Type</label>
+                <select id="clientType" name="clientType" required>
+                    <option value="0" selected>Standard (AC Power + Battery)</option>
+                    <option value="1">Rugged (Solar + Battery Outdoor)</option>
+                    <option value="2">Deep Sleep (Ultra Low Power)</option>
+                </select>
+                <p class="help-text">
+                    <strong>Standard:</strong> AC power with battery backup, normal operation<br>
+                    <strong>Rugged:</strong> Solar-powered outdoor sensor with weather-resistant battery<br>
+                    <strong>Deep Sleep:</strong> Battery-only with deep sleep mode for extended battery life
+                </p>
+            </div>
+            
+            <div class="form-group">
                 <label for="networkId">Network ID (1-65535)</label>
                 <input type="number" id="networkId" name="networkId" min="1" max="65535" value="12345" required>
                 <p class="help-text">🔒 All devices in the same network must use the same Network ID</p>
@@ -634,6 +648,13 @@ void WiFiPortal::handleSensorConfig(AsyncWebServerRequest *request) {
             config.priority = (SensorPriority)request->getParam("priority", true)->value().toInt();
         } else {
             config.priority = PRIORITY_MEDIUM;
+        }
+        
+        // Parse client type (default to STANDARD)
+        if (request->hasParam("clientType", true)) {
+            config.clientType = (ClientType)request->getParam("clientType", true)->value().toInt();
+        } else {
+            config.clientType = CLIENT_STANDARD;
         }
         
         config.configured = true;

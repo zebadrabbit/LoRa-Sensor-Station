@@ -707,12 +707,13 @@ A piezo buzzer provides audio feedback for alerts, status changes, and user inte
 
 **Piezo Buzzer (Passive or Active):**
 
-| Buzzer Pin | Wire Color | Function          |
-|------------|------------|-------------------|
-| +          | Red        | Signal (GPIO)     |
-| -          | Black      | Ground            |
+| Buzzer Pin | Wire Color | Function      |
+| ---------- | ---------- | ------------- |
+| +          | Red        | Signal (GPIO) |
+| -          | Black      | Ground        |
 
-**Note:** 
+**Note:**
+
 - **Active buzzers** - Have built-in oscillator, simply turn on/off (easier)
 - **Passive buzzers** - Require PWM signal for tone generation (more flexible)
 
@@ -720,17 +721,17 @@ A piezo buzzer provides audio feedback for alerts, status changes, and user inte
 
 **Sensor Node:**
 
-| Heltec Pin | Buzzer Pin | Notes                           |
-|------------|------------|---------------------------------|
-| GPIO 5     | + (Red)    | PWM-capable pin for tones       |
-| GND        | - (Black)  | Ground connection               |
+| Heltec Pin | Buzzer Pin | Notes                     |
+| ---------- | ---------- | ------------------------- |
+| GPIO 5     | + (Red)    | PWM-capable pin for tones |
+| GND        | - (Black)  | Ground connection         |
 
 **Base Station:**
 
-| Heltec Pin | Buzzer Pin | Notes                           |
-|------------|------------|---------------------------------|
-| GPIO 6     | + (Red)    | PWM-capable pin for tones       |
-| GND        | - (Black)  | Ground connection               |
+| Heltec Pin | Buzzer Pin | Notes                     |
+| ---------- | ---------- | ------------------------- |
+| GPIO 6     | + (Red)    | PWM-capable pin for tones |
+| GND        | - (Black)  | Ground connection         |
 
 **Wiring Diagram:**
 
@@ -757,6 +758,7 @@ Heltec Board                Piezo Buzzer
 ### Buzzer Types
 
 **Active Buzzer (Recommended for Beginners):**
+
 - Has built-in oscillator
 - Fixed frequency (typically 2-4 kHz)
 - Simple on/off control via `digitalWrite()`
@@ -764,6 +766,7 @@ Heltec Board                Piezo Buzzer
 - **Best for:** Alerts, warnings, confirmations
 
 **Passive Buzzer (Advanced):**
+
 - Requires external PWM signal
 - Variable frequency for tones and melodies
 - Use `ledcSetup()` and `ledcWriteTone()` on ESP32
@@ -836,6 +839,7 @@ void errorTone() {
 ### Use Cases
 
 **Sensor Node:**
+
 - Configuration saved (double beep)
 - LoRa packet sent successfully (short beep)
 - Low battery warning (3 beeps every minute)
@@ -844,6 +848,7 @@ void errorTone() {
 - Remote command received (ascending tone)
 
 **Base Station:**
+
 - Sensor timeout alert (3 beeps)
 - Alert condition triggered (continuous beeping)
 - Network connection lost (descending tone)
@@ -854,10 +859,12 @@ void errorTone() {
 ### Power Considerations
 
 **Current Draw:**
+
 - Active buzzer: 20-30 mA @ 3.3V
 - Passive buzzer: 10-20 mA @ 3.3V
 
 **Battery Impact:**
+
 - Minimal when used sparingly
 - Consider reducing volume or duration for battery-powered sensors
 - Use only for critical alerts on remote sensors
@@ -865,10 +872,12 @@ void errorTone() {
 ### Volume Control
 
 **Hardware:**
+
 - Add a series resistor (100Ω - 1kΩ) to reduce volume
 - Larger resistor = quieter buzzer
 
 **Software (Passive Buzzer only):**
+
 ```cpp
 // Reduce duty cycle for quieter sound
 ledcWrite(BUZZER_CHANNEL, 64);  // 25% duty = quieter
@@ -878,18 +887,21 @@ ledcWrite(BUZZER_CHANNEL, 32);  // 12.5% duty = very quiet
 ### Troubleshooting
 
 **No sound:**
+
 - Check polarity (+ to GPIO, - to GND)
 - Verify GPIO pin not in use by other peripherals
 - Test with simple digitalWrite() HIGH/LOW
 - Confirm buzzer is working (test with 3.3V directly)
 
 **Quiet or distorted:**
+
 - Check if active vs passive buzzer
 - Passive buzzers need PWM signal
 - Try different frequencies (1-5 kHz typical range)
 - Add series resistor to reduce volume if too loud
 
 **Buzzer stays on:**
+
 - Ensure pinMode() set to OUTPUT
 - Call digitalWrite(LOW) or ledcWrite(0) to turn off
 - Check for infinite loops or missing delays
@@ -897,16 +909,19 @@ ledcWrite(BUZZER_CHANNEL, 32);  // 12.5% duty = very quiet
 ### Recommended Products
 
 **Active Buzzers:**
+
 - 5V active buzzer with 3.3V compatible input
 - Built-in oscillator, easy to use
 - ~85dB @ 10cm
 
 **Passive Buzzers:**
+
 - 3.3V passive piezo element
 - Requires PWM signal
 - More versatile for tones
 
 **Mounting:**
+
 - Self-adhesive back
 - PCB mount with through-holes
 - Wire leads for flexible placement

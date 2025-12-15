@@ -2,7 +2,35 @@
 
 ## Version History
 
-### v2.15.0 (December 14, 2025) - Current Version
+### v2.15.2 (December 14, 2025) - Current Version
+
+- ✅ **Client Type Selection**: Initial setup configuration
+- ✅ Three client types: Standard (AC+battery), Rugged (solar+battery), Deep Sleep (ultra low power)
+- ✅ Client type persisted in NVS configuration
+- ✅ Captive portal dropdown with detailed descriptions
+- ✅ Prepares foundation for future deep sleep and power management features
+- ✅ **Bug Fixes**:
+- ✅ Removed duplicate chart card sections from dashboard (46 lines)
+- ✅ Fixed dashboard showing empty cards for environmental sensors
+- ✅ **Hardware Documentation**:
+- ✅ Added piezo buzzer wiring for both sensor and base station
+- ✅ GPIO 5 (sensor) and GPIO 6 (base station)
+- ✅ Active vs passive buzzer guidance with code examples
+
+### v2.15.1 (December 14, 2025)
+
+- ✅ **Pico-Inspired CSS Framework**
+- ✅ Created pico-custom.css (6.44KB) - lightweight CSS framework
+- ✅ Semantic HTML conversion (article/header tags)
+- ✅ Consistent styling across all web pages
+- ✅ **Dashboard Chart Fixes**
+- ✅ Fixed chart visibility logic (article selector)
+- ✅ Charts hide when no data available
+- ✅ Battery/RSSI updates working correctly
+- ✅ Status indicator with inline CSS colors
+- ✅ Client cards with hover effects and grid layout
+
+### v2.15.0 (December 14, 2025)
 
 - ✅ **I2C Sensor Support (Phase 2)**: BME680, BH1750, INA219
 - ✅ BME680 environmental sensor (temperature, humidity, pressure, gas resistance)
@@ -242,10 +270,21 @@
   4. User enters configuration: ✅
      - Unique Sensor ID (1-255) ✅
      - Sensor Location/Name (text field) ✅
+     - Zone/Area (optional grouping field) ✅
+     - Sensor Priority (Low/Medium/High) ✅
+     - Client Type (Standard/Rugged/DeepSleep) ✅ NEW
+     - Network ID (pairing) ✅
      - Transmission Interval (15s/30s/60s/5min) ✅
+     - Encryption Key (optional) ✅
   5. Save → Device stores config in NVS ✅
   6. Device reboots into sensor mode (LoRa only, no WiFi) ✅
   7. Display shows sensor status with configured settings ✅
+
+  **Client Types:** ✅ NEW
+
+  - **Standard (CLIENT_STANDARD)**: AC power with battery backup, normal operation
+  - **Rugged (CLIENT_RUGGED)**: Solar-powered outdoor sensor with weather-resistant battery
+  - **Deep Sleep (CLIENT_DEEPSLEEP)**: Battery-only with deep sleep mode for extended battery life
 
   **Base Station Path:** ✅ IMPLEMENTED
 
@@ -288,7 +327,9 @@
   - [x] WebSocket for live updates (currently polling) ✅ COMPLETED v2.6.0
   - [x] Alert configuration interface ✅ COMPLETED v2.3.0
   - [x] Configuration page for runtime settings ✅ COMPLETED v2.15.0- [x] Pico-inspired CSS framework ✅ COMPLETED v2.15.1
-- [x] Dashboard chart visibility fixes ✅ COMPLETED v2.15.1  - [ ] OTA firmware update interface
+
+- [x] Dashboard chart visibility fixes ✅ COMPLETED v2.15.1 - [ ] OTA firmware update interface
+
   - [ ] Network diagnostics page
 
   **Note:** Base station now serves live dashboard at http://[IP]/ showing real-time sensor data with auto-refresh.

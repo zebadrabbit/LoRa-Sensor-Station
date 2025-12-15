@@ -11,6 +11,13 @@ enum DeviceMode {
     MODE_BASE_STATION = 2
 };
 
+// Client type enumeration
+enum ClientType {
+    CLIENT_STANDARD = 0,      // Standard client (AC power + battery backup)
+    CLIENT_RUGGED = 1,        // Rugged outdoor client (solar + battery)
+    CLIENT_DEEPSLEEP = 2      // Deep sleep client (ultra low power)
+};
+
 // Sensor priority levels
 enum SensorPriority {
     PRIORITY_LOW = 0,
@@ -26,6 +33,7 @@ struct SensorConfig {
     uint16_t transmitInterval;  // seconds
     uint16_t networkId;         // Network ID for pairing (0-65535)
     SensorPriority priority;    // Priority level (affects polling, alerts)
+    ClientType clientType;      // Client type (standard/rugged/deepsleep)
     bool meshEnabled;           // Enable mesh networking
     bool meshForwarding;        // Allow packet forwarding (relay mode)
     bool configured;

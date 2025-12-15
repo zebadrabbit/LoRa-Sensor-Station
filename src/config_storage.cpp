@@ -31,6 +31,7 @@ SensorConfig ConfigStorage::getSensorConfig() {
     config.transmitInterval = prefs.getUShort("tx_interval", 30);
     config.networkId = prefs.getUShort("network_id", 12345);  // Default to 12345 if not set
     config.priority = (SensorPriority)prefs.getUChar("priority", PRIORITY_MEDIUM);  // Default to medium
+    config.clientType = (ClientType)prefs.getUChar("client_type", CLIENT_STANDARD);  // Default to standard
     config.meshEnabled = prefs.getBool("mesh_en", false);  // Disabled by default for backward compatibility
     config.meshForwarding = prefs.getBool("mesh_fwd", true);  // Forwarding enabled by default
     config.configured = (config.sensorId != 0);
@@ -44,6 +45,7 @@ void ConfigStorage::setSensorConfig(const SensorConfig& config) {
     prefs.putUShort("tx_interval", config.transmitInterval);
     prefs.putUShort("network_id", config.networkId);
     prefs.putUChar("priority", config.priority);
+    prefs.putUChar("client_type", config.clientType);
     prefs.putBool("mesh_en", config.meshEnabled);
     prefs.putBool("mesh_fwd", config.meshForwarding);
 }
