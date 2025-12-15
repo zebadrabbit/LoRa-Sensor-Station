@@ -352,6 +352,11 @@ tr:hover {
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
 
+.sensor-item-tab {
+    border-left: 5px solid var(--primary);
+    padding-left: 16px !important;
+}
+
 /* Utility Classes */
 .hidden {
     display: none;

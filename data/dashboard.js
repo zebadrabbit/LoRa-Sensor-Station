@@ -72,7 +72,7 @@ function updateSensorList(sensors) {
         else if (sensor.priorityLevel === 0) priorityColor = '#95a5a6'; // Low = gray
         
         html += `
-            <div class="sensor-item" style="background: white; border: 1px solid #e0e6ed; border-radius: 8px; padding: 12px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <div class="sensor-item sensor-item-tab" style="background: white; border: 1px solid #e0e6ed; border-left: 5px solid #667eea; border-radius: 8px; padding: 12px; padding-left: 16px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
                     <span class="status-indicator ${statusClass}" style="width: 10px; height: 10px; border-radius: 50%; ${isOnline ? 'background: #27ae60;' : 'background: #e74c3c;'}"></span>
                     <strong style="font-size: 16px;">${location}</strong>
