@@ -75,6 +75,7 @@ private:
     void handleMQTTConfigUpdate(AsyncWebServerRequest *request, uint8_t *data, size_t len);
     void handleSensorNameUpdate(AsyncWebServerRequest *request, uint8_t *data, size_t len);
     void handleRemoteSetInterval(AsyncWebServerRequest *request, uint8_t *data, size_t len);
+    void handleRemoteSetLocation(AsyncWebServerRequest *request, uint8_t *data, size_t len);
     void handleRemoteRestart(AsyncWebServerRequest *request, uint8_t *data, size_t len);
     void handleRemoteGetConfig(AsyncWebServerRequest *request, uint8_t *data, size_t len);
     String generateCommandQueueJSON();

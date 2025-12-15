@@ -970,6 +970,15 @@ void WiFiPortal::setupDashboard() {
         }
     });
     
+    // Runtime configuration page
+    webServer.on("/runtime-config", HTTP_GET, [](AsyncWebServerRequest *request) {
+        if (LittleFS.exists("/runtime-config.html")) {
+            request->send(LittleFS, "/runtime-config.html", "text/html");
+        } else {
+            request->send(404, "text/plain", "Runtime configuration page not found");
+        }
+    });
+    
     // LoRa configuration API endpoints
     webServer.on("/api/lora/config", HTTP_GET, [](AsyncWebServerRequest *request) {
         BaseStationConfig config = configStorage.getBaseStationConfig();
@@ -1204,6 +1213,11 @@ void WiFiPortal::setupDashboard() {
     webServer.on("/api/remote-config/restart", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL,
         [this](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
             handleRemoteRestart(request, data, len);
+        });
+    
+    webServer.on("/api/remote-config/location", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL,
+        [this](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+            handleRemoteSetLocation(request, data, len);
         });
     
     webServer.on("/api/remote-config/get-config", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL,
@@ -3529,6 +3543,51 @@ void WiFiPortal::handleRemoteRestart(AsyncWebServerRequest *request, uint8_t *da
     
     String response = success ? 
         "{\"success\":true,\"message\":\"Restart command queued\"}" : 
+        "{\"success\":false,\"message\":\"Failed to queue command\"}";
+    request->send(success ? 200 : 500, "application/json", response);
+}
+
+void WiFiPortal::handleRemoteSetLocation(AsyncWebServerRequest *request, uint8_t *data, size_t len) {
+    extern RemoteConfigManager remoteConfigManager;
+    
+    Serial.println("=== handleRemoteSetLocation called ===");
+    
+    // Build body string
+    String body = "";
+    body.reserve(len + 1);
+    for (size_t i = 0; i < len; i++) {
+        body += (char)data[i];
+    }
+    
+    Serial.printf("Received JSON: %s\n", body.c_str());
+    
+    // Parse JSON: {"id":1,"location":"Kitchen"}
+    int idStart = body.indexOf("\"id\":") + 5;
+    int idEnd = body.indexOf(",", idStart);
+    uint8_t sensorId = body.substring(idStart, idEnd).toInt();
+    
+    int locationStart = body.indexOf("\"location\":\"") + 12;
+    int locationEnd = body.lastIndexOf("\"");
+    String location = body.substring(locationStart, locationEnd);
+    
+    Serial.printf("Remote config: Set location for sensor %d to '%s'\n", sensorId, location.c_str());
+    
+    // Validate location length (max 31 characters + null terminator)
+    if (location.length() > 31) {
+        Serial.println("ERROR: Location too long (max 31 characters)");
+        request->send(400, "application/json", "{\"success\":false,\"message\":\"Location too long (max 31 characters)\"}");
+        return;
+    }
+    
+    // Queue command with location string as data
+    uint8_t locationData[32];
+    strncpy((char*)locationData, location.c_str(), 31);
+    locationData[31] = '\0';  // Ensure null termination
+    
+    bool success = remoteConfigManager.queueCommand(sensorId, CMD_SET_LOCATION, locationData, strlen((char*)locationData) + 1);
+    
+    String response = success ? 
+        "{\"success\":true,\"message\":\"Location command queued\"}" : 
         "{\"success\":false,\"message\":\"Failed to queue command\"}";
     request->send(success ? 200 : 500, "application/json", response);
 }

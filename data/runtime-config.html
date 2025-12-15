@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Runtime Configuration</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚙️ Runtime Configuration</h1>
+            <p>Configure sensor settings remotely via LoRa</p>
+            <a href="/" class="btn btn-secondary">← Back to Dashboard</a>
+        </div>
+        
+        <div class="card">
+            <div class="card-title">📡 Select Sensor</div>
+            <select id="sensorSelect" style="width: 100%; padding: 8px; margin-bottom: 10px;">
+                <option value="">-- Select a sensor --</option>
+            </select>
+            <div id="sensorInfo" style="display: none; padding: 10px; background: #f5f5f5; border-radius: 5px; margin-top: 10px;">
+                <strong>Current Configuration:</strong><br>
+                <div style="margin-top: 8px;">
+                    <strong>Location:</strong> <span id="currentLocation">-</span><br>
+                    <strong>Interval:</strong> <span id="currentInterval">-</span> seconds<br>
+                    <strong>Last Seen:</strong> <span id="lastSeen">-</span><br>
+                    <strong>Battery:</strong> <span id="battery">-</span>%
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-title">📍 Sensor Location</div>
+            <form id="locationForm">
+                <div class="form-group">
+                    <label for="locationInput">Sensor Name/Location</label>
+                    <input type="text" id="locationInput" placeholder="e.g., Living Room, Garage, Freezer" maxlength="31" required>
+                    <small>Maximum 31 characters</small>
+                </div>
+                <button type="submit" class="btn">💾 Update Location</button>
+            </form>
+        </div>
+        
+        <div class="card">
+            <div class="card-title">⏱️ Transmission Interval</div>
+            <form id="intervalForm">
+                <div class="form-group">
+                    <label for="intervalInput">Interval (seconds)</label>
+                    <input type="number" id="intervalInput" min="10" max="3600" value="30" required>
+                    <small>Range: 10 seconds to 1 hour (3600 seconds)</small>
+                </div>
+                <div style="margin-top: 10px;">
+                    <strong>Quick Presets:</strong><br>
+                    <button type="button" class="btn btn-secondary" onclick="setInterval(10)">10s</button>
+                    <button type="button" class="btn btn-secondary" onclick="setInterval(30)">30s</button>
+                    <button type="button" class="btn btn-secondary" onclick="setInterval(60)">1 min</button>
+                    <button type="button" class="btn btn-secondary" onclick="setInterval(300)">5 min</button>
+                    <button type="button" class="btn btn-secondary" onclick="setInterval(900)">15 min</button>
+                    <button type="button" class="btn btn-secondary" onclick="setInterval(1800)">30 min</button>
+                </div>
+                <button type="submit" class="btn" style="margin-top: 15px;">💾 Update Interval</button>
+            </form>
+        </div>
+        
+        <div class="card">
+            <div class="card-title">🔄 Sensor Actions</div>
+            <p>Send commands to the selected sensor</p>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <button class="btn btn-secondary" onclick="restartSensor()">🔄 Restart Sensor</button>
+                <button class="btn btn-secondary" onclick="pingSensor()">📡 Request Immediate Ping</button>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-title">ℹ️ Information</div>
+            <p><strong>How it works:</strong> Commands are sent via LoRa to the sensor. The sensor will acknowledge the command in its next transmission.</p>
+            <p><strong>Response time:</strong> Sensors with long intervals will temporarily switch to 10-second intervals for 60 seconds after receiving a command, allowing quick responses.</p>
+            <p><strong>No WiFi required:</strong> Sensors don't need WiFi connectivity. All configuration happens over LoRa radio.</p>
+        </div>
+        
+        <div id="statusMessage" class="message" style="display: none;"></div>
+    </div>
+    
+    <script>
+        let sensors = [];
+        let selectedSensor = null;
+        
+        async function loadSensors() {
+            try {
+                const response = await fetch('/api/sensors');
+                sensors = await response.json();
+                
+                const select = document.getElementById('sensorSelect');
+                select.innerHTML = '<option value="">-- Select a sensor --</option>';
+                
+                sensors.forEach(sensor => {
+                    const option = document.createElement('option');
+                    option.value = sensor.id;
+                    option.textContent = `${sensor.location || 'Sensor ' + sensor.id} (ID: ${sensor.id})`;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading sensors:', error);
+                showMessage('Failed to load sensors', 'error');
+            }
+        }
+        
+        function onSensorSelected() {
+            const sensorId = document.getElementById('sensorSelect').value;
+            if (!sensorId) {
+                document.getElementById('sensorInfo').style.display = 'none';
+                selectedSensor = null;
+                return;
+            }
+            
+            selectedSensor = sensors.find(s => s.id == sensorId);
+            if (selectedSensor) {
+                document.getElementById('currentLocation').textContent = selectedSensor.location || 'Not set';
+                document.getElementById('currentInterval').textContent = 'Unknown'; // API doesn't return this yet
+                document.getElementById('lastSeen').textContent = selectedSensor.age || 'Unknown';
+                document.getElementById('battery').textContent = selectedSensor.battery || '0';
+                document.getElementById('sensorInfo').style.display = 'block';
+                
+                // Pre-fill location field
+                document.getElementById('locationInput').value = selectedSensor.location || '';
+            }
+        }
+        
+        function setInterval(seconds) {
+            document.getElementById('intervalInput').value = seconds;
+        }
+        
+        document.getElementById('locationForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            if (!selectedSensor) {
+                showMessage('Please select a sensor first', 'error');
+                return;
+            }
+            
+            const location = document.getElementById('locationInput').value.trim();
+            if (!location) {
+                showMessage('Location cannot be empty', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/remote-config/location', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        id: selectedSensor.id,
+                        location: location
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showMessage(`Location update command sent to sensor ${selectedSensor.id}. The sensor will acknowledge in its next transmission.`, 'success');
+                } else {
+                    showMessage(`Failed: ${result.message || 'Unknown error'}`, 'error');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showMessage('Failed to send command', 'error');
+            }
+        });
+        
+        document.getElementById('intervalForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            if (!selectedSensor) {
+                showMessage('Please select a sensor first', 'error');
+                return;
+            }
+            
+            const interval = parseInt(document.getElementById('intervalInput').value);
+            if (interval < 10 || interval > 3600) {
+                showMessage('Interval must be between 10 and 3600 seconds', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/remote-config/interval', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        id: selectedSensor.id,
+                        interval: interval
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showMessage(`Interval update command sent to sensor ${selectedSensor.id}. New interval: ${interval} seconds. The sensor will acknowledge in its next transmission.`, 'success');
+                } else {
+                    showMessage(`Failed: ${result.message || 'Unknown error'}`, 'error');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showMessage('Failed to send command', 'error');
+            }
+        });
+        
+        async function restartSensor() {
+            if (!selectedSensor) {
+                showMessage('Please select a sensor first', 'error');
+                return;
+            }
+            
+            if (!confirm(`Are you sure you want to restart sensor ${selectedSensor.id}?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/remote-config/restart', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        id: selectedSensor.id
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showMessage(`Restart command sent to sensor ${selectedSensor.id}. The sensor will reboot in ~1 second.`, 'success');
+                } else {
+                    showMessage(`Failed: ${result.message || 'Unknown error'}`, 'error');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showMessage('Failed to send command', 'error');
+            }
+        }
+        
+        async function pingSensor() {
+            if (!selectedSensor) {
+                showMessage('Please select a sensor first', 'error');
+                return;
+            }
+            
+            showMessage('Note: Ping functionality requires sensor to implement CMD_PING. Currently, sensors send data on their regular interval. Use "Update Interval" to adjust timing.', 'info');
+        }
+        
+        function showMessage(text, type) {
+            const message = document.getElementById('statusMessage');
+            message.textContent = text;
+            message.className = 'message ' + type;
+            message.style.display = 'block';
+            
+            if (type === 'success') {
+                setTimeout(() => {
+                    message.style.display = 'none';
+                }, 10000);
+            }
+        }
+        
+        // Initialize
+        document.getElementById('sensorSelect').addEventListener('change', onSensorSelected);
+        loadSensors();
+        
+        // Auto-refresh sensor list every 30 seconds
+        setInterval(loadSensors, 30000);
+    </script>
+</body>
+</html>

@@ -36,6 +36,13 @@
 - ✅ Historical data charts hide when no data available (temp, humidity, pressure, gas, light, voltage, current, power)
 - ✅ Only battery and RSSI charts shown (these are tracked in history)
 - ✅ Status indicator inline with sensor name (improved layout)
+- ✅ **Remote Configuration**
+- ✅ Forced 10s interval after command reception (60 second duration)
+- ✅ Runtime configuration web page (/runtime-config)
+- ✅ Remote interval adjustment via web UI
+- ✅ Remote location/name change via web UI
+- ✅ Remote sensor restart command
+- ✅ Quick response even from 30-minute interval sensors
 
 ### v2.14.0 (December 14, 2025)
 
@@ -280,7 +287,7 @@
   - [x] Historical data graphs (hourly/daily/weekly) ✅ COMPLETED v2.7.0
   - [x] WebSocket for live updates (currently polling) ✅ COMPLETED v2.6.0
   - [x] Alert configuration interface ✅ COMPLETED v2.3.0
-  - [ ] Configuration page for runtime settings
+  - [x] Configuration page for runtime settings ✅ COMPLETED v2.15.0
   - [ ] OTA firmware update interface
   - [ ] Network diagnostics page
 
@@ -709,7 +716,7 @@
 - [ ] Full web server on base station (beyond captive portal) ✅ BASIC VERSION DONE
 - [ ] Real-time sensor dashboard with live charts ✅ DONE (polling)
 - [ ] Historical data graphs (hourly/daily/weekly)
-- [ ] Configuration page for runtime settings
+- [x] Configuration page for runtime settings ✅ COMPLETED v2.15.0
 - [ ] WebSocket for live updates (currently using polling)
 - [ ] Export data (CSV/JSON) ✅ DONE
 - [ ] Alert configuration interface
