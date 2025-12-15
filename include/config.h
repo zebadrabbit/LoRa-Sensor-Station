@@ -33,7 +33,7 @@
 // ============================================================================
 #define RF_FREQUENCY                868000000   // Hz (adjust for your region: 433, 868, 915 MHz)
 #define TX_OUTPUT_POWER             14          // dBm
-#define LORA_BANDWIDTH              0           // [0: 125 kHz, 1: 250 kHz, 2: 500 kHz]
+#define LORA_BANDWIDTH              125000      // Hz (125000, 250000, or 500000)
 #define LORA_SPREADING_FACTOR       10          // [SF7..SF12] - SF10 needed for 200-byte packets
 #define LORA_CODINGRATE             1           // [1: 4/5, 2: 4/6, 3: 4/7, 4: 4/8]
 #define LORA_PREAMBLE_LENGTH        8           // Same for Tx and Rx

@@ -2,7 +2,42 @@
 
 ## Version History
 
-### v2.14.0 (December 14, 2025) - Current Version
+### v2.15.0 (December 14, 2025) - Current Version
+
+- ✅ **I2C Sensor Support (Phase 2)**: BME680, BH1750, INA219
+- ✅ BME680 environmental sensor (temperature, humidity, pressure, gas resistance)
+- ✅ BH1750 light intensity sensor (ambient light in lux)
+- ✅ INA219 power monitor (voltage, current, power)
+- ✅ Auto-detection on I2C bus (addresses 0x23, 0x40, 0x5C, 0x76, 0x77)
+- ✅ Multi-sensor MQTT publishing with individual topics per sensor type
+- ✅ Home Assistant multi-sensor auto-discovery
+- ✅ Sensor wiring documentation (SENSOR_WIRING.md)
+- ✅ **Display Improvements**: Welcome pages, longer page cycle
+- ✅ Page 0 welcome screens ("Hello! I am [name]")
+- ✅ Adaptive font sizing for long names (>14 chars)
+- ✅ Page cycle increased from 5s to 10s
+- ✅ Button press resets page timer (already implemented)
+- ✅ 7 pages base station, 5 pages sensor
+- ✅ **Button Action Swap**: 2 clicks=ping, 3 clicks=reboot
+- ✅ Double click sends immediate ping (was reboot)
+- ✅ Triple click reboots device (was ping)
+- ✅ More intuitive UX (common action easier, destructive action safer)
+- ✅ **LoRa Settings Sync**: Coordinated reboot protocol
+- ✅ Web UI for changing LoRa parameters (frequency, SF, bandwidth, TX power, etc.)
+- ✅ Coordinated reboot: sensors reboot in 5s, base station in 10s
+- ✅ 5-step modal with timing display and reboot sequence
+- ✅ Parameter persistence via NVS (lora_params namespace)
+- ✅ Boot screen displays actual frequency and sensor ID
+- ✅ Bandwidth conversion fix (kHz to Hz) and auto-correction
+- ✅ Default bandwidth changed to 125000 Hz
+- ✅ Parameters always loaded from NVS if stored (not just when pending flag set)
+- ✅ API endpoint reads actual stored parameters (not hardcoded values)
+- ✅ **Dashboard UI Improvements**
+- ✅ Historical data charts hide when no data available (temp, humidity, pressure, gas, light, voltage, current, power)
+- ✅ Only battery and RSSI charts shown (these are tracked in history)
+- ✅ Status indicator inline with sensor name (improved layout)
+
+### v2.14.0 (December 14, 2025)
 
 - ✅ Multi-Sensor Support: Zones, Priority, Health Scoring
 - ✅ Sensor zone/area grouping (16-character field, NVS-persisted)
@@ -353,15 +388,22 @@
   - JST connector pin assignments ✅
   - I2C bus scanning with auto-detection ✅
 
-  **Still TODO for Full Sensor Support:**
+  **Completed I2C Sensors:** ✅ COMPLETED v2.15.0
 
-  - [ ] BME680 (temp/humidity/pressure/gas) - Phase 2
-  - [ ] BH1750 light sensor - Phase 2
-  - [ ] INA219 current/power sensor - Phase 2
+  - [x] BME680 (temp/humidity/pressure/gas) ✅
+  - [x] BH1750 light sensor ✅
+  - [x] INA219 current/power sensor ✅
+  - [x] I2C auto-detection and initialization ✅
+  - [x] Multi-sensor MQTT publishing ✅
+  - [x] Home Assistant multi-sensor discovery ✅
+  - [x] Sensor wiring documentation ✅
+
+  **Still TODO for Additional Sensors:**
+
   - [ ] DS18B20 1-Wire temperature - Phase 3
   - [ ] DHT22 humidity sensor - Phase 4
   - [ ] Additional ADC sensors (photoresistor, soil moisture) - Phase 5
-  - [ ] Web configuration interface - Phase 6
+  - [ ] Web configuration interface for sensor settings - Phase 6
   - [ ] Motion detection (PIR)
   - [ ] Door/window contact sensors
 
@@ -534,7 +576,6 @@
 - [ ] External antenna support
 - [ ] Multiple radio support (868/915/433 MHz)
 - [ ] E-ink display option (ultra-low power)
-- [ ] Waterproof enclosure designs
 
 ### Protocol Support
 
@@ -547,8 +588,6 @@
 
 - [ ] Time-series database optimization
 - [ ] Edge computing/local AI processing
-- [ ] Blockchain logging (immutable audit trail)
-- [ ] Satellite backup communication (emergency)
 - [ ] Professional weather station mode
 
 ---
@@ -606,34 +645,57 @@
 
 ## 🔵 Current Focus - Phase 3: Advanced Features
 
-### Recently Completed (v2.9.0 Phase 1):
+### Recently Completed (v2.15.0):
 
-- [x] Modular Sensor Architecture ✅
-- [x] Abstract ISensor interface (12 sensor types) ✅
-- [x] SensorManager with I2C auto-detection ✅
-- [x] Variable-length MultiSensorPacket ✅
-- [x] ThermistorSensor with Steinhart-Hart ✅
-- [x] Backward compatible packet handling ✅
+- [x] I2C Sensor Implementations ✅
+- [x] BME680 environmental sensor (temp/humidity/pressure/gas) ✅
+- [x] BH1750 light intensity sensor ✅
+- [x] INA219 current/power monitoring ✅
+- [x] Multi-sensor MQTT publishing ✅
+- [x] Home Assistant multi-sensor auto-discovery ✅
+- [x] Sensor wiring documentation (SENSOR_WIRING.md) ✅
+- [x] Display improvements (welcome pages, 10s cycle) ✅
+- [x] Button action swap (2=ping, 3=reboot) ✅
 
 ### Next Priority Options:
 
-1. **I2C Sensor Implementations** (Medium effort, high value) ⭐ RECOMMENDED
-   - [ ] BME680 environmental sensor (temp/humidity/pressure/gas) - Phase 2
-   - [ ] BH1750 light intensity sensor - Phase 2
-   - [ ] INA219 current/power monitoring - Phase 2
-   - [ ] Web sensor configuration interface - Phase 6
-   - Ready architecture, just need concrete implementations
-2. **Runtime Configuration Page** (Medium effort, high value)
+1. **LoRa Settings Sync - CRITICAL** (Medium effort, BLOCKING) ⭐⭐⭐ HIGHEST PRIORITY
+   - [ ] Complete SET_LORA_PARAMS command implementation
+   - [ ] Coordinated reboot protocol:
+     - Send command to all active sensors
+     - Wait for ACKs from all sensors
+     - Sensors reboot with new parameters
+     - Base station reboots with new parameters
+     - All nodes reconnect on new frequency/SF/BW
+   - [ ] Status modal already built in /lora-settings.html
+   - [ ] Without this: Changing LoRa settings breaks all communication
+   - **BLOCKING**: /lora-settings page exists but doesn't fully work
+2. **Hardware Testing with Real Sensors** (Low effort, high validation) ⭐⭐ RECOMMENDED
+
+   - [ ] Test BME680 with actual hardware (ordered, arriving next week)
+   - [ ] Test BH1750 light sensor
+   - [ ] Test INA219 power monitor
+   - [ ] Validate multi-sensor packets over LoRa
+   - [ ] Verify MQTT publishing with all sensor types
+   - [ ] Test adaptive font sizing with various names
+   - **VALIDATES**: All the code we just wrote
+
+3. **Mesh Network Testing** (Low effort, high value) ⭐⭐
+
+   - [ ] Code complete (v3.0.0), just needs 3-node testing
+   - [ ] Validate route discovery and forwarding
+   - [ ] Test self-healing on node failure
+   - [ ] Measure range extension through relay
+   - [ ] Web dashboard mesh status page
+   - **ADVANTAGE**: Already implemented, just needs validation
+
+4. **Runtime Configuration Page** (Medium effort, medium value)
+   - [ ] Web UI for all remote config commands
    - [ ] Adjust transmission intervals without reset
    - [ ] Change sensor location names
    - [ ] Modify alert thresholds
-   - [ ] WiFi network changes
-   - [ ] LoRa parameters tuning
-3. **Cloud Data Storage** (Medium effort, medium value)
-   - [ ] InfluxDB integration via MQTT
-   - [ ] ThingSpeak direct publishing
-   - [ ] Long-term data retention
-   - [ ] Advanced analytics and queries
+   - [ ] LoRa parameters tuning (via #1 above)
+   - **DEPENDS ON**: #1 for LoRa settings
 
 **Shelved/Deferred:**
 
@@ -657,36 +719,52 @@
 
 ## Implementation Priority Matrix
 
-| Feature Category             | Complexity | Impact     | Priority       | Status                           |
-| ---------------------------- | ---------- | ---------- | -------------- | -------------------------------- |
-| WiFi Captive Portal          | Medium     | High       | ⭐⭐⭐⭐⭐     | ✅ Completed v2.0.0              |
-| Sensor Health Monitoring     | Low        | High       | ⭐⭐⭐⭐⭐     | ✅ Completed v2.0.0              |
-| Display Enhancements         | Low        | Medium     | ⭐⭐⭐⭐       | ✅ Completed v2.0.0              |
-| Multi-Click Buttons          | Low        | Medium     | ⭐⭐⭐⭐       | ✅ Completed v2.0.0              |
-| Web Dashboard (Basic)        | Medium     | High       | ⭐⭐⭐⭐⭐     | ✅ Completed v2.1.0              |
-| Teams Notifications          | Low        | High       | ⭐⭐⭐⭐⭐     | ✅ Completed v2.3.0              |
-| Email Alerts Phase 1\*\*     | **Medium** | **High**   | **⭐⭐⭐⭐⭐** | **✅ Completed v2.12.0**         |
-| **Network Pairing Phase 2**  | Low        | High       | ⭐⭐⭐⭐⭐     | ✅ Completed v2.5.0              |
-| WebSocket Live Updates       | Low        | Medium     | ⭐⭐⭐⭐       | ✅ Completed v2.6.0              |
-| In-Memory Historical Data    | Medium     | High       | ⭐⭐⭐⭐       | ✅ Completed v2.7.0              |
-| MQTT Publishing              | Low        | High       | ⭐⭐⭐⭐⭐     | ✅ Completed v2.8.0              |
-| Home Assistant Integration   | Low        | High       | ⭐⭐⭐⭐⭐     | ✅ Completed v2.8.0              |
-| Modular Sensor Architecture  | Medium     | High       | ⭐⭐⭐⭐⭐     | ✅ Completed v2.9.0              |
-| Remote LoRa Configuration    | Medium     | High       | ⭐⭐⭐⭐⭐     | ✅ Completed v2.10.0             |
-| **Network Pairing/Security** | **Medium** | **High**   | **⭐⭐⭐⭐⭐** | **🔵 NEXT RECOMMENDED**          |
-| **Additional Sensor Types**  | **Low**    | **High**   | **⭐⭐⭐⭐⭐** | **🔵 ALTERNATIVE**               |
-| **Runtime Config Web UI**    | **Low**    | **Medium** | **⭐⭐⭐⭐**   | **🔵 ALTERNATIVE**               |
-| Deep Sleep Mode              | Medium     | High       | ⭐⭐⭐⭐       | ⚪ Shelved (lab use, not remote) |
-| OTA Firmware Updates         | Medium     | High       | ⭐⭐⭐⭐⭐     | ⚪ Shelved (USB preferred)       |
-| SMS Alerts (Twilio)          | Low        | Medium     | ⭐⭐⭐         | ⚪ Shelved (deferred)            |
-| SD Card Logging              | Low        | Medium     | ⭐⭐⭐⭐       | ⚪ Shelved (no hardware)         |
-| Mobile App                   | Very High  | Medium     | ⭐⭐           | ⚪ Future                        |
+| Feature Category            | Complexity | Impact       | Priority       | Status                             |
+| --------------------------- | ---------- | ------------ | -------------- | ---------------------------------- |
+| WiFi Captive Portal         | Medium     | High         | ⭐⭐⭐⭐⭐     | ✅ Completed v2.0.0                |
+| Sensor Health Monitoring    | Low        | High         | ⭐⭐⭐⭐⭐     | ✅ Completed v2.0.0                |
+| Display Enhancements        | Low        | Medium       | ⭐⭐⭐⭐       | ✅ Completed v2.0.0                |
+| Multi-Click Buttons         | Low        | Medium       | ⭐⭐⭐⭐       | ✅ Completed v2.0.0                |
+| Web Dashboard (Basic)       | Medium     | High         | ⭐⭐⭐⭐⭐     | ✅ Completed v2.1.0                |
+| Teams Notifications         | Low        | High         | ⭐⭐⭐⭐⭐     | ✅ Completed v2.3.0                |
+| Email Alerts Phase 1\*\*    | **Medium** | **High**     | **⭐⭐⭐⭐⭐** | **✅ Completed v2.12.0**           |
+| **Network Pairing Phase 2** | Low        | High         | ⭐⭐⭐⭐⭐     | ✅ Completed v2.5.0                |
+| WebSocket Live Updates      | Low        | Medium       | ⭐⭐⭐⭐       | ✅ Completed v2.6.0                |
+| In-Memory Historical Data   | Medium     | High         | ⭐⭐⭐⭐       | ✅ Completed v2.7.0                |
+| MQTT Publishing             | Low        | High         | ⭐⭐⭐⭐⭐     | ✅ Completed v2.8.0                |
+| Home Assistant Integration  | Low        | High         | ⭐⭐⭐⭐⭐     | ✅ Completed v2.8.0                |
+| Modular Sensor Architecture | Medium     | High         | ⭐⭐⭐⭐⭐     | ✅ Completed v2.9.0                |
+| Remote LoRa Configuration   | Medium     | High         | ⭐⭐⭐⭐⭐     | ✅ Completed v2.10.0               |
+| Network Pairing/Security    | Medium     | High         | ⭐⭐⭐⭐⭐     | ✅ Completed v2.13.0               |
+| I2C Sensor Implementations  | Low        | High         | ⭐⭐⭐⭐⭐     | ✅ Completed v2.15.0               |
+| Display Enhancements        | Low        | Medium       | ⭐⭐⭐⭐       | ✅ Completed v2.15.0               |
+| **LoRa Settings Sync**      | **Medium** | **CRITICAL** | **⭐⭐⭐⭐⭐** | **🔴 BLOCKING - HIGHEST PRIORITY** |
+| **Hardware Sensor Testing** | **Low**    | **High**     | **⭐⭐⭐⭐⭐** | **🟡 RECOMMENDED NEXT**            |
+| **Mesh Network Testing**    | **Low**    | **High**     | **⭐⭐⭐⭐**   | **🟢 READY FOR TESTING**           |
+| **Runtime Config Web UI**   | **Medium** | **Medium**   | **⭐⭐⭐⭐**   | **🔵 FUTURE**                      |
+| Deep Sleep Mode             | Medium     | High         | ⭐⭐⭐⭐       | ⚪ Shelved (lab use, not remote)   |
+| OTA Firmware Updates        | Medium     | High         | ⭐⭐⭐⭐⭐     | ⚪ Shelved (USB preferred)         |
+| SMS Alerts (Twilio)         | Low        | Medium       | ⭐⭐⭐         | ⚪ Shelved (deferred)              |
+| SD Card Logging             | Low        | Medium       | ⭐⭐⭐⭐       | ⚪ Shelved (no hardware)           |
+| Mobile App                  | Very High  | Medium       | ⭐⭐           | ⚪ Future                          |
 
 ---
 
 ## Detailed Version History
 
-2.2 (December 14, 2025) - CURRENT
+### v2.15.0 (December 14, 2025) - CURRENT
+
+- ✅ I2C Sensor Support: BME680, BH1750, INA219
+- ✅ Multi-sensor MQTT publishing
+- ✅ Home Assistant multi-sensor auto-discovery
+- ✅ Sensor wiring documentation (SENSOR_WIRING.md)
+- ✅ Welcome pages with adaptive fonts
+- ✅ Page cycle increased to 10 seconds
+- ✅ Button action swap (2=ping, 3=reboot)
+- ✅ LoRa settings page UI complete
+- ⚠️ LoRa settings sync protocol incomplete (coordinated reboot)
+
+### v2.14.0 (December 14, 2025)
 
 - ✅ Display Enhancement: Sensor status page (1/3) shows sensor ID and network ID
 - ✅ UX Consistency: All web pages standardized to 800px width
@@ -855,7 +933,9 @@
 
 **Recommended Next Steps (Lab Use):**
 
-1. **Network Pairing & Security** ⭐ HIGHEST PRIORITY - Prevent interference from other LoRa networks, unique network ID, device authentication
-2. **Additional Sensor Types** - BME680 environmental, BH1750 light, INA219 power monitoring, DS18B20 temperature
-3. **Remote Config Web UI** - Web interface for all remote commands (interval, location, thresholds, restart)
-4. **Cloud Data Storage** - InfluxDB integration via MQTT, ThingSpeak publishing for long-term analytics
+1. **LoRa Settings Sync** 🔴 BLOCKING - Complete coordinated reboot protocol for changing radio parameters
+2. **Hardware Testing** 🟡 VALIDATE - Test BME680, BH1750, INA219 with actual hardware (arriving next week)
+3. **Mesh Network Testing** 🟢 READY - 3-node topology testing, code complete (v3.0.0)
+4. **Runtime Config Web UI** 🔵 FUTURE - Web interface for all remote commands
+5. **Additional Sensor Types** 🔵 FUTURE - DS18B20 1-Wire temperature (Phase 3)
+6. **Cloud Data Storage** 🔵 FUTURE - InfluxDB/ThingSpeak for long-term analytics

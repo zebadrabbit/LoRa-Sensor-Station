@@ -43,16 +43,25 @@ void initDisplay() {
   display.setFont(ArialMT_Plain_10);
   display.clear();
   
+  // Read frequency from NVS (or use default)
+  Preferences prefs;
+  prefs.begin("lora_params", true);  // Read-only
+  uint32_t frequency = prefs.getUInt("frequency", RF_FREQUENCY);
+  prefs.end();
+  float freqMHz = frequency / 1000000.0;
+  
   #ifdef BASE_STATION
     display.drawString(0, 0, "Heltec LoRa V3");
     display.drawString(0, 15, "BASE STATION");
     display.drawString(0, 30, "Initializing...");
-    display.drawString(0, 45, "Freq: 868 MHz");
+    display.drawString(0, 45, "Freq: " + String(freqMHz, 1) + " MHz");
   #elif defined(SENSOR_NODE)
+    // Read sensor ID from config
+    SensorConfig sensorConfig = configStorage.getSensorConfig();
     display.drawString(0, 0, "Heltec LoRa V3");
     display.drawString(0, 15, "SENSOR NODE");
-    display.drawString(0, 30, String("ID: ") + String(SENSOR_ID));
-    display.drawString(0, 45, "Freq: 868 MHz");
+    display.drawString(0, 30, String("ID: ") + String(sensorConfig.sensorId));
+    display.drawString(0, 45, "Freq: " + String(freqMHz, 1) + " MHz");
   #endif
   
   display.display();

@@ -135,8 +135,8 @@
                 <div id="step1" class="status-step">⏳ Saving configuration to base station...</div>
                 <div id="step2" class="status-step" style="display: none;">⏳ Broadcasting to sensor nodes...</div>
                 <div id="step3" class="status-step" style="display: none;">⏳ Waiting for acknowledgments...</div>
-                <div id="step4" class="status-step" style="display: none;">⏳ Preparing to reboot...</div>
-                <div id="step5" class="status-step" style="display: none;">🔄 Rebooting base station...</div>
+                <div id="step4" class="status-step" style="display: none;">⏳ Sensors rebooting (5 seconds)...</div>
+                <div id="step5" class="status-step" style="display: none;">🔄 Base station rebooting (10 seconds)...</div>
             </div>
             <div id="sensorInfo" style="margin-top: 15px; padding: 10px; background: #f5f5f5; border-radius: 5px; display: none;">
                 <strong>Sensors Updated:</strong> <span id="sensorCount">0</span><br>
@@ -167,50 +167,59 @@
     </style>
     
     <script>
-        async function loadConfig() {
-            try {
-                const response = await fetch('/api/lora/config');
-                const config = await response.json();
-                
-                // Update current values display
-                document.getElementById('currentNetworkId').textContent = config.networkId || 'Not set';
-                document.getElementById('currentRegion').textContent = config.region || 'US915';
-                document.getElementById('currentFrequency').textContent = (config.frequency || 915000000) / 1000000 + ' MHz';
-                document.getElementById('currentSF').textContent = 'SF' + (config.spreadingFactor || 10);
-                document.getElementById('currentBW').textContent = (config.bandwidth || 125) + ' kHz';
-                document.getElementById('currentTxPower').textContent = (config.txPower || 14) + ' dBm';
-                
-                // Update form fields
-                document.getElementById('region').value = config.region || 'US915';
-                document.getElementById('frequency').value = config.frequency || 915000000;
-                document.getElementById('spreadingFactor').value = config.spreadingFactor || 10;
-                document.getElementById('bandwidth').value = config.bandwidth || 125;
-                document.getElementById('txPower').value = config.txPower || 14;
-                document.getElementById('codingRate').value = config.codingRate || 1;
-                document.getElementById('preambleLength').value = config.preambleLength || 8;
-            } catch (error) {
-                console.error('Error loading configuration:', error);
-                showMessage('Failed to load configuration', 'error');
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('LoRa Settings page loaded');
+            
+            async function loadConfig() {
+                try {
+                    console.log('Fetching current config...');
+                    const response = await fetch('/api/lora/config');
+                    const config = await response.json();
+                    console.log('Config loaded:', config);
+                    
+                    // Update current values display
+                    document.getElementById('currentNetworkId').textContent = config.networkId || 'Not set';
+                    document.getElementById('currentRegion').textContent = config.region || 'US915';
+                    document.getElementById('currentFrequency').textContent = (config.frequency || 915000000) / 1000000 + ' MHz';
+                    document.getElementById('currentSF').textContent = 'SF' + (config.spreadingFactor || 10);
+                    document.getElementById('currentBW').textContent = (config.bandwidth || 125) + ' kHz';
+                    document.getElementById('currentTxPower').textContent = (config.txPower || 14) + ' dBm';
+                    
+                    // Update form fields
+                    document.getElementById('region').value = config.region || 'US915';
+                    document.getElementById('frequency').value = config.frequency || 915000000;
+                    document.getElementById('spreadingFactor').value = config.spreadingFactor || 10;
+                    document.getElementById('bandwidth').value = config.bandwidth || 125;
+                    document.getElementById('txPower').value = config.txPower || 14;
+                    document.getElementById('codingRate').value = config.codingRate || 1;
+                    document.getElementById('preambleLength').value = config.preambleLength || 8;
+                } catch (error) {
+                    console.error('Error loading configuration:', error);
+                    showMessage('Failed to load configuration', 'error');
+                }
             }
-        }
-        
-        document.getElementById('loraForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
             
-            const formData = new FormData(e.target);
-            const config = {
-                region: formData.get('region'),
-                frequency: parseInt(formData.get('frequency')),
-                spreadingFactor: parseInt(formData.get('spreadingFactor')),
-                bandwidth: parseInt(formData.get('bandwidth')),
-                txPower: parseInt(formData.get('txPower')),
-                codingRate: parseInt(formData.get('codingRate')),
-                preambleLength: parseInt(formData.get('preambleLength'))
-            };
-            
-            // Show status modal
-            const modal = document.getElementById('statusModal');
-            modal.style.display = 'flex';
+            document.getElementById('loraForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                console.log('Form submitted!');
+                
+                const formData = new FormData(e.target);
+                const config = {
+                    region: formData.get('region'),
+                    frequency: parseInt(formData.get('frequency')),
+                    spreadingFactor: parseInt(formData.get('spreadingFactor')),
+                    bandwidth: parseInt(formData.get('bandwidth')),
+                    txPower: parseInt(formData.get('txPower')),
+                    codingRate: parseInt(formData.get('codingRate')),
+                    preambleLength: parseInt(formData.get('preambleLength'))
+                };
+                
+                console.log('Sending config:', config);
+                
+                // Show status modal
+                const modal = document.getElementById('statusModal');
+                modal.style.display = 'flex';
+                console.log('Modal should be visible now');
             
             try {
                 // Step 1: Saving
@@ -240,15 +249,15 @@
                     
                     // Step 3: Waiting for ACKs
                     setStepActive('step3');
-                    await new Promise(resolve => setTimeout(resolve, 1500));
+                    await new Promise(resolve => setTimeout(resolve, 2000));
                     setStepComplete('step3');
                     
-                    // Step 4: Preparing reboot
+                    // Step 4: Sensors rebooting (automatic, 5 seconds)
                     setStepActive('step4');
-                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    await new Promise(resolve => setTimeout(resolve, 5000));
                     setStepComplete('step4');
                     
-                    // Step 5: Rebooting
+                    // Step 5: Base station rebooting (automatic, 10 seconds total)
                     setStepActive('step5');
                     document.getElementById('rebootTimer').style.display = 'block';
                     
@@ -340,6 +349,7 @@
         });
         
         loadConfig();
+        });  // End of DOMContentLoaded
     </script>
 </body>
 </html>

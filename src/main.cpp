@@ -38,6 +38,10 @@ extern uint8_t lastProcessedCommandSeq;
 extern uint8_t lastCommandAckStatus;
 #endif
 
+// LoRa settings reboot coordination
+bool loraRebootPending = false;
+uint32_t loraRebootTime = 0;
+
 const char* FIRMWARE_VERSION = "v3.0.0 - Mesh Network Support";
 
 // ============================================================================
@@ -188,6 +192,16 @@ void setup() {
 // MAIN LOOP
 // ============================================================================
 void loop() {
+  // Check for pending LoRa settings reboot
+  if (loraRebootPending && millis() >= loraRebootTime) {
+    Serial.println("\n========================================");
+    Serial.println("🔄 REBOOTING TO APPLY NEW LORA SETTINGS");
+    Serial.println("========================================\n");
+    displayMessage("Rebooting...", "New LoRa", "Settings", 2000);
+    delay(2000);
+    ESP.restart();
+  }
+  
   // Handle WiFi portal if active
   if (wifiPortal.isPortalActive()) {
     wifiPortal.handleClient();

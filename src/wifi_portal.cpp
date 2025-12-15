@@ -973,15 +973,27 @@ void WiFiPortal::setupDashboard() {
     // LoRa configuration API endpoints
     webServer.on("/api/lora/config", HTTP_GET, [](AsyncWebServerRequest *request) {
         BaseStationConfig config = configStorage.getBaseStationConfig();
+        
+        // Read current LoRa parameters from NVS
+        Preferences prefs;
+        prefs.begin("lora_params", true);  // Read-only
+        uint32_t frequency = prefs.getUInt("frequency", 915000000);  // Default 915 MHz
+        uint8_t spreadingFactor = prefs.getUChar("sf", 10);  // Default SF10
+        uint32_t bandwidth = prefs.getUInt("bandwidth", 125000);  // Default 125 kHz
+        uint8_t txPower = prefs.getUChar("tx_power", 14);  // Default 14 dBm
+        uint8_t codingRate = prefs.getUChar("coding_rate", 1);  // Default 4/5
+        uint8_t preambleLength = prefs.getUChar("preamble", 8);  // Default 8
+        prefs.end();
+        
         String json = "{";
         json += "\"networkId\":" + String(config.networkId) + ",";
         json += "\"region\":\"US915\",";  // Placeholder - would need to add to config
-        json += "\"frequency\":915000000,";  // Placeholder
-        json += "\"spreadingFactor\":10,";  // Current default
-        json += "\"bandwidth\":125,";  // Current default
-        json += "\"txPower\":14,";  // Current default
-        json += "\"codingRate\":1,";  // 4/5
-        json += "\"preambleLength\":8";  // Standard
+        json += "\"frequency\":" + String(frequency) + ",";
+        json += "\"spreadingFactor\":" + String(spreadingFactor) + ",";
+        json += "\"bandwidth\":" + String(bandwidth / 1000) + ",";  // Convert Hz to kHz
+        json += "\"txPower\":" + String(txPower) + ",";
+        json += "\"codingRate\":" + String(codingRate) + ",";
+        json += "\"preambleLength\":" + String(preambleLength);
         json += "}";
         request->send(200, "application/json", json);
     });
@@ -1011,12 +1023,10 @@ void WiFiPortal::setupDashboard() {
             uint8_t txPower = doc["txPower"] | 14;
             uint8_t codingRate = doc["codingRate"] | 1;
             
-            // Convert bandwidth to Hz if it's just the enum value
-            if (bandwidth < 10) {
-                // It's the enum (0/1/2), convert to Hz
-                if (bandwidth == 0) bandwidth = 125000;
-                else if (bandwidth == 1) bandwidth = 250000;
-                else if (bandwidth == 2) bandwidth = 500000;
+            // Convert bandwidth from kHz to Hz
+            // Web UI sends 125, 250, or 500 (in kHz)
+            if (bandwidth < 1000) {
+                bandwidth = bandwidth * 1000;  // Convert kHz to Hz
             }
             
             Serial.println("Parsed Parameters:");
@@ -1089,11 +1099,23 @@ void WiFiPortal::setupDashboard() {
             responseDoc["message"] = "LoRa parameters updated and broadcast to sensors";
             responseDoc["sensorsFound"] = sensorCount;
             responseDoc["commandsSent"] = commandsSent;
-            responseDoc["nextSteps"] = "Wait for sensor ACKs, then reboot all sensors, then reboot base station";
+            responseDoc["rebootRequired"] = true;
+            responseDoc["rebootDelay"] = 10;  // Base station will reboot in 10 seconds
             
             String response;
             serializeJson(responseDoc, response);
             request->send(200, "application/json", response);
+            
+            // Schedule base station reboot after giving sensors time to ACK and reboot
+            // Sensors reboot 5s after ACK, so we wait 10s total
+            Serial.println("🔄 Scheduling base station reboot in 10 seconds...");
+            Serial.println("This allows sensors to ACK and reboot first.");
+            
+            // Set global reboot flag that main loop will check
+            extern bool loraRebootPending;
+            extern uint32_t loraRebootTime;
+            loraRebootPending = true;
+            loraRebootTime = millis() + 10000;  // 10 seconds from now;
         });
 #endif // BASE_STATION
     

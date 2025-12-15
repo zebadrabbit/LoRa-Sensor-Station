@@ -62,28 +62,60 @@ void initLoRa() {
   
   Preferences prefs;
   prefs.begin("lora_params", true);  // Read-only
-  if (prefs.getBool("pending", false)) {
-    // Load new parameters from NVS
-    frequency = prefs.getUInt("frequency", RF_FREQUENCY);
+  
+  // Always check if custom parameters are stored in NVS
+  // If frequency is set in NVS (non-zero), use stored parameters
+  uint32_t storedFreq = prefs.getUInt("frequency", 0);
+  if (storedFreq != 0) {
+    // Load parameters from NVS
+    frequency = storedFreq;
     spreadingFactor = prefs.getUChar("sf", LORA_SPREADING_FACTOR);
     bandwidth = prefs.getUInt("bandwidth", LORA_BANDWIDTH);
     txPower = prefs.getUChar("tx_power", TX_OUTPUT_POWER);
     codingRate = prefs.getUChar("coding_rate", LORA_CODINGRATE);
     
-    Serial.println("\n=== APPLYING NEW LORA PARAMETERS ===");
+    // Validate bandwidth (must be at least 10000 Hz)
+    if (bandwidth < 10000) {
+      Serial.printf("⚠️  Invalid bandwidth detected: %u Hz - using default %u Hz\n", bandwidth, LORA_BANDWIDTH);
+      bandwidth = LORA_BANDWIDTH;
+      
+      // Write corrected value back to NVS
+      prefs.end();
+      prefs.begin("lora_params", false);  // Read-write
+      prefs.putUInt("bandwidth", bandwidth);
+      prefs.end();
+      prefs.begin("lora_params", true);  // Back to read-only
+      Serial.println("✓ Corrected bandwidth saved to NVS");
+    }
+    
+    Serial.println("\n=== LOADING LORA PARAMETERS FROM NVS ===");
     Serial.printf("Frequency: %u Hz\n", frequency);
     Serial.printf("Spreading Factor: SF%d\n", spreadingFactor);
     Serial.printf("Bandwidth: %u Hz\n", bandwidth);
     Serial.printf("TX Power: %d dBm\n", txPower);
     Serial.printf("Coding Rate: %d\n", codingRate);
-    Serial.println("====================================\n");
-    
-    // Clear pending flag
-    prefs.end();
+    Serial.println("=========================================\n");
+  } else {
+    Serial.println("\n=== USING DEFAULT LORA PARAMETERS ===");
+    Serial.printf("Frequency: %u Hz\n", frequency);
+    Serial.printf("Spreading Factor: SF%d\n", spreadingFactor);
+    Serial.printf("Bandwidth: %u Hz\n", bandwidth);
+    Serial.printf("TX Power: %d dBm\n", txPower);
+    Serial.printf("Coding Rate: %d\n", codingRate);
+    Serial.println("======================================\n");
+  }
+  
+  // Check if there's a pending parameter update that needs confirmation
+  bool wasPending = prefs.getBool("pending", false);
+  prefs.end();
+  
+  // Clear pending flag if it was set (parameter change has been applied)
+  if (wasPending) {
     prefs.begin("lora_params", false);  // Read-write
     prefs.putBool("pending", false);
+    prefs.end();
+    Serial.println("✓ Pending LoRa parameter update applied and confirmed");
   }
-  prefs.end();
   
   RadioEvents.TxDone = OnTxDone;
   RadioEvents.RxDone = OnRxDone;
@@ -842,6 +874,14 @@ void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr) {
                 success = true;
                 Serial.println("LoRa parameters saved! Will apply on next reboot.");
                 Serial.println("⚠️ IMPORTANT: Base station must also reboot with matching parameters!");
+                
+                // Schedule automatic reboot after sending ACK (5 second delay)
+                Serial.println("🔄 Scheduling automatic reboot in 5 seconds...");
+                // This will be handled in main loop by checking a reboot flag
+                extern bool loraRebootPending;
+                extern uint32_t loraRebootTime;
+                loraRebootPending = true;
+                loraRebootTime = millis() + 5000;  // 5 seconds from now
               }
               break;
             }

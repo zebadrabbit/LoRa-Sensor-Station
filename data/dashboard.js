@@ -73,8 +73,8 @@ function updateSensorList(sensors) {
         
         html += `
             <div class="sensor-item">
-                <span class="status-indicator ${statusClass}"></span>
                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                    <span class="status-indicator ${statusClass}"></span>
                     <strong>${location}</strong> (ID: ${sensor.id})
                     ${sensor.zone ? `<span style="background: #ecf0f1; padding: 2px 8px; border-radius: 12px; font-size: 11px; color: #7f8c8d;">📍 ${sensor.zone}</span>` : ''}
                     <span style="background: ${priorityColor}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">${sensor.priority || 'Medium'}</span>
@@ -198,33 +198,43 @@ async function loadHistoricalData() {
         // Update each chart with its specific metric
         const labels = data.map(d => new Date(d.t * 1000).toLocaleTimeString());
         
-        // Temperature chart - hide it (client telemetry doesn't include sensor readings)
-        const tempChartCard = document.getElementById('tempChart')?.closest('.card');
-        if (tempChartCard) {
-            tempChartCard.style.display = 'none';
-        }
+        // Check which data fields exist in the response
+        // API only returns: t, batt, rssi, charging
+        const hasBatt = data.some(d => d.batt !== undefined && d.batt !== null);
+        const hasRssi = data.some(d => d.rssi !== undefined && d.rssi !== null);
         
-        // Battery chart
-        if (charts['battChart']) {
-            const battChartCard = document.getElementById('battChart')?.closest('.card');
-            if (battChartCard) {
-                battChartCard.style.display = 'block';
-            }
-            charts['battChart'].data.labels = labels;
-            charts['battChart'].data.datasets[0].data = data.map(d => d.batt);
-            charts['battChart'].update();
-        }
+        // Note: Historical data API currently only tracks battery and RSSI
+        // Other metrics (temp, humidity, etc.) are not stored in history
         
-        // RSSI chart
-        if (charts['rssiChart']) {
-            const rssiChartCard = document.getElementById('rssiChart')?.closest('.card');
-            if (rssiChartCard) {
-                rssiChartCard.style.display = 'block';
+        // Hide all charts that don't have data
+        const chartFields = [
+            { id: 'tempChart', field: 'temp', hasData: false },
+            { id: 'humidityChart', field: 'humidity', hasData: false },
+            { id: 'pressureChart', field: 'pressure', hasData: false },
+            { id: 'gasChart', field: 'gas', hasData: false },
+            { id: 'lightChart', field: 'light', hasData: false },
+            { id: 'voltageChart', field: 'voltage', hasData: false },
+            { id: 'currentChart', field: 'current', hasData: false },
+            { id: 'powerChart', field: 'power', hasData: false },
+            { id: 'battChart', field: 'batt', hasData: hasBatt },
+            { id: 'rssiChart', field: 'rssi', hasData: hasRssi }
+        ];
+        
+        chartFields.forEach(chart => {
+            const card = document.getElementById(chart.id)?.closest('.card');
+            if (card) {
+                if (chart.hasData) {
+                    card.style.display = 'block';
+                    if (charts[chart.id]) {
+                        charts[chart.id].data.labels = labels;
+                        charts[chart.id].data.datasets[0].data = data.map(d => d[chart.field] || 0);
+                        charts[chart.id].update();
+                    }
+                } else {
+                    card.style.display = 'none';
+                }
             }
-            charts['rssiChart'].data.labels = labels;
-            charts['rssiChart'].data.datasets[0].data = data.map(d => d.rssi);
-            charts['rssiChart'].update();
-        }
+        });
         
         console.log('Updated charts with', data.length, 'data points');
     } catch (error) {
