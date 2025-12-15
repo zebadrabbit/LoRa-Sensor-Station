@@ -246,7 +246,21 @@ void loop() {
     // Sensor stays in RX mode continuously
     #endif
     
-    uint32_t interval = sensorConfig.transmitInterval * 1000;
+    // Get configured interval and apply forced interval if command was recently received
+    uint32_t configuredInterval = sensorConfig.transmitInterval * 1000;
+    #ifdef SENSOR_NODE
+    uint32_t interval = getEffectiveTransmitInterval(configuredInterval);
+    // Log when forced interval is active
+    if (interval != configuredInterval) {
+      static uint32_t lastForcedLog = 0;
+      if (millis() - lastForcedLog > 30000) {  // Log every 30s
+        Serial.printf("⚡ Using forced 10s interval (configured: %lus)\n", configuredInterval / 1000);
+        lastForcedLog = millis();
+      }
+    }
+    #else
+    uint32_t interval = configuredInterval;
+    #endif
     
     // Check for immediate ping request (double click)
     bool sendNow = shouldSendImmediatePing();

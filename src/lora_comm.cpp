@@ -31,6 +31,9 @@ static uint8_t pendingCommandSensorId = 0;
 uint8_t lastProcessedCommandSeq = 0;  // Last command sequence number we processed
 uint8_t lastCommandAckStatus = 0;     // Status of last command (0=success, non-zero=error)
 static bool pendingAckSend = false;   // Flag to send immediate telemetry with ACK
+static uint32_t forcedIntervalUntil = 0;  // Timestamp until which to use forced 10s interval
+static const uint32_t FORCED_INTERVAL_MS = 10000;  // 10 seconds
+static const uint32_t FORCED_INTERVAL_DURATION = 60000;  // Keep forced interval for 60 seconds after command
 #endif
 
 // Calculate LoRa sync word from network ID
@@ -905,6 +908,10 @@ void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr) {
           lastProcessedCommandSeq = cmd->sequenceNumber;
           lastCommandAckStatus = success ? 0 : 2; // 0 = success, 2 = execution failed
           
+          // Activate forced interval mode for 60 seconds to allow quick follow-up commands
+          forcedIntervalUntil = millis() + FORCED_INTERVAL_DURATION;
+          Serial.printf("🕐 Forced 10s interval activated for next 60 seconds (until %lu)\n", forcedIntervalUntil);
+          
           Serial.printf("Command processed. ACK will be sent in next telemetry (seq %d, status %d)\n", 
                        lastProcessedCommandSeq, lastCommandAckStatus);
           
@@ -920,6 +927,11 @@ void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr) {
           // Save NACK status
           lastProcessedCommandSeq = cmd->sequenceNumber;
           lastCommandAckStatus = 3; // Checksum error
+          
+          // Activate forced interval mode even on checksum error
+          forcedIntervalUntil = millis() + FORCED_INTERVAL_DURATION;
+          Serial.printf("🕐 Forced 10s interval activated for next 60 seconds (until %lu)\n", forcedIntervalUntil);
+          
           blinkLED(getColorRed(), 3, 50);
           // Trigger immediate telemetry send with NACK
           pendingAckSend = true;
@@ -1036,5 +1048,21 @@ bool shouldSendImmediateAck() {
     return true;
   }
   return false;
+}
+
+// Get the effective transmit interval (may be forced to 10s after command reception)
+uint32_t getEffectiveTransmitInterval(uint32_t configuredInterval) {
+  // If we're in forced interval mode and it hasn't expired
+  if (millis() < forcedIntervalUntil) {
+    // Use the shorter of: configured interval or forced 10s interval
+    uint32_t forcedMs = FORCED_INTERVAL_MS;
+    if (configuredInterval < forcedMs) {
+      return configuredInterval;  // Use configured if it's already shorter than 10s
+    } else {
+      return forcedMs;  // Use 10s forced interval
+    }
+  }
+  // Otherwise use configured interval normally
+  return configuredInterval;
 }
 #endif

@@ -29,6 +29,7 @@ void checkCommandRetries();  // Check for commands that need retry
 
 #ifdef SENSOR_NODE
 bool shouldSendImmediateAck();  // Check if immediate ACK telemetry should be sent
+uint32_t getEffectiveTransmitInterval(uint32_t configuredInterval);  // Get effective interval (may be forced after command)
 #endif
 
 #endif // LORA_COMM_H
