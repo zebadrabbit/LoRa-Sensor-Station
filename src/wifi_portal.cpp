@@ -3181,108 +3181,124 @@ void WiFiPortal::handleMQTTConfigUpdate(AsyncWebServerRequest *request, uint8_t 
 String WiFiPortal::generateMQTTPage() {
     String html = R"rawliteral(
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>MQTT Configuration</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MQTT Configuration - LoRa Sensor Station</title>
+    <link rel="stylesheet" href="/pico-custom.css">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f7fa; padding: 20px; }
-        .container { max-width: 800px; margin: 0 auto; }
-        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 15px; margin-bottom: 20px; }
-        .header h1 { font-size: 28px; margin-bottom: 5px; }
-        .card { background: white; border-radius: 12px; padding: 25px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-        .form-group { margin-bottom: 20px; }
-        label { display: block; font-weight: 600; margin-bottom: 8px; color: #333; }
-        input[type="text"], input[type="number"], input[type="password"] { width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 14px; }
-        input[type="checkbox"] { width: 20px; height: 20px; margin-right: 8px; }
-        .checkbox-label { display: flex; align-items: center; margin-bottom: 10px; }
-        .btn { padding: 12px 24px; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.3s; }
-        .btn-primary { background: #667eea; color: white; }
-        .btn-primary:hover { background: #5568d3; }
-        .btn-secondary { background: #6b7280; color: white; margin-left: 10px; }
-        .btn-secondary:hover { background: #4b5563; }
-        .alert { padding: 15px; border-radius: 6px; margin-bottom: 20px; }
-        .alert-success { background: #d1fae5; color: #065f46; }
-        .alert-error { background: #fee2e2; color: #991b1b; }
-        .alert-info { background: #dbeafe; color: #1e40af; }
-        .hidden { display: none; }
-        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-top: 20px; }
-        .stat-box { background: #f9f9f9; padding: 15px; border-radius: 8px; text-align: center; }
-        .stat-label { font-size: 12px; color: #666; text-transform: uppercase; margin-bottom: 5px; }
-        .stat-value { font-size: 24px; font-weight: bold; color: #333; }
-        .back-link { display: inline-block; color: white; text-decoration: none; margin-top: 10px; opacity: 0.9; }
-        .back-link:hover { opacity: 1; }
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 6px;
+            margin-bottom: 10px;
+        }
+        .checkbox-group label {
+            margin: 0;
+            cursor: pointer;
+            flex: 1;
+        }
+        .help-text {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .stat-box {
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <h1> MQTT Configuration</h1>
+        <header>
+            <h1>📡 MQTT Configuration</h1>
             <p>Connect to MQTT broker for data publishing</p>
-            <a href="/" class="back-link"> Back to Dashboard</a>
-        </div>
+            <a href="/" class="btn secondary">← Back to Dashboard</a>
+        </header>
         
-        <div id="messageBox" class="alert hidden"></div>
+        <div id="messageBox" class="message hidden"></div>
         
-        <div class="card">
-            <h2 style="margin-bottom: 20px;">MQTT Connection</h2>
+        <article>
+            <header><h2>📢 MQTT Connection</h2></header>
             <form id="mqttForm">
-                <div class="form-group">
-                    <div class="checkbox-label">
+                <div>
+                    <div class="checkbox-group">
                         <input type="checkbox" id="enabled">
                         <label for="enabled">Enable MQTT Publishing</label>
                     </div>
                 </div>
                 
-                <div class="form-group">
-                    <label for="broker">MQTT Broker:</label>
+                <div>
+                    <label for="broker">MQTT Broker</label>
                     <input type="text" id="broker" placeholder="192.168.1.100 or mqtt.example.com">
                 </div>
                 
-                <div class="form-group">
-                    <label for="port">Port:</label>
+                <div>
+                    <label for="port">Port</label>
                     <input type="number" id="port" value="1883">
                 </div>
                 
-                <div class="form-group">
-                    <label for="username">Username (optional):</label>
+                <div>
+                    <label for="username">Username (optional)</label>
                     <input type="text" id="username" placeholder="mqtt_user">
                 </div>
                 
-                <div class="form-group">
-                    <label for="password">Password (optional):</label>
+                <div>
+                    <label for="password">Password (optional)</label>
                     <input type="password" id="password" placeholder="mqtt_password">
                 </div>
                 
-                <div class="form-group">
-                    <label for="topicPrefix">Topic Prefix:</label>
+                <div>
+                    <label for="topicPrefix">Topic Prefix</label>
                     <input type="text" id="topicPrefix" value="lora" placeholder="lora">
-                    <small style="color: #666;">Topics: {prefix}/sensor/{id}/temperature</small>
+                    <div class="help-text">Topics: {prefix}/sensor/{id}/temperature</div>
                 </div>
                 
-                <div class="form-group">
-                    <div class="checkbox-label">
+                <div>
+                    <div class="checkbox-group">
                         <input type="checkbox" id="haDiscovery" checked>
                         <label for="haDiscovery">Enable Home Assistant Auto-Discovery</label>
                     </div>
                 </div>
                 
-                <div class="form-group">
-                    <label for="qos">QoS Level:</label>
+                <div>
+                    <label for="qos">QoS Level</label>
                     <input type="number" id="qos" value="0" min="0" max="2">
-                    <small style="color: #666;">0 = At most once, 1 = At least once, 2 = Exactly once</small>
+                    <div class="help-text">0 = At most once, 1 = At least once, 2 = Exactly once</div>
                 </div>
                 
-                <div style="margin-top: 30px;">
-                    <button type="submit" class="btn btn-primary"> Save Configuration</button>
-                    <button type="button" class="btn btn-secondary" onclick="testConnection()"> Test Connection</button>
+                <div style="margin-top: 20px;">
+                    <button type="submit">💾 Save Configuration</button>
+                    <button type="button" class="secondary" onclick="testConnection()">🔌 Test Connection</button>
                 </div>
             </form>
-        </div>
+        </article>
         
-        <div class="card">
-            <h2 style="margin-bottom: 20px;">MQTT Statistics</h2>
+        <article>
+            <header><h2>📊 MQTT Statistics</h2></header>
             <div class="stats">
                 <div class="stat-box">
                     <div class="stat-label">Status</div>
@@ -3301,7 +3317,7 @@ String WiFiPortal::generateMQTTPage() {
                     <div class="stat-value" id="mqttReconnects">0</div>
                 </div>
             </div>
-        </div>
+        </article>
     </div>
     
     <script>

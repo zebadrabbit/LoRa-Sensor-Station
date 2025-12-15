@@ -8,14 +8,16 @@
 </head>
 <body>
     <div class="container">
-        <div class="header">
+        <header>
             <h1>📻 LoRa Radio Settings</h1>
             <p>Configure LoRa radio parameters and network settings</p>
-            <a href="/" class="btn btn-secondary">← Back to Dashboard</a>
-        </div>
+            <a href="/" class="btn secondary">← Back to Dashboard</a>
+        </header>
         
-        <div class="card">
-            <div class="card-title">📡 Current Configuration</div>
+        <div id="messageBox" class="message hidden"></div>
+        
+        <article>
+            <header><h2>📡 Current Configuration</h2></header>
             <div class="info-grid">
                 <div class="info-item">
                     <strong>Network ID:</strong>
@@ -42,10 +44,10 @@
                     <span id="currentTxPower">Loading...</span>
                 </div>
             </div>
-        </div>
+        </article>
         
-        <div class="card">
-            <div class="card-title">⚙️ LoRa Configuration</div>
+        <article>
+            <header><h2>⚙️ LoRa Configuration</h2></header>
             <form id="loraForm">
                 <div class="form-group">
                     <label for="region">Region</label>
@@ -115,16 +117,14 @@
                 <button type="submit" class="btn">💾 Save Configuration</button>
                 <button type="button" class="btn btn-secondary" onclick="loadConfig()">🔄 Reset</button>
             </form>
-        </div>
+        </article>
         
-        <div class="card">
-            <div class="card-title">ℹ️ Information</div>
+        <article>
+            <header><h2>ℹ️ Information</h2></header>
             <p><strong>Note:</strong> Changing LoRa settings requires updating all devices in your network (base station and sensors).</p>
             <p><strong>Warning:</strong> Using incorrect frequencies may violate local regulations. Ensure compliance with your country's RF laws.</p>
             <p><strong>Range vs Speed:</strong> Higher spreading factors increase range but reduce data rate. SF10 with 125kHz bandwidth is a good balance.</p>
-        </div>
-        
-        <div id="statusMessage" class="message" style="display: none;"></div>
+        </article>
     </div>
     
     <!-- Status Modal -->

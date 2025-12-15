@@ -160,9 +160,13 @@
 </head>
 <body>
     <div class="container">
-        <h1>🔐 Security Configuration</h1>
+        <header>
+            <h1>🔐 Security Configuration</h1>
+            <p>Configure device whitelist and security settings</p>
+            <a href="/" class="btn secondary">← Back to Dashboard</a>
+        </header>
         
-        <div id="alertBox" class="alert"></div>
+        <div id="messageBox" class="message hidden"></div>
         
         <!-- Security Status Overview -->
         <div class="security-status">
@@ -179,8 +183,8 @@
         </div>
         
         <!-- Encryption Configuration -->
-        <div class="config-section">
-            <h2>Encryption Settings</h2>
+        <article>
+            <header><h2>Encryption Settings</h2></header>
             <p>Enable AES-128 encryption for all LoRa packets. When enabled, only devices with the shared encryption key can communicate.</p>
             
             <label style="display: flex; align-items: center; margin-top: 15px;">
@@ -210,11 +214,11 @@
                 <p><strong>Warning:</strong> This will generate a completely new random key. All sensors must be reconfigured with the new key!</p>
                 <button onclick="generateNewKey()" class="btn btn-warning">Generate New Key</button>
             </div>
-        </div>
+        </article>
         
         <!-- Whitelist Configuration -->
-        <div class="config-section">
-            <h2>Device Whitelist</h2>
+        <article>
+            <header><h2>Device Whitelist</h2></header>
             <p>Control which sensor devices are allowed to communicate with this base station. When enabled, only whitelisted device IDs will be accepted.</p>
             
             <label style="display: flex; align-items: center; margin-top: 15px;">
@@ -241,11 +245,7 @@
                     <button onclick="loadWhitelist()" class="btn btn-secondary">Refresh List</button>
                 </div>
             </div>
-        </div>
-        
-        <div style="margin-top: 30px;">
-            <button onclick="window.location.href='/'" class="btn btn-secondary">← Back to Dashboard</button>
-        </div>
+        </article>
     </div>
     
     <script>
