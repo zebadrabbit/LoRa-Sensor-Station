@@ -3540,6 +3540,16 @@ void WiFiPortal::handleRemoteSetLocation(AsyncWebServerRequest *request, uint8_t
     
     bool success = remoteConfigManager.queueCommand(sensorId, CMD_SET_LOCATION, locationData, strlen((char*)locationData) + 1);
     
+    // Also update the base station's stored sensor metadata immediately
+    #ifdef BASE_STATION
+    extern SensorConfigManager sensorConfigManager;
+    SensorMetadata metadata = sensorConfigManager.getSensorMetadata(sensorId);
+    strncpy(metadata.location, location.c_str(), sizeof(metadata.location) - 1);
+    metadata.location[sizeof(metadata.location) - 1] = '\0';
+    sensorConfigManager.setSensorMetadata(sensorId, metadata);
+    Serial.printf("Updated base station metadata for sensor %d\n", sensorId);
+    #endif
+    
     String response = success ? 
         "{\"success\":true,\"message\":\"Location command queued\"}" : 
         "{\"success\":false,\"message\":\"Failed to queue command\"}";
