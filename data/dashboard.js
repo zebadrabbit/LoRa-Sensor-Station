@@ -72,17 +72,20 @@ function updateSensorList(sensors) {
         else if (sensor.priorityLevel === 0) priorityColor = '#95a5a6'; // Low = gray
         
         html += `
-            <div class="sensor-item">
-                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-                    <span class="status-indicator ${statusClass}"></span>
-                    <strong>${location}</strong> (ID: ${sensor.id})
+            <div class="sensor-item" style="background: white; border: 1px solid #e0e6ed; border-radius: 8px; padding: 12px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                    <span class="status-indicator ${statusClass}" style="width: 10px; height: 10px; border-radius: 50%; ${isOnline ? 'background: #27ae60;' : 'background: #e74c3c;'}"></span>
+                    <strong style="font-size: 16px;">${location}</strong>
+                    <span style="background: #ecf0f1; padding: 2px 8px; border-radius: 12px; font-size: 11px; color: #7f8c8d;">ID: ${sensor.id}</span>
                     ${sensor.zone ? `<span style="background: #ecf0f1; padding: 2px 8px; border-radius: 12px; font-size: 11px; color: #7f8c8d;">📍 ${sensor.zone}</span>` : ''}
                     <span style="background: ${priorityColor}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">${sensor.priority || 'Medium'}</span>
                     <span style="background: ${healthColor}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;" title="Communication: ${(health * 100).toFixed(0)}%">❤️ ${healthLabel}</span>
                 </div>
-                Battery: ${batteryDisplay}, 
-                RSSI: ${sensor.rssi} dBm,
-                Last seen: ${sensor.age}
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; font-size: 14px; color: #666;">
+                    <div>🔋 <strong>Battery:</strong> ${batteryDisplay}</div>
+                    <div>📶 <strong>RSSI:</strong> ${sensor.rssi} dBm</div>
+                    <div>🕐 <strong>Last seen:</strong> ${sensor.age}</div>
+                </div>
             </div>
         `;
     });
@@ -221,17 +224,20 @@ async function loadHistoricalData() {
         ];
         
         chartFields.forEach(chart => {
-            const card = document.getElementById(chart.id)?.closest('.card');
-            if (card) {
+            const canvas = document.getElementById(chart.id);
+            const article = canvas?.closest('article');
+            if (article) {
                 if (chart.hasData) {
-                    card.style.display = 'block';
+                    article.style.display = 'block';
                     if (charts[chart.id]) {
                         charts[chart.id].data.labels = labels;
-                        charts[chart.id].data.datasets[0].data = data.map(d => d[chart.field] || 0);
+                        charts[chart.id].data.datasets[0].data = data.map(d => d[chart.field]);
                         charts[chart.id].update();
+                        console.log(`Updated ${chart.id} with ${data.length} points`);
                     }
                 } else {
-                    card.style.display = 'none';
+                    article.style.display = 'none';
+                    console.log(`Hiding ${chart.id} - no data`);
                 }
             }
         });
@@ -319,6 +325,13 @@ document.addEventListener('DOMContentLoaded', () => {
     initChart('powerChart', 'Power', 'mW');
     initChart('battChart', 'Battery', '%');
     initChart('rssiChart', 'RSSI', 'dBm');
+    
+    // Hide all charts initially until data is loaded
+    ['tempChart', 'humidityChart', 'pressureChart', 'gasChart', 'lightChart', 'voltageChart', 'currentChart', 'powerChart', 'battChart', 'rssiChart'].forEach(chartId => {
+        const canvas = document.getElementById(chartId);
+        const article = canvas?.closest('article');
+        if (article) article.style.display = 'none';
+    });
     
     // Connect WebSocket
     connectWebSocket();
