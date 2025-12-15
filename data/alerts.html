@@ -4,72 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Alert Configuration - LoRa Sensor Station</title>
+    <link rel="stylesheet" href="/style.css">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-            padding: 30px;
-        }
-        h1 {
-            color: #333;
-            margin-bottom: 10px;
-            font-size: 28px;
-        }
-        .subtitle {
-            color: #666;
-            margin-bottom: 30px;
-            font-size: 14px;
-        }
-        .nav-links {
-            margin-bottom: 30px;
-            padding-bottom: 20px;
-            border-bottom: 2px solid #e0e0e0;
-        }
-        .nav-links a {
-            display: inline-block;
-            padding: 8px 16px;
-            margin-right: 10px;
-            background: #667eea;
-            color: white;
-            text-decoration: none;
-            border-radius: 6px;
-            font-size: 14px;
-            transition: background 0.3s;
-        }
-        .nav-links a:hover {
-            background: #764ba2;
-        }
-        .section {
-            margin-bottom: 30px;
-            padding: 20px;
-            background: #f9f9f9;
-            border-radius: 8px;
-        }
-        .section h2 {
-            color: #333;
-            margin-bottom: 15px;
-            font-size: 20px;
-            display: flex;
-            align-items: center;
-        }
-        .section h2::before {
-            content: '';
-            display: inline-block;
-            width: 4px;
-            height: 20px;
-            background: #667eea;
-            margin-right: 10px;
-        }
         .form-group {
             margin-bottom: 20px;
         }
@@ -81,6 +17,7 @@
             font-size: 14px;
         }
         input[type="text"],
+        input[type="password"],
         input[type="number"] {
             width: 100%;
             padding: 12px;
@@ -90,6 +27,7 @@
             transition: border-color 0.3s;
         }
         input[type="text"]:focus,
+        input[type="password"]:focus,
         input[type="number"]:focus {
             outline: none;
             border-color: #667eea;
@@ -98,7 +36,7 @@
             display: flex;
             align-items: center;
             padding: 10px;
-            background: white;
+            background: #f9f9f9;
             border-radius: 6px;
             margin-bottom: 10px;
         }
@@ -118,54 +56,31 @@
             grid-template-columns: 1fr 1fr;
             gap: 15px;
         }
-        .btn {
-            padding: 14px 28px;
-            border: none;
-            border-radius: 6px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-            margin-right: 10px;
-        }
-        .btn-primary {
-            background: #667eea;
-            color: white;
-        }
-        .btn-primary:hover {
-            background: #764ba2;
-        }
-        .btn-secondary {
-            background: #6c757d;
-            color: white;
-        }
-        .btn-secondary:hover {
-            background: #5a6268;
-        }
         .btn-test {
             background: #28a745;
             color: white;
+            margin-top: 10px;
         }
         .btn-test:hover {
             background: #218838;
         }
-        .alert {
+        .message {
             padding: 15px;
             border-radius: 6px;
             margin-bottom: 20px;
             font-size: 14px;
         }
-        .alert-success {
+        .message.success {
             background: #d4edda;
             color: #155724;
             border: 1px solid #c3e6cb;
         }
-        .alert-error {
+        .message.error {
             background: #f8d7da;
             color: #721c24;
             border: 1px solid #f5c6cb;
         }
-        .alert-info {
+        .message.info {
             background: #d1ecf1;
             color: #0c5460;
             border: 1px solid #bee5eb;
@@ -182,19 +97,18 @@
 </head>
 <body>
     <div class="container">
-        <h1>Alert Configuration</h1>
-        <p class="subtitle">Configure Microsoft Teams notifications and alert thresholds</p>
-        
-        <div class="nav-links">
-            <a href="/">&larr;† Back to Dashboard</a>
+        <div class="header">
+            <h1>🔔 Alert Configuration</h1>
+            <p>Configure Microsoft Teams notifications and alert thresholds</p>
+            <a href="/" class="btn btn-secondary">← Back to Dashboard</a>
         </div>
         
-        <div id="messageBox" class="alert hidden"></div>
+        <div id="messageBox" class="message hidden"></div>
         
         <form id="alertsForm">
             <!-- Teams Webhook -->
-            <div class="section">
-                <h2>Microsoft Teams Integration</h2>
+            <div class="card">
+                <div class="card-title">📢 Microsoft Teams Integration</div>
                 <div class="form-group">
                     <div class="checkbox-group">
                         <input type="checkbox" id="teamsEnabled" name="teamsEnabled">
@@ -210,8 +124,8 @@
             </div>
             
             <!-- Email Configuration -->
-            <div class="section">
-                <h2>Email Notifications</h2>
+            <div class="card">
+                <div class="card-title">📧 Email Notifications</div>
                 <div class="form-group">
                     <div class="checkbox-group">
                         <input type="checkbox" id="emailEnabled" name="emailEnabled">
@@ -253,12 +167,12 @@
                         <label for="emailTLS">Use TLS/STARTTLS</label>
                     </div>
                 </div>
-                <button type="button" class="btn btn-test" onclick="testEmail()">ðŸ“§ Send Test Email</button>
+                <button type="button" class="btn btn-test" onclick="testEmail()">📧 Send Test Email</button>
             </div>
             
             <!-- Temperature Thresholds -->
-            <div class="section">
-                <h2>Temperature Thresholds</h2>
+            <div class="card">
+                <div class="card-title">🌡️ Temperature Thresholds</div>
                 <div class="threshold-row">
                     <div class="form-group">
                         <label for="tempLow">Low Temperature (°C)</label>
@@ -280,8 +194,8 @@
             </div>
             
             <!-- Battery Thresholds -->
-            <div class="section">
-                <h2>Battery Thresholds</h2>
+            <div class="card">
+                <div class="card-title">🔋 Battery Thresholds</div>
                 <div class="threshold-row">
                     <div class="form-group">
                         <label for="batteryLow">Low Battery (%)</label>
@@ -303,8 +217,8 @@
             </div>
             
             <!-- Sensor Status -->
-            <div class="section">
-                <h2>Client Status Alerts</h2>
+            <div class="card">
+                <div class="card-title">📡 Client Status Alerts</div>
                 <div class="form-group">
                     <label for="sensorTimeout">Client Inactivity Timeout (minutes)</label>
                     <input type="number" id="sensorTimeout" name="sensorTimeout" min="1" max="1440" value="15">
@@ -320,8 +234,10 @@
                 </div>
             </div>
             
-            <button type="submit" class="btn btn-primary">ðŸ’¾ Save Configuration</button>
-            <button type="button" class="btn btn-secondary" onclick="location.href='/'">Cancel</button>
+            <div class="card">
+                <button type="submit" class="btn">💾 Save Configuration</button>
+                <button type="button" class="btn btn-secondary" onclick="location.href='/'">Cancel</button>
+            </div>
         </form>
     </div>
     
@@ -412,7 +328,7 @@
                 return;
             }
             
-            showMessage('Test alert...', 'info');
+            showMessage('Sending test alert...', 'info');
             
             try {
                 const response = await fetch('/api/alerts/test', { method: 'POST' });
@@ -421,10 +337,10 @@
                 if (result.success) {
                     showMessage('Test alert sent! Check your Teams channel.', 'success');
                 } else {
-                    showMessage('Test alert: ' + result.message, 'error');
+                    showMessage('Failed to send test alert: ' + result.message, 'error');
                 }
             } catch (error) {
-                showMessage('Test alert: ' + error.message, 'error');
+                showMessage('Failed to send test alert: ' + error.message, 'error');
             }
         }
         
@@ -448,7 +364,7 @@
                     showMessage('Failed to send test email: ' + result.message, 'error');
                 }
             } catch (error) {
-                showMessage('Sending test email: ' + error.message, 'error');
+                showMessage('Failed to send test email: ' + error.message, 'error');
             }
         }
         
@@ -456,7 +372,7 @@
         function showMessage(message, type) {
             const box = document.getElementById('messageBox');
             box.textContent = message;
-            box.className = 'alert alert-' + type;
+            box.className = 'message ' + type;
             box.classList.remove('hidden');
             
             if (type === 'success' || type === 'info') {

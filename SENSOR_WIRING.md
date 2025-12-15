@@ -599,6 +599,104 @@ No code changes needed for standard sensors!
 
 ---
 
+## Micro SD Card Module (SPI)
+
+### Module Specifications
+
+- **Model:** Micro SD TF Card Adapter Mini Reader Module
+- **Voltage:** 3.3V
+- **Interface:** SPI (6-pin)
+- **Supported Cards:** Micro SD, Micro SDHC (up to 32GB)
+- **Max SPI Speed:** 25 MHz
+
+### Pinout
+
+| Pin  | Function            | Description                  |
+| ---- | ------------------- | ---------------------------- |
+| GND  | Ground              | Connect to GND               |
+| VCC  | Power               | 3.3V power supply            |
+| MISO | Master In Slave Out | SPI data output from SD card |
+| MOSI | Master Out Slave In | SPI data input to SD card    |
+| SCK  | Serial Clock        | SPI clock signal             |
+| CS   | Chip Select         | SPI chip select (active low) |
+
+### Wiring to Heltec WiFi LoRa 32 V3
+
+**Important:** The ESP32-S3 has dedicated SPI pins for SD card access.
+
+| SD Card Pin | ESP32-S3 GPIO | Function                   |
+| ----------- | ------------- | -------------------------- |
+| GND         | GND           | Ground                     |
+| VCC         | 3.3V          | Power supply               |
+| MISO        | GPIO 11       | SPI MISO                   |
+| MOSI        | GPIO 10       | SPI MOSI                   |
+| SCK         | GPIO 9        | SPI Clock                  |
+| CS          | GPIO 21       | Chip Select (configurable) |
+
+### Notes
+
+- **Power:** Use 3.3V only. 5V will damage the module.
+- **Pull-up Resistors:** Module usually includes built-in pull-ups on MISO, MOSI, SCK
+- **Card Detection:** Some modules have a card detect pin (CD) - not required
+- **File System:** Format card as FAT32 for best compatibility
+- **Max Current:** ~100mA during write operations
+- **Speed Class:** Use Class 10 cards for best performance
+
+### Code Configuration
+
+```cpp
+#include <SD.h>
+#include <SPI.h>
+
+#define SD_CS_PIN 21
+
+void setup() {
+    Serial.begin(115200);
+
+    // Initialize SPI for SD card
+    SPI.begin(9, 10, 11, 21);  // SCK, MISO, MOSI, CS
+
+    if (!SD.begin(SD_CS_PIN)) {
+        Serial.println("SD card initialization failed!");
+        return;
+    }
+    Serial.println("SD card initialized successfully");
+
+    // Get card info
+    uint64_t cardSize = SD.cardSize() / (1024 * 1024);
+    Serial.printf("SD Card Size: %lluMB\n", cardSize);
+}
+```
+
+### Troubleshooting
+
+1. **Card not detected:**
+
+   - Check wiring connections
+   - Ensure card is formatted as FAT32
+   - Try different SD card
+   - Verify 3.3V power supply
+
+2. **Write failures:**
+
+   - Card may be write-protected
+   - Card full or corrupted
+   - Insufficient power supply
+
+3. **Slow performance:**
+   - Use Class 10 or UHS-I cards
+   - Check SPI clock speed
+   - Avoid long cable runs (keep under 10cm)
+
+### Use Cases
+
+- **Data Logging:** Store sensor readings locally
+- **Configuration Files:** Store settings and calibration data
+- **Firmware Updates:** OTA firmware stored on SD card
+- **Backup:** Historical data backup before transmission
+
+---
+
 ## Additional Resources
 
 ### Datasheets
@@ -606,6 +704,7 @@ No code changes needed for standard sensors!
 - **BME680:** [Bosch Sensortec](https://www.bosch-sensortec.com/products/environmental-sensors/gas-sensors/bme680/)
 - **BH1750:** [ROHM Semiconductor](https://www.mouser.com/datasheet/2/348/bh1750fvi-e-186247.pdf)
 - **INA219:** [Texas Instruments](https://www.ti.com/product/INA219)
+- **SD Card SPI:** [SD Association](https://www.sdcard.org/)
 - **ESP32-S3:** [Espressif Systems](https://www.espressif.com/en/products/socs/esp32-s3)
 
 ### Community Support
