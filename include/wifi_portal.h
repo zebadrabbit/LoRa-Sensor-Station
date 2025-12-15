@@ -64,8 +64,6 @@ private:
     String generateAlertsConfigJSON();
     String generateMQTTPage();
     String generateMQTTConfigJSON();
-    String generateSensorNamesPage();
-    String generateSensorNamesJSON();
     
     // Handle form submissions
     void handleModeSelection(AsyncWebServerRequest *request);
@@ -73,7 +71,6 @@ private:
     void handleBaseStationConfig(AsyncWebServerRequest *request);
     void handleAlertsConfigUpdate(AsyncWebServerRequest *request, uint8_t *data, size_t len);
     void handleMQTTConfigUpdate(AsyncWebServerRequest *request, uint8_t *data, size_t len);
-    void handleSensorNameUpdate(AsyncWebServerRequest *request, uint8_t *data, size_t len);
     void handleRemoteSetInterval(AsyncWebServerRequest *request, uint8_t *data, size_t len);
     void handleRemoteSetLocation(AsyncWebServerRequest *request, uint8_t *data, size_t len);
     void handleRemoteRestart(AsyncWebServerRequest *request, uint8_t *data, size_t len);

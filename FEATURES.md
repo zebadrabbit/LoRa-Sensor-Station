@@ -9,6 +9,10 @@
 - ✅ Client type persisted in NVS configuration
 - ✅ Captive portal dropdown with detailed descriptions
 - ✅ Prepares foundation for future deep sleep and power management features
+- ✅ **Code Cleanup**: Removed redundant /sensors page
+- ✅ Consolidated sensor configuration into /runtime-config page
+- ✅ Removed 279 lines of duplicate code (generateSensorNamesPage, generateSensorNamesJSON, handleSensorNameUpdate)
+- ✅ Streamlined web interface with single configuration page
 - ✅ **Bug Fixes**:
 - ✅ Removed duplicate chart card sections from dashboard (46 lines)
 - ✅ Fixed dashboard showing empty cards for environmental sensors
