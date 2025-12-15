@@ -12,12 +12,24 @@
 #include <LittleFS.h>
 #include <ArduinoJson.h>
 #include <Preferences.h>
+#include <map>
 
 // Global instance
 WiFiPortal wifiPortal;
 
 // WebSocket for live updates
 AsyncWebSocket ws("/ws");
+
+#ifdef BASE_STATION
+// LoRa settings reboot coordination tracking
+struct LoRaRebootTracker {
+    std::map<uint8_t, bool> sensorAcks;  // sensorId -> ack received
+    uint32_t commandStartTime = 0;
+    bool trackingActive = false;
+    uint8_t totalSensors = 0;
+};
+static LoRaRebootTracker loraRebootTracker;
+#endif
 
 // DNS server port
 const byte DNS_PORT = 53;
@@ -1116,10 +1128,26 @@ void WiFiPortal::setupDashboard() {
             
             Serial.println("===================================");
             Serial.printf("Commands sent to %d of %d active sensors\n", commandsSent, sensorCount);
-            Serial.println("\n⚠️  NEXT STEPS:");
-            Serial.println("1. Wait for all sensors to ACK (check logs)");
-            Serial.println("2. Reboot all sensor nodes");
-            Serial.println("3. Reboot base station");
+            
+            // Initialize reboot coordination tracker
+            loraRebootTracker.sensorAcks.clear();
+            loraRebootTracker.totalSensors = commandsSent;
+            loraRebootTracker.commandStartTime = millis();
+            loraRebootTracker.trackingActive = (commandsSent > 0);
+            
+            // Record which sensors we're waiting for
+            for (int i = 0; i < 256; i++) {
+                SensorInfo* sensor = getSensorInfo(i);
+                if (sensor != NULL && !isSensorTimedOut(i)) {
+                    loraRebootTracker.sensorAcks[i] = false;
+                    Serial.printf("Tracking ACK from sensor %d (%s)\n", i, sensor->location);
+                }
+            }
+            
+            Serial.println("\n⚠️  COORDINATION PROTOCOL:");
+            Serial.println("1. Waiting for all sensors to ACK (max 20s)");
+            Serial.println("2. Sensors will auto-reboot 5s after ACK");
+            Serial.println("3. Base station will reboot after all ACKs + 5s");
             Serial.println("4. All nodes will apply new LoRa parameters");
             Serial.println("===================================\n");
             
@@ -1130,24 +1158,62 @@ void WiFiPortal::setupDashboard() {
             responseDoc["sensorsFound"] = sensorCount;
             responseDoc["commandsSent"] = commandsSent;
             responseDoc["rebootRequired"] = true;
-            responseDoc["rebootDelay"] = 10;  // Base station will reboot in 10 seconds
+            responseDoc["trackingEnabled"] = loraRebootTracker.trackingActive;
             
             String response;
             serializeJson(responseDoc, response);
             request->send(200, "application/json", response);
             
-            // Schedule base station reboot after giving sensors time to ACK and reboot
-            // Sensors reboot 5s after ACK, so we wait 10s total
-            Serial.println("🔄 Scheduling base station reboot in 10 seconds...");
-            Serial.println("This allows sensors to ACK and reboot first.");
-            
-            // Set global reboot flag that main loop will check
-            extern bool loraRebootPending;
-            extern uint32_t loraRebootTime;
-            loraRebootPending = true;
-            loraRebootTime = millis() + 10000;  // 10 seconds from now;
+            // DON'T auto-schedule reboot yet - wait for ACKs
+            Serial.println("⏳ Waiting for sensor ACKs before scheduling reboot...");
+            Serial.println("Use /api/lora/reboot-status to monitor progress.");
         });
-#endif // BASE_STATION
+    
+    // API endpoint to check LoRa reboot coordination status
+    webServer.on("/api/lora/reboot-status", HTTP_GET, [](AsyncWebServerRequest *request) {
+        StaticJsonDocument<1024> doc;
+        
+        doc["trackingActive"] = loraRebootTracker.trackingActive;
+        doc["totalSensors"] = loraRebootTracker.totalSensors;
+        doc["commandStartTime"] = loraRebootTracker.commandStartTime;
+        doc["elapsedTime"] = loraRebootTracker.trackingActive ? (millis() - loraRebootTracker.commandStartTime) : 0;
+        
+        // Count ACKs
+        uint8_t ackedCount = 0;
+        JsonArray sensors = doc.createNestedArray("sensors");
+        for (auto& pair : loraRebootTracker.sensorAcks) {
+            JsonObject sensor = sensors.createNestedObject();
+            sensor["id"] = pair.first;
+            sensor["acked"] = pair.second;
+            if (pair.second) ackedCount++;
+            
+            SensorInfo* info = getSensorInfo(pair.first);
+            if (info != NULL) {
+                sensor["name"] = info->location;
+            }
+        }
+        
+        doc["ackedCount"] = ackedCount;
+        doc["allAcked"] = (ackedCount == loraRebootTracker.totalSensors) && (loraRebootTracker.totalSensors > 0);
+        
+        // Check if we've timed out (20 seconds)
+        bool timedOut = loraRebootTracker.trackingActive && (millis() - loraRebootTracker.commandStartTime > 20000);
+        doc["timedOut"] = timedOut;
+        
+        // Check if base station reboot is scheduled
+        extern bool loraRebootPending;
+        extern uint32_t loraRebootTime;
+        doc["rebootPending"] = loraRebootPending;
+        if (loraRebootPending) {
+            doc["rebootIn"] = (loraRebootTime > millis()) ? (loraRebootTime - millis()) / 1000 : 0;
+        }
+        
+        String response;
+        serializeJson(doc, response);
+        request->send(200, "application/json", response);
+    });
+    
+    #endif // BASE_STATION
     
     // Alerts API endpoints
     webServer.on("/api/alerts/config", HTTP_GET, [this](AsyncWebServerRequest *request) {
@@ -3602,6 +3668,67 @@ String WiFiPortal::generateCommandQueueJSON() {
     
     json += "]";
     return json;
+}
+
+// Global function to update LoRa reboot tracking when sensor ACKs
+// This is called from lora_comm.cpp when ACK is received
+void updateLoRaRebootTracking(uint8_t sensorId) {
+    if (!loraRebootTracker.trackingActive) return;
+    
+    if (loraRebootTracker.sensorAcks.find(sensorId) != loraRebootTracker.sensorAcks.end()) {
+        loraRebootTracker.sensorAcks[sensorId] = true;
+        Serial.printf("✅ Sensor %d ACKed LoRa settings command\n", sensorId);
+        
+        // Count how many have ACKed
+        uint8_t ackedCount = 0;
+        for (auto& pair : loraRebootTracker.sensorAcks) {
+            if (pair.second) ackedCount++;
+        }
+        
+        Serial.printf("Progress: %d/%d sensors ACKed\n", ackedCount, loraRebootTracker.totalSensors);
+        
+        // Check if all sensors have ACKed
+        if (ackedCount == loraRebootTracker.totalSensors) {
+            Serial.println("\n========================================");
+            Serial.println("✅ ALL SENSORS ACKNOWLEDGED!");
+            Serial.println("Sensors will reboot in ~5 seconds");
+            Serial.println("Scheduling base station reboot in 8 seconds...");
+            Serial.println("========================================\n");
+            
+            extern bool loraRebootPending;
+            extern uint32_t loraRebootTime;
+            loraRebootPending = true;
+            loraRebootTime = millis() + 8000;  // 8 seconds (sensors reboot at 5s)
+            loraRebootTracker.trackingActive = false;
+        }
+    }
+}
+
+// Check if we've timed out waiting for sensor ACKs (20 seconds)
+void checkLoRaRebootTimeout() {
+    if (!loraRebootTracker.trackingActive) return;
+    
+    // Check if 20 seconds have elapsed
+    if (millis() - loraRebootTracker.commandStartTime > 20000) {
+        // Count how many ACKed
+        uint8_t ackedCount = 0;
+        for (auto& pair : loraRebootTracker.sensorAcks) {
+            if (pair.second) ackedCount++;
+        }
+        
+        Serial.println("\n========================================");
+        Serial.println("⚠️  TIMEOUT WAITING FOR SENSOR ACKS");
+        Serial.printf("Received ACKs from %d/%d sensors\n", ackedCount, loraRebootTracker.totalSensors);
+        Serial.println("Proceeding with base station reboot anyway...");
+        Serial.println("========================================\n");
+        
+        // Schedule reboot even though not all sensors ACKed
+        extern bool loraRebootPending;
+        extern uint32_t loraRebootTime;
+        loraRebootPending = true;
+        loraRebootTime = millis() + 5000;  // 5 second grace period
+        loraRebootTracker.trackingActive = false;
+    }
 }
 
 #endif // BASE_STATION

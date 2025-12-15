@@ -729,6 +729,10 @@ void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr) {
           
           if (received.header.ackStatus == 0) {
             Serial.println("Command executed successfully!");
+            
+            // Check if this is a LoRa settings ACK and update tracking
+            extern void updateLoRaRebootTracking(uint8_t sensorId);
+            updateLoRaRebootTracking(received.header.sensorId);
           } else {
             Serial.printf("Command failed with error code: %d\n", received.header.ackStatus);
           }

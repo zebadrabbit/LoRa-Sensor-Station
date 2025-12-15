@@ -202,6 +202,12 @@ void loop() {
     ESP.restart();
   }
   
+  #ifdef BASE_STATION
+  // Check for LoRa settings reboot timeout (if not all sensors ACKed within 20s)
+  extern void checkLoRaRebootTimeout();
+  checkLoRaRebootTimeout();
+  #endif
+  
   // Handle WiFi portal if active
   if (wifiPortal.isPortalActive()) {
     wifiPortal.handleClient();

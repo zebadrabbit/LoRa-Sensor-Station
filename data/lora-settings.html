@@ -247,56 +247,109 @@
                     document.getElementById('sensorCount').textContent = result.sensorsFound || 0;
                     document.getElementById('commandCount').textContent = result.commandsSent || 0;
                     
-                    // Step 3: Waiting for ACKs
+                    // Step 3: Waiting for ACKs - REAL-TIME MONITORING
                     setStepActive('step3');
-                    await new Promise(resolve => setTimeout(resolve, 2000));
-                    setStepComplete('step3');
                     
-                    // Step 4: Sensors rebooting (automatic, 5 seconds)
-                    setStepActive('step4');
-                    await new Promise(resolve => setTimeout(resolve, 5000));
-                    setStepComplete('step4');
+                    // Poll for ACK status
+                    let allAcked = false;
+                    let timedOut = false;
+                    const maxPolls = 40; // 20 seconds (500ms intervals)
+                    let pollCount = 0;
                     
-                    // Step 5: Base station rebooting (automatic, 10 seconds total)
-                    setStepActive('step5');
-                    document.getElementById('rebootTimer').style.display = 'block';
-                    
-                    // Start countdown
-                    let countdown = 30;
-                    const countdownInterval = setInterval(async () => {
-                        countdown--;
-                        document.getElementById('countdown').textContent = countdown;
-                        
-                        // Try to ping the server
-                        if (countdown % 2 === 0) {
-                            try {
-                                const pingResponse = await fetch('/api/status', { 
-                                    method: 'GET',
-                                    cache: 'no-cache'
-                                });
-                                if (pingResponse.ok) {
-                                    // Server is back online
-                                    clearInterval(countdownInterval);
-                                    setStepComplete('step5');
-                                    document.getElementById('rebootTimer').innerHTML = '<strong style="color: #4CAF50;">✅ Base station is back online! Redirecting...</strong>';
-                                    setTimeout(() => {
-                                        window.location.href = '/';
-                                    }, 1500);
-                                }
-                            } catch (e) {
-                                // Server not ready yet
+                    const ackPollInterval = setInterval(async () => {
+                        try {
+                            const statusResponse = await fetch('/api/lora/reboot-status');
+                            const status = await statusResponse.json();
+                            
+                            // Update display with ACK progress
+                            const step3 = document.getElementById('step3');
+                            if (status.trackingActive) {
+                                step3.textContent = `⏳ Waiting for sensor ACKs... (${status.ackedCount}/${status.totalSensors})`;
                             }
+                            
+                            // Check if all sensors ACKed
+                            if (status.allAcked || !status.trackingActive) {
+                                allAcked = true;
+                                clearInterval(ackPollInterval);
+                                setStepComplete('step3');
+                                
+                                // Move to step 4
+                                setStepActive('step4');
+                                await new Promise(resolve => setTimeout(resolve, 5000));
+                                setStepComplete('step4');
+                                
+                                // Move to step 5
+                                startBaseStationRebootMonitoring();
+                            }
+                            
+                            // Check for timeout
+                            if (status.timedOut) {
+                                timedOut = true;
+                                clearInterval(ackPollInterval);
+                                step3.textContent = `⚠️ Partial ACKs received (${status.ackedCount}/${status.totalSensors}) - proceeding anyway`;
+                                setStepComplete('step3');
+                                
+                                // Still proceed to reboot
+                                setStepActive('step4');
+                                await new Promise(resolve => setTimeout(resolve, 3000));
+                                setStepComplete('step4');
+                                
+                                startBaseStationRebootMonitoring();
+                            }
+                            
+                            pollCount++;
+                            if (pollCount >= maxPolls && !allAcked && !timedOut) {
+                                // Safety timeout
+                                clearInterval(ackPollInterval);
+                                setStepComplete('step3');
+                                startBaseStationRebootMonitoring();
+                            }
+                        } catch (error) {
+                            console.error('Error polling ACK status:', error);
                         }
+                    }, 500);  // Poll every 500ms
+                    
+                    // Function to monitor base station reboot
+                    async function startBaseStationRebootMonitoring() {
+                        setStepActive('step5');
+                        document.getElementById('rebootTimer').style.display = 'block';
                         
-                        if (countdown <= 0) {
-                            clearInterval(countdownInterval);
-                            setStepComplete('step5');
-                            document.getElementById('rebootTimer').innerHTML = '<strong style="color: #4CAF50;">✅ Redirecting to dashboard...</strong>';
-                            setTimeout(() => {
-                                window.location.href = '/';
-                            }, 1000);
-                        }
-                    }, 1000);
+                        let countdown = 30;
+                        const countdownInterval = setInterval(async () => {
+                            countdown--;
+                            document.getElementById('countdown').textContent = countdown;
+                            
+                            // Try to ping the server
+                            if (countdown % 2 === 0) {
+                                try {
+                                    const pingResponse = await fetch('/api/status', { 
+                                        method: 'GET',
+                                        cache: 'no-cache'
+                                    });
+                                    if (pingResponse.ok) {
+                                        // Server is back online
+                                        clearInterval(countdownInterval);
+                                        setStepComplete('step5');
+                                        document.getElementById('rebootTimer').innerHTML = '<strong style=\"color: #4CAF50;\">✅ Base station is back online! Redirecting...</strong>';
+                                        setTimeout(() => {
+                                            window.location.href = '/';
+                                        }, 1500);
+                                    }
+                                } catch (e) {
+                                    // Server not ready yet
+                                }
+                            }
+                            
+                            if (countdown <= 0) {
+                                clearInterval(countdownInterval);
+                                setStepComplete('step5');
+                                document.getElementById('rebootTimer').innerHTML = '<strong style=\"color: #4CAF50;\">✅ Redirecting to dashboard...</strong>';
+                                setTimeout(() => {
+                                    window.location.href = '/';
+                                }, 1000);
+                            }
+                        }, 1000);
+                    }
                     
                 } else {
                     modal.style.display = 'none';
