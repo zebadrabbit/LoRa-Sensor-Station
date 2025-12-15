@@ -22,8 +22,15 @@ SensorConfig ConfigStorage::getSensorConfig() {
     SensorConfig config;
     config.sensorId = prefs.getUChar("sensor_id", 0);
     prefs.getString("sensor_loc", config.location, sizeof(config.location));
+    // Zone is managed by base station, only read if key exists to avoid error spam
+    if (prefs.isKey("sensor_zone")) {
+        prefs.getString("sensor_zone", config.zone, sizeof(config.zone));
+    } else {
+        config.zone[0] = '\0';  // Empty string for sensor nodes
+    }
     config.transmitInterval = prefs.getUShort("tx_interval", 30);
     config.networkId = prefs.getUShort("network_id", 12345);  // Default to 12345 if not set
+    config.priority = (SensorPriority)prefs.getUChar("priority", PRIORITY_MEDIUM);  // Default to medium
     config.meshEnabled = prefs.getBool("mesh_en", false);  // Disabled by default for backward compatibility
     config.meshForwarding = prefs.getBool("mesh_fwd", true);  // Forwarding enabled by default
     config.configured = (config.sensorId != 0);
@@ -33,8 +40,10 @@ SensorConfig ConfigStorage::getSensorConfig() {
 void ConfigStorage::setSensorConfig(const SensorConfig& config) {
     prefs.putUChar("sensor_id", config.sensorId);
     prefs.putString("sensor_loc", config.location);
+    prefs.putString("sensor_zone", config.zone);
     prefs.putUShort("tx_interval", config.transmitInterval);
     prefs.putUShort("network_id", config.networkId);
+    prefs.putUChar("priority", config.priority);
     prefs.putBool("mesh_en", config.meshEnabled);
     prefs.putBool("mesh_fwd", config.meshForwarding);
 }

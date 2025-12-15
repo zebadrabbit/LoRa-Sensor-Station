@@ -51,11 +51,17 @@ public:
     // Publishing
     bool publishSensorData(uint8_t sensorId, const char* location, float temperature, 
                           uint8_t battery, int16_t rssi, int8_t snr);
+    bool publishMultiSensorData(uint8_t sensorId, const char* location,
+                               const struct SensorValuePacket* values, uint8_t valueCount,
+                               uint8_t battery, int16_t rssi, int8_t snr);
     bool publishBaseStationStatus(uint8_t activeSensors, uint32_t totalPackets, 
                                   uint32_t uptime);
     
     // Home Assistant Discovery
     void publishHomeAssistantDiscovery(uint8_t sensorId, const char* location);
+    void publishHomeAssistantMultiSensorDiscovery(uint8_t sensorId, const char* location,
+                                                 const struct SensorValuePacket* values, 
+                                                 uint8_t valueCount);
     void removeHomeAssistantDiscovery(uint8_t sensorId);
     
     // Statistics

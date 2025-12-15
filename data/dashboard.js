@@ -29,8 +29,27 @@ function updateSensorList(sensors) {
         return;
     }
     
+    // Update zone filter dropdown
+    const zoneFilter = document.getElementById('zoneFilter');
+    const currentZone = zoneFilter.value;
+    const zones = new Set();
+    sensors.forEach(s => { if (s.zone) zones.add(s.zone); });
+    
+    zoneFilter.innerHTML = '<option value="">All Zones</option>';
+    Array.from(zones).sort().forEach(zone => {
+        const opt = document.createElement('option');
+        opt.value = zone;
+        opt.textContent = zone;
+        zoneFilter.appendChild(opt);
+    });
+    if (currentZone) zoneFilter.value = currentZone;
+    
+    // Filter sensors by zone
+    const filteredSensors = currentZone ? 
+        sensors.filter(s => s.zone === currentZone) : sensors;
+    
     let html = '';
-    sensors.forEach(sensor => {
+    filteredSensors.forEach(sensor => {
         const location = sensor.location || `Client ${sensor.id}`;
         const isOnline = sensor.ageSeconds < 300; // Online if seen in last 5 minutes
         const statusClass = isOnline ? 'status-online' : 'status-offline';
@@ -40,10 +59,27 @@ function updateSensorList(sensors) {
         const chargingState = sensor.battery === 0 ? 'N/A' : (sensor.charging ? 'Charging' : 'Discharging');
         const batteryDisplay = `${powerSource}/${sensor.battery}%/${chargingState}`;
         
+        // Health score color coding
+        const health = sensor.health ? sensor.health.overall : 0;
+        let healthColor = '#e74c3c'; // Red
+        let healthLabel = 'Poor';
+        if (health >= 0.8) { healthColor = '#27ae60'; healthLabel = 'Good'; }
+        else if (health >= 0.5) { healthColor = '#f39c12'; healthLabel = 'Fair'; }
+        
+        // Priority badge color
+        let priorityColor = '#3498db'; // Medium = blue
+        if (sensor.priorityLevel === 2) priorityColor = '#e74c3c'; // High = red
+        else if (sensor.priorityLevel === 0) priorityColor = '#95a5a6'; // Low = gray
+        
         html += `
             <div class="sensor-item">
                 <span class="status-indicator ${statusClass}"></span>
-                <strong>${location}</strong> (ID: ${sensor.id})<br>
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                    <strong>${location}</strong> (ID: ${sensor.id})
+                    ${sensor.zone ? `<span style="background: #ecf0f1; padding: 2px 8px; border-radius: 12px; font-size: 11px; color: #7f8c8d;">📍 ${sensor.zone}</span>` : ''}
+                    <span style="background: ${priorityColor}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">${sensor.priority || 'Medium'}</span>
+                    <span style="background: ${healthColor}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;" title="Communication: ${(health * 100).toFixed(0)}%">❤️ ${healthLabel}</span>
+                </div>
                 Battery: ${batteryDisplay}, 
                 RSSI: ${sensor.rssi} dBm,
                 Last seen: ${sensor.age}
@@ -51,7 +87,7 @@ function updateSensorList(sensors) {
         `;
     });
     sensorList.innerHTML = html;
-    console.log('Updated sensor list with', sensors.length, 'sensors');
+    console.log('Updated sensor list with', filteredSensors.length, 'sensors (filtered from', sensors.length, ')');
 }
 
 function updateSensorDropdown(sensors) {
@@ -264,6 +300,13 @@ function connectWebSocket() {
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     initChart('tempChart', 'Temperature', '°C');
+    initChart('humidityChart', 'Humidity', '%');
+    initChart('pressureChart', 'Pressure', 'hPa');
+    initChart('gasChart', 'Gas Resistance', 'kΩ');
+    initChart('lightChart', 'Light', 'lux');
+    initChart('voltageChart', 'Voltage', 'V');
+    initChart('currentChart', 'Current', 'mA');
+    initChart('powerChart', 'Power', 'mW');
     initChart('battChart', 'Battery', '%');
     initChart('rssiChart', 'RSSI', 'dBm');
     
@@ -288,4 +331,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Sensor selection
     document.getElementById('sensorSelect').addEventListener('change', loadHistoricalData);
+    
+    // Zone filter
+    document.getElementById('zoneFilter').addEventListener('change', loadData);
 });

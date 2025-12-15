@@ -10,6 +10,8 @@
 #endif
 #include <AsyncWebSocket.h>
 #include <LittleFS.h>
+#include <ArduinoJson.h>
+#include <Preferences.h>
 
 // Global instance
 WiFiPortal wifiPortal;
@@ -323,6 +325,22 @@ String WiFiPortal::generateSensorConfigPage() {
             </div>
             
             <div class="form-group">
+                <label for="zone">Zone / Area (Optional)</label>
+                <input type="text" id="zone" name="zone" maxlength="15" placeholder="e.g., Outdoor, Garage, Bedroom">
+                <p class="help-text">Group sensors by physical area or zone for filtering on dashboard</p>
+            </div>
+            
+            <div class="form-group">
+                <label for="priority">Sensor Priority</label>
+                <select id="priority" name="priority" required>
+                    <option value="0">Low Priority</option>
+                    <option value="1" selected>Medium Priority</option>
+                    <option value="2">High Priority</option>
+                </select>
+                <p class="help-text">Affects alert urgency and polling frequency</p>
+            </div>
+            
+            <div class="form-group">
                 <label for="networkId">Network ID (1-65535)</label>
                 <input type="number" id="networkId" name="networkId" min="1" max="65535" value="12345" required>
                 <p class="help-text">🔒 All devices in the same network must use the same Network ID</p>
@@ -602,6 +620,22 @@ void WiFiPortal::handleSensorConfig(AsyncWebServerRequest *request) {
         config.location[sizeof(config.location) - 1] = '\0';
         config.transmitInterval = request->getParam("interval", true)->value().toInt();
         config.networkId = request->getParam("networkId", true)->value().toInt();
+        
+        // Parse zone (optional)
+        if (request->hasParam("zone", true)) {
+            strncpy(config.zone, request->getParam("zone", true)->value().c_str(), sizeof(config.zone) - 1);
+            config.zone[sizeof(config.zone) - 1] = '\0';
+        } else {
+            config.zone[0] = '\0';  // Empty zone
+        }
+        
+        // Parse priority (default to MEDIUM)
+        if (request->hasParam("priority", true)) {
+            config.priority = (SensorPriority)request->getParam("priority", true)->value().toInt();
+        } else {
+            config.priority = PRIORITY_MEDIUM;
+        }
+        
         config.configured = true;
         
         // Handle encryption key if provided
@@ -839,6 +873,10 @@ void WiFiPortal::setupDashboard() {
     });
     
     // API endpoints - MUST be registered BEFORE serveStatic!
+    webServer.on("/api/status", HTTP_GET, [](AsyncWebServerRequest *request) {
+        request->send(200, "application/json", "{\"status\":\"ok\",\"uptime\":" + String(millis()) + "}");
+    });
+    
     webServer.on("/api/sensors", HTTP_GET, [this](AsyncWebServerRequest *request) {
         request->send(200, "application/json", generateSensorsJSON());
     });
@@ -922,6 +960,142 @@ void WiFiPortal::setupDashboard() {
             request->send(404, "text/plain", "Security page not found");
         }
     });
+    
+    // LoRa settings page
+    webServer.on("/lora-settings", HTTP_GET, [](AsyncWebServerRequest *request) {
+        if (LittleFS.exists("/lora-settings.html")) {
+            request->send(LittleFS, "/lora-settings.html", "text/html");
+        } else {
+            request->send(404, "text/plain", "LoRa settings page not found");
+        }
+    });
+    
+    // LoRa configuration API endpoints
+    webServer.on("/api/lora/config", HTTP_GET, [](AsyncWebServerRequest *request) {
+        BaseStationConfig config = configStorage.getBaseStationConfig();
+        String json = "{";
+        json += "\"networkId\":" + String(config.networkId) + ",";
+        json += "\"region\":\"US915\",";  // Placeholder - would need to add to config
+        json += "\"frequency\":915000000,";  // Placeholder
+        json += "\"spreadingFactor\":10,";  // Current default
+        json += "\"bandwidth\":125,";  // Current default
+        json += "\"txPower\":14,";  // Current default
+        json += "\"codingRate\":1,";  // 4/5
+        json += "\"preambleLength\":8";  // Standard
+        json += "}";
+        request->send(200, "application/json", json);
+    });
+    
+#ifdef BASE_STATION
+    webServer.on("/api/lora/config", HTTP_POST, [this](AsyncWebServerRequest *request) {}, NULL,
+        [this](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+            String body = String((char*)data).substring(0, len);
+            Serial.printf("\n=== LoRa Configuration Update Request ===\n");
+            Serial.printf("Payload: %s\n", body.c_str());
+            
+            // Parse JSON using ArduinoJson
+            StaticJsonDocument<512> doc;
+            DeserializationError error = deserializeJson(doc, body);
+            
+            if (error) {
+                Serial.printf("JSON parse error: %s\n", error.c_str());
+                String response = "{\"success\":false,\"error\":\"Invalid JSON\"}";
+                request->send(400, "application/json", response);
+                return;
+            }
+            
+            // Extract parameters
+            uint32_t frequency = doc["frequency"] | 868000000;
+            uint8_t spreadingFactor = doc["spreadingFactor"] | 10;
+            uint32_t bandwidth = doc["bandwidth"] | 125;
+            uint8_t txPower = doc["txPower"] | 14;
+            uint8_t codingRate = doc["codingRate"] | 1;
+            
+            // Convert bandwidth to Hz if it's just the enum value
+            if (bandwidth < 10) {
+                // It's the enum (0/1/2), convert to Hz
+                if (bandwidth == 0) bandwidth = 125000;
+                else if (bandwidth == 1) bandwidth = 250000;
+                else if (bandwidth == 2) bandwidth = 500000;
+            }
+            
+            Serial.println("Parsed Parameters:");
+            Serial.printf("  Frequency: %u Hz\n", frequency);
+            Serial.printf("  Spreading Factor: SF%d\n", spreadingFactor);
+            Serial.printf("  Bandwidth: %u Hz\n", bandwidth);
+            Serial.printf("  TX Power: %d dBm\n", txPower);
+            Serial.printf("  Coding Rate: 4/%d\n", codingRate + 4);
+            
+            // Save to base station's NVS for application after reboot
+            Preferences prefs;
+            prefs.begin("lora_params", false);
+            prefs.putUInt("frequency", frequency);
+            prefs.putUChar("sf", spreadingFactor);
+            prefs.putUInt("bandwidth", bandwidth);
+            prefs.putUChar("tx_power", txPower);
+            prefs.putUChar("coding_rate", codingRate);
+            prefs.putBool("pending", true);
+            prefs.end();
+            
+            Serial.println("✓ Parameters saved to base station NVS");
+            
+            // Send SET_LORA_PARAMS command to all active sensor nodes
+            extern RemoteConfigManager remoteConfigManager;
+            int sensorCount = 0;
+            int commandsSent = 0;
+            
+            Serial.println("\n=== Broadcasting to Sensor Nodes ===");
+            for (int i = 0; i < 256; i++) {
+                SensorInfo* sensor = getSensorInfo(i);
+                if (sensor != NULL && !isSensorTimedOut(i)) {
+                    sensorCount++;
+                    Serial.printf("Sending SET_LORA_PARAMS to sensor %d (%s)...\n", 
+                                 i, sensor->location);
+                    
+                    // Use CommandBuilder to create the command
+                    CommandPacket cmd = CommandBuilder::createSetLoRaParams(
+                        i, frequency, spreadingFactor, bandwidth, txPower, codingRate
+                    );
+                    
+                    // Queue the command (will be sent via existing remote config system)
+                    uint8_t cmdData[14];
+                    memcpy(&cmdData[0], &frequency, sizeof(uint32_t));
+                    cmdData[4] = spreadingFactor;
+                    memcpy(&cmdData[5], &bandwidth, sizeof(uint32_t));
+                    cmdData[9] = txPower;
+                    cmdData[10] = codingRate;
+                    
+                    if (remoteConfigManager.queueCommand(i, CMD_SET_LORA_PARAMS, cmdData, 11)) {
+                        commandsSent++;
+                        Serial.printf("  ✓ Command queued for sensor %d\n", i);
+                    } else {
+                        Serial.printf("  ✗ Failed to queue command for sensor %d\n", i);
+                    }
+                }
+            }
+            
+            Serial.println("===================================");
+            Serial.printf("Commands sent to %d of %d active sensors\n", commandsSent, sensorCount);
+            Serial.println("\n⚠️  NEXT STEPS:");
+            Serial.println("1. Wait for all sensors to ACK (check logs)");
+            Serial.println("2. Reboot all sensor nodes");
+            Serial.println("3. Reboot base station");
+            Serial.println("4. All nodes will apply new LoRa parameters");
+            Serial.println("===================================\n");
+            
+            // Build JSON response with details
+            StaticJsonDocument<512> responseDoc;
+            responseDoc["success"] = true;
+            responseDoc["message"] = "LoRa parameters updated and broadcast to sensors";
+            responseDoc["sensorsFound"] = sensorCount;
+            responseDoc["commandsSent"] = commandsSent;
+            responseDoc["nextSteps"] = "Wait for sensor ACKs, then reboot all sensors, then reboot base station";
+            
+            String response;
+            serializeJson(responseDoc, response);
+            request->send(200, "application/json", response);
+        });
+#endif // BASE_STATION
     
     // Alerts API endpoints
     webServer.on("/api/alerts/config", HTTP_GET, [this](AsyncWebServerRequest *request) {
@@ -1017,6 +1191,87 @@ void WiFiPortal::setupDashboard() {
     
     webServer.on("/api/remote-config/queue-status", HTTP_GET, [this](AsyncWebServerRequest *request) {
         request->send(200, "application/json", generateCommandQueueJSON());
+    });
+    
+    // ============================================================================
+    // SENSOR ZONE AND PRIORITY API ENDPOINTS
+    // ============================================================================
+    
+    // Get sensor zone
+    webServer.on("^\\/api\\/sensors\\/([0-9]+)\\/zone$", HTTP_GET, [](AsyncWebServerRequest *request) {
+        extern SensorConfigManager sensorConfigManager;
+        uint8_t sensorId = request->pathArg(0).toInt();
+        String zone = sensorConfigManager.getSensorZone(sensorId);
+        String json = "{\"sensorId\":" + String(sensorId) + ",\"zone\":\"" + zone + "\"}";
+        request->send(200, "application/json", json);
+    });
+    
+    // Set sensor zone
+    webServer.on("^\\/api\\/sensors\\/([0-9]+)\\/zone$", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL,
+        [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+            extern SensorConfigManager sensorConfigManager;
+            uint8_t sensorId = request->pathArg(0).toInt();
+            
+            String body = String((char*)data).substring(0, len);
+            int zoneStart = body.indexOf("\"zone\":\"") + 8;
+            int zoneEnd = body.indexOf("\"", zoneStart);
+            String zone = body.substring(zoneStart, zoneEnd);
+            
+            bool success = sensorConfigManager.setSensorZone(sensorId, zone.c_str());
+            String response = success ? 
+                "{\"success\":true,\"message\":\"Zone updated\"}" : 
+                "{\"success\":false,\"error\":\"Failed to update zone\"}";
+            request->send(success ? 200 : 500, "application/json", response);
+        });
+    
+    // Get sensor priority
+    webServer.on("^\\/api\\/sensors\\/([0-9]+)\\/priority$", HTTP_GET, [](AsyncWebServerRequest *request) {
+        extern SensorConfigManager sensorConfigManager;
+        uint8_t sensorId = request->pathArg(0).toInt();
+        SensorPriority priority = sensorConfigManager.getSensorPriority(sensorId);
+        const char* priorityStr = (priority == PRIORITY_HIGH) ? "High" : (priority == PRIORITY_LOW) ? "Low" : "Medium";
+        String json = "{\"sensorId\":" + String(sensorId) + ",\"priority\":\"" + String(priorityStr) + "\",\"level\":" + String((int)priority) + "}";
+        request->send(200, "application/json", json);
+    });
+    
+    // Set sensor priority
+    webServer.on("^\\/api\\/sensors\\/([0-9]+)\\/priority$", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL,
+        [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+            extern SensorConfigManager sensorConfigManager;
+            uint8_t sensorId = request->pathArg(0).toInt();
+            
+            String body = String((char*)data).substring(0, len);
+            int levelStart = body.indexOf("\"level\":") + 8;
+            int levelEnd = body.indexOf(",", levelStart);
+            if (levelEnd == -1) levelEnd = body.indexOf("}", levelStart);
+            int level = body.substring(levelStart, levelEnd).toInt();
+            
+            SensorPriority priority = (SensorPriority)level;
+            bool success = sensorConfigManager.setSensorPriority(sensorId, priority);
+            String response = success ? 
+                "{\"success\":true,\"message\":\"Priority updated\"}" : 
+                "{\"success\":false,\"error\":\"Failed to update priority\"}";
+            request->send(success ? 200 : 500, "application/json", response);
+        });
+    
+    // Get sensor health
+    webServer.on("^\\/api\\/sensors\\/([0-9]+)\\/health$", HTTP_GET, [](AsyncWebServerRequest *request) {
+        extern SensorConfigManager sensorConfigManager;
+        uint8_t sensorId = request->pathArg(0).toInt();
+        SensorHealthScore health = sensorConfigManager.getHealthScore(sensorId);
+        
+        String json = "{";
+        json += "\"sensorId\":" + String(sensorId) + ",";
+        json += "\"overallHealth\":" + String(health.overallHealth, 2) + ",";
+        json += "\"communicationReliability\":" + String(health.communicationReliability, 2) + ",";
+        json += "\"batteryHealth\":" + String(health.batteryHealth, 2) + ",";
+        json += "\"readingQuality\":" + String(health.readingQuality, 2) + ",";
+        json += "\"uptimeSeconds\":" + String(health.uptimeSeconds) + ",";
+        json += "\"lastSeenTimestamp\":" + String(health.lastSeenTimestamp) + ",";
+        json += "\"totalPackets\":" + String(health.totalPackets) + ",";
+        json += "\"failedPackets\":" + String(health.failedPackets);
+        json += "}";
+        request->send(200, "application/json", json);
     });
     
     // ============================================================================
@@ -2002,6 +2257,10 @@ String WiFiPortal::generateDashboardPage() {
 }
 
 String WiFiPortal::generateSensorsJSON() {
+#ifdef BASE_STATION
+    extern SensorConfigManager sensorConfigManager;
+#endif
+    
     String json = "[";
     bool first = true;
     
@@ -2027,9 +2286,25 @@ String WiFiPortal::generateSensorsJSON() {
                 sensorCount++;
             }
             
+#ifdef BASE_STATION
+            // Get metadata for zone, priority, and health
+            SensorMetadata meta = sensorConfigManager.getSensorMetadata(sensor->sensorId);
+            SensorHealthScore health = sensorConfigManager.getHealthScore(sensor->sensorId);
+            
+            // Priority string
+            const char* priorityStr = "Medium";
+            if (meta.priority == PRIORITY_HIGH) priorityStr = "High";
+            else if (meta.priority == PRIORITY_LOW) priorityStr = "Low";
+#endif
+            
             json += "{";
             json += "\"id\":" + String(sensor->sensorId) + ",";
             json += "\"location\":\"" + String(sensor->location) + "\",";
+#ifdef BASE_STATION
+            json += "\"zone\":\"" + String(meta.zone) + "\",";
+            json += "\"priority\":\"" + String(priorityStr) + "\",";
+            json += "\"priorityLevel\":" + String((int)meta.priority) + ",";
+#endif
             json += "\"battery\":" + String(sensor->lastBatteryPercent) + ",";
             json += "\"charging\":" + String(sensor->powerState ? "true" : "false") + ",";
             json += "\"rssi\":" + String(sensor->lastRssi) + ",";
@@ -2037,6 +2312,16 @@ String WiFiPortal::generateSensorsJSON() {
             json += "\"packets\":" + String(sensor->packetsReceived) + ",";
             json += "\"ageSeconds\":" + String(ageSeconds) + ",";
             json += "\"age\":\"" + ageStr + "\"";
+#ifdef BASE_STATION
+            json += ",\"health\":{";
+            json += "\"overall\":" + String(health.overallHealth, 2) + ",";
+            json += "\"communication\":" + String(health.communicationReliability, 2) + ",";
+            json += "\"battery\":" + String(health.batteryHealth, 2) + ",";
+            json += "\"quality\":" + String(health.readingQuality, 2) + ",";
+            json += "\"totalPackets\":" + String(health.totalPackets) + ",";
+            json += "\"failedPackets\":" + String(health.failedPackets);
+            json += "}";
+#endif
             json += "}";
         }
     }

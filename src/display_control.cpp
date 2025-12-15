@@ -7,6 +7,7 @@
 #include <WiFi.h>
 #include "HT_SSD1306Wire.h"
 #include <qrcode.h>
+#include <Preferences.h>
 
 static SSD1306Wire display(0x3c, 500000, SDA_OLED, SCL_OLED, GEOMETRY_128_64, RST_OLED);
 static bool displayOn = true;
@@ -24,9 +25,9 @@ static bool factoryResetTriggered = false;
 static bool immediatePingRequested = false;
 
 #ifdef BASE_STATION
-  #define NUM_PAGES 6  // Status, Sensors, Statistics, Signal Graph, Battery, WiFi Info
+  #define NUM_PAGES 7  // Welcome, Status, Active Sensors, Statistics, LoRa Config, Battery, WiFi Info
 #else
-  #define NUM_PAGES 3  // Status, Statistics, Battery
+  #define NUM_PAGES 5  // Welcome, Client Status, Statistics, Battery, LoRa Info
 #endif
 
 void initDisplay() {
@@ -212,15 +213,15 @@ void handleButton() {
         forceNextPage();
       }
     } else if (clickCount == 2 && displayOn) {
-      // Double click = Reboot
-      Serial.println("Double click: Rebooting...");
-      displayMessage("Rebooting...", "", "", 1000);
-      ESP.restart();
-    } else if (clickCount == 3 && displayOn) {
-      // Triple click = Send immediate ping
-      Serial.println("Triple click: Sending immediate ping");
+      // Double click = Send immediate ping
+      Serial.println("Double click: Sending immediate ping");
       immediatePingRequested = true;
       displayMessage("Sending", "Ping...", "", 800);
+    } else if (clickCount == 3 && displayOn) {
+      // Triple click = Reboot
+      Serial.println("Triple click: Rebooting...");
+      displayMessage("Rebooting...", "", "", 1000);
+      ESP.restart();
     }
     
     clickCount = 0;
@@ -314,6 +315,28 @@ void displayBaseStationPage() {
   
   switch (currentPage) {
     case 0: {
+      // Welcome page
+      display.setFont(ArialMT_Plain_16);
+      display.setTextAlignment(TEXT_ALIGN_CENTER);
+      
+      display.drawString(64, 15, "Hello! I am");
+      
+      String name = "Base Station!";
+      // Use smaller font for long names to fit more characters
+      if (name.length() > 14) {
+        display.setFont(ArialMT_Plain_10);
+        display.drawString(64, 38, name);
+      } else {
+        display.drawString(64, 35, name);
+      }
+      
+      display.setTextAlignment(TEXT_ALIGN_LEFT);
+      display.setFont(ArialMT_Plain_10);
+      display.drawString(110, 54, "1/7");
+      break;
+    }
+    
+    case 1: {
       display.setFont(ArialMT_Plain_10);
       display.setColor(WHITE);
       display.fillRect(0, 0, 128, 11);
@@ -321,25 +344,34 @@ void displayBaseStationPage() {
       display.drawString(0, 0, "BASE STATION");
       display.setColor(WHITE);
       
-      bool wifiConnected = (WiFi.status() == WL_CONNECTED);
-      display.drawString(0, 12, "WiFi: " + String(wifiConnected ? "Connected" : "Off"));
-      drawWifiStatus(wifiConnected, 110, 12);
+      #ifdef BASE_STATION
+        BaseStationConfig config = configStorage.getBaseStationConfig();
+        String idLine = "ID: 0  Net: " + String(config.networkId);
+        if (securityManager.isEncryptionEnabled()) {
+          idLine += " [E]";
+        }
+        display.drawString(0, 12, idLine);
+      #endif
       
-      uint8_t sensorCount = getActiveSensorCount();
-      display.drawString(0, 24, "Sensors: " + String(sensorCount));
+      bool wifiConnected = (WiFi.status() == WL_CONNECTED);
+      display.drawString(0, 24, "WiFi: " + String(wifiConnected ? "Connected" : "Off"));
+      drawWifiStatus(wifiConnected, 110, 24);
+      
+      uint8_t clientCount = getActiveClientCount();
+      display.drawString(0, 36, "Clients: " + String(clientCount));
       
       if (stats->lastRxTime > 0) {
         uint32_t secAgo = (millis() - stats->lastRxTime) / 1000;
-        display.drawString(0, 36, "Last RX: " + String(secAgo) + "s ago");
+        display.drawString(0, 48, "Last RX: " + String(secAgo) + "s");
       } else {
-        display.drawString(0, 36, "Last RX: Never");
+        display.drawString(0, 48, "Last RX: Never");
       }
       
-      display.drawString(110, 54, "1/6");
+      display.drawString(110, 54, "2/7");
       break;
     }
     
-    case 1: {
+    case 2: {
       display.setFont(ArialMT_Plain_10);
       display.setColor(WHITE);
       display.fillRect(0, 0, 128, 11);
@@ -365,11 +397,11 @@ void displayBaseStationPage() {
         }
       }
       
-      display.drawString(110, 54, "2/6");
+      display.drawString(110, 54, "3/7");
       break;
     }
     
-    case 2: {
+    case 3: {
       display.setFont(ArialMT_Plain_10);
       display.setColor(WHITE);
       display.fillRect(0, 0, 128, 11);
@@ -384,27 +416,47 @@ void displayBaseStationPage() {
         (stats->totalRxPackets * 100) / (stats->totalRxPackets + stats->totalRxInvalid) : 0;
       display.drawString(0, 36, "Success: " + String(rxSuccess) + "%");
       
-      display.drawString(110, 54, "3/6");
-      break;
-    }
-    
-    case 3: {
-      display.setFont(ArialMT_Plain_10);
-      display.setColor(WHITE);
-      display.fillRect(0, 0, 128, 11);
-      display.setColor(BLACK);
-      display.drawString(0, 0, "SIGNAL HISTORY");
-      display.setColor(WHITE);
-      
-      drawSignalGraph(stats->rssiHistory, 32, 10, 13, 108, 36);
-      
-      display.drawString(0, 52, "-120");
-      display.drawString(90, 52, "-20");
-      display.drawString(110, 52, "4/6");
+      display.drawString(110, 54, "4/7");
       break;
     }
     
     case 4: {
+      display.setFont(ArialMT_Plain_10);
+      display.setColor(WHITE);
+      display.fillRect(0, 0, 128, 11);
+      display.setColor(BLACK);
+      display.drawString(0, 0, "LORA CONFIG");
+      display.setColor(WHITE);
+      
+      // Read current LoRa parameters from NVS or use defaults
+      Preferences prefs;
+      prefs.begin("lora_params", true);  // Read-only
+      uint32_t frequency = prefs.getUInt("frequency", RF_FREQUENCY);
+      uint8_t spreadingFactor = prefs.getUChar("sf", LORA_SPREADING_FACTOR);
+      uint32_t bandwidth = prefs.getUInt("bandwidth", LORA_BANDWIDTH);
+      uint8_t txPower = prefs.getUChar("tx_power", TX_OUTPUT_POWER);
+      uint8_t codingRate = prefs.getUChar("coding_rate", LORA_CODINGRATE);
+      prefs.end();
+      
+      // Display frequency in MHz
+      float freqMHz = frequency / 1000000.0;
+      display.drawString(0, 12, "Freq: " + String(freqMHz, 1) + " MHz");
+      
+      // Display spreading factor
+      display.drawString(0, 24, "SF: " + String(spreadingFactor) + "  CR: 4/" + String(codingRate + 4));
+      
+      // Display bandwidth in kHz
+      uint16_t bwKHz = bandwidth / 1000;
+      display.drawString(0, 36, "BW: " + String(bwKHz) + " kHz");
+      
+      // Display TX power
+      display.drawString(0, 48, "Power: " + String(txPower) + " dBm");
+      
+      display.drawString(110, 54, "5/7");
+      break;
+    }
+    
+    case 5: {
       display.setFont(ArialMT_Plain_10);
       display.setColor(WHITE);
       display.fillRect(0, 0, 128, 11);
@@ -417,17 +469,17 @@ void displayBaseStationPage() {
         uint8_t batteryPercent = calculateBatteryPercent(batteryVoltage);
         bool powerState = getPowerState();
         
-        display.drawString(0, 14, "Voltage: " + String(batteryVoltage, 2) + "V");
-        display.drawString(0, 26, "Level: " + String(batteryPercent) + "%");
-        display.drawString(0, 38, String(powerState ? "Charging" : "Discharging"));
-        drawBatteryIcon(batteryPercent, 90, 26);
+        display.drawString(0, 20, "Voltage: " + String(batteryVoltage, 2) + "V");
+        display.drawString(0, 32, "Level: " + String(batteryPercent) + "%");
+        drawBatteryIcon(batteryPercent, 90, 32);
+        display.drawString(0, 48, String(powerState ? "Charging" : "Discharging"));
       #endif
       
-      display.drawString(110, 54, "5/6");
+      display.drawString(110, 54, "6/7");
       break;
     }
     
-    case 5: {
+    case 6: {
       display.setFont(ArialMT_Plain_10);
       display.setColor(WHITE);
       display.fillRect(0, 0, 128, 11);
@@ -461,7 +513,7 @@ void displayBaseStationPage() {
         drawWifiStatus(false, 110, 38);
       }
       
-      display.drawString(110, 54, "6/6");
+      display.drawString(110, 54, "7/7");
       break;
     }
   }
@@ -478,11 +530,38 @@ void displaySensorPage() {
   
   switch (currentPage) {
     case 0: {
+      // Welcome page
+      SensorConfig config = configStorage.getSensorConfig();
+      String location = String(config.location);
+      
+      display.setFont(ArialMT_Plain_16);
+      display.setTextAlignment(TEXT_ALIGN_CENTER);
+      
+      display.drawString(64, 15, "Hello! I am");
+      
+      // Use smaller font for long names to fit more characters
+      if (location.length() > 14) {
+        display.setFont(ArialMT_Plain_10);
+        if (location.length() > 20) {
+          location = location.substring(0, 20);
+        }
+        display.drawString(64, 38, location);
+      } else {
+        display.drawString(64, 35, location);
+      }
+      
+      display.setTextAlignment(TEXT_ALIGN_LEFT);
+      display.setFont(ArialMT_Plain_10);
+      display.drawString(110, 54, "1/5");
+      break;
+    }
+    
+    case 1: {
       display.setFont(ArialMT_Plain_10);
       display.setColor(WHITE);
       display.fillRect(0, 0, 128, 11);
       display.setColor(BLACK);
-      display.drawString(0, 0, "SENSOR STATUS");
+      display.drawString(0, 0, "CLIENT STATUS");
       display.setColor(WHITE);
       
       SensorConfig config = configStorage.getSensorConfig();
@@ -506,11 +585,11 @@ void displaySensorPage() {
         display.drawString(0, 48, "Last TX: " + String(secAgo) + "s");
       }
       
-      display.drawString(110, 54, "1/3");
+      display.drawString(110, 54, "2/5");
       break;
     }
     
-    case 1: {
+    case 2: {
       display.setFont(ArialMT_Plain_10);
       display.setColor(WHITE);
       display.fillRect(0, 0, 128, 11);
@@ -526,11 +605,11 @@ void displaySensorPage() {
         (stats->totalTxSuccess * 100) / stats->totalTxAttempts : 0;
       display.drawString(0, 48, "Rate: " + String(txSuccess) + "%");
       
-      display.drawString(110, 54, "2/3");
+      display.drawString(110, 54, "3/5");
       break;
     }
     
-    case 2: {
+    case 3: {
       display.setFont(ArialMT_Plain_10);
       display.setColor(WHITE);
       display.fillRect(0, 0, 128, 11);
@@ -538,12 +617,48 @@ void displaySensorPage() {
       display.drawString(0, 0, "BATTERY STATUS");
       display.setColor(WHITE);
       
-      display.drawString(0, 20, "Battery: N/A");
-      drawBatteryIcon(0, 54, 35);
+      display.drawString(0, 20, "Voltage: N/A");
+      display.drawString(0, 32, "Level: N/A");
+      drawBatteryIcon(0, 90, 32);
+      display.drawString(0, 48, "Connect battery");
       
-      display.drawString(0, 50, "Connect battery");
+      display.drawString(110, 54, "4/5");
+      break;
+    }
+    
+    case 4: {
+      display.setFont(ArialMT_Plain_10);
+      display.setColor(WHITE);
+      display.fillRect(0, 0, 128, 11);
+      display.setColor(BLACK);
+      display.drawString(0, 0, "LORA CONFIG");
+      display.setColor(WHITE);
       
-      display.drawString(110, 54, "3/3");
+      // Read current LoRa parameters from NVS or use defaults
+      Preferences prefs;
+      prefs.begin("lora_params", true);  // Read-only
+      uint32_t frequency = prefs.getUInt("frequency", RF_FREQUENCY);
+      uint8_t spreadingFactor = prefs.getUChar("sf", LORA_SPREADING_FACTOR);
+      uint32_t bandwidth = prefs.getUInt("bandwidth", LORA_BANDWIDTH);
+      uint8_t txPower = prefs.getUChar("tx_power", TX_OUTPUT_POWER);
+      uint8_t codingRate = prefs.getUChar("coding_rate", LORA_CODINGRATE);
+      prefs.end();
+      
+      // Display frequency in MHz
+      float freqMHz = frequency / 1000000.0;
+      display.drawString(0, 12, "Freq: " + String(freqMHz, 1) + " MHz");
+      
+      // Display spreading factor
+      display.drawString(0, 24, "SF: " + String(spreadingFactor) + "  CR: 4/" + String(codingRate + 4));
+      
+      // Display bandwidth in kHz
+      uint16_t bwKHz = bandwidth / 1000;
+      display.drawString(0, 36, "BW: " + String(bwKHz) + " kHz");
+      
+      // Display TX power
+      display.drawString(0, 48, "Power: " + String(txPower) + " dBm");
+      
+      display.drawString(110, 54, "5/5");
       break;
     }
   }

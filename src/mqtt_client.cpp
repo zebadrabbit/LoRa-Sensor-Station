@@ -8,6 +8,8 @@
 #ifdef BASE_STATION
 
 #include "mqtt_client.h"
+#include "sensor_interface.h"
+#include "data_types.h"
 #include <Preferences.h>
 #include <ArduinoJson.h>
 
@@ -251,6 +253,130 @@ bool MQTTClientManager::publishSensorData(uint8_t sensorId, const char* location
 }
 
 /**
+ * @brief Publish multi-sensor data to MQTT (Phase 2 support)
+ */
+bool MQTTClientManager::publishMultiSensorData(uint8_t sensorId, const char* location,
+                                              const SensorValuePacket* values, uint8_t valueCount,
+                                              uint8_t battery, int16_t rssi, int8_t snr) {
+    if (!isConnected()) {
+        failedPublishCount++;
+        return false;
+    }
+    
+    char payload[16];
+    bool success = true;
+    
+    // Publish each sensor value to its own topic
+    for (uint8_t i = 0; i < valueCount; i++) {
+        String topic;
+        snprintf(payload, sizeof(payload), "%.2f", values[i].value);
+        
+        switch(values[i].type) {
+            case VALUE_TEMPERATURE:
+                topic = buildSensorTopic(sensorId, "temperature");
+                break;
+            case VALUE_HUMIDITY:
+                topic = buildSensorTopic(sensorId, "humidity");
+                break;
+            case VALUE_PRESSURE:
+                topic = buildSensorTopic(sensorId, "pressure");
+                break;
+            case VALUE_LIGHT:
+                topic = buildSensorTopic(sensorId, "light");
+                break;
+            case VALUE_VOLTAGE:
+                topic = buildSensorTopic(sensorId, "voltage");
+                break;
+            case VALUE_CURRENT:
+                topic = buildSensorTopic(sensorId, "current");
+                break;
+            case VALUE_POWER:
+                topic = buildSensorTopic(sensorId, "power");
+                break;
+            case VALUE_GAS_RESISTANCE:
+                // Convert ohms to kilo-ohms for display
+                snprintf(payload, sizeof(payload), "%.2f", values[i].value / 1000.0f);
+                topic = buildSensorTopic(sensorId, "gas_resistance");
+                break;
+            case VALUE_MOISTURE:
+                topic = buildSensorTopic(sensorId, "moisture");
+                break;
+            default:
+                // Skip unknown value types
+                continue;
+        }
+        
+        success &= publish(topic.c_str(), payload);
+    }
+    
+    // Publish battery and signal strength
+    snprintf(payload, sizeof(payload), "%d", battery);
+    success &= publish(buildSensorTopic(sensorId, "battery").c_str(), payload);
+    
+    snprintf(payload, sizeof(payload), "%d", rssi);
+    success &= publish(buildSensorTopic(sensorId, "rssi").c_str(), payload);
+    
+    snprintf(payload, sizeof(payload), "%d", snr);
+    success &= publish(buildSensorTopic(sensorId, "snr").c_str(), payload);
+    
+    // Publish combined JSON state
+    String jsonTopic = buildSensorTopic(sensorId, "state");
+    StaticJsonDocument<512> doc;
+    doc["sensor_id"] = sensorId;
+    doc["location"] = location;
+    doc["battery"] = battery;
+    doc["rssi"] = rssi;
+    doc["snr"] = snr;
+    doc["timestamp"] = millis() / 1000;
+    
+    // Add all sensor values to JSON
+    JsonObject readings = doc.createNestedObject("readings");
+    for (uint8_t i = 0; i < valueCount; i++) {
+        switch(values[i].type) {
+            case VALUE_TEMPERATURE:
+                readings["temperature"] = values[i].value;
+                break;
+            case VALUE_HUMIDITY:
+                readings["humidity"] = values[i].value;
+                break;
+            case VALUE_PRESSURE:
+                readings["pressure"] = values[i].value;
+                break;
+            case VALUE_LIGHT:
+                readings["light"] = values[i].value;
+                break;
+            case VALUE_VOLTAGE:
+                readings["voltage"] = values[i].value;
+                break;
+            case VALUE_CURRENT:
+                readings["current"] = values[i].value;
+                break;
+            case VALUE_POWER:
+                readings["power"] = values[i].value;
+                break;
+            case VALUE_GAS_RESISTANCE:
+                readings["gas_resistance"] = values[i].value / 1000.0f;  // kΩ
+                break;
+            case VALUE_MOISTURE:
+                readings["moisture"] = values[i].value;
+                break;
+        }
+    }
+    
+    String jsonPayload;
+    serializeJson(doc, jsonPayload);
+    success &= publish(jsonTopic.c_str(), jsonPayload.c_str());
+    
+    if (success) {
+        publishCount++;
+    } else {
+        failedPublishCount++;
+    }
+    
+    return success;
+}
+
+/**
  * @brief Publish base station status
  */
 bool MQTTClientManager::publishBaseStationStatus(uint8_t activeSensors, 
@@ -342,6 +468,150 @@ void MQTTClientManager::publishHomeAssistantDiscovery(uint8_t sensorId, const ch
     publish(rssiConfigTopic.c_str(), rssiPayload.c_str(), true);
     
     Serial.printf("Published Home Assistant discovery for sensor %d\n", sensorId);
+}
+
+/**
+ * @brief Publish Home Assistant MQTT discovery config for multi-sensor device
+ */
+void MQTTClientManager::publishHomeAssistantMultiSensorDiscovery(uint8_t sensorId, const char* location,
+                                                                const SensorValuePacket* values, 
+                                                                uint8_t valueCount) {
+    if (!isConnected() || !config.homeAssistantDiscovery) {
+        return;
+    }
+    
+    String deviceName = String(location);
+    if (deviceName.length() == 0) {
+        deviceName = "LoRa Sensor " + String(sensorId);
+    }
+    
+    String deviceId = "lora_sensor_" + String(sensorId);
+    
+    // Create device info object once
+    StaticJsonDocument<256> deviceDoc;
+    JsonObject device = deviceDoc.to<JsonObject>();
+    device["identifiers"][0] = deviceId;
+    device["name"] = deviceName;
+    device["model"] = "LoRa Multi-Sensor";
+    device["manufacturer"] = "Heltec";
+    
+    // Publish discovery for each sensor type
+    for (uint8_t i = 0; i < valueCount; i++) {
+        StaticJsonDocument<512> doc;
+        String configTopic;
+        String suffix;
+        String unit;
+        String deviceClass;
+        String sensorName;
+        
+        switch(values[i].type) {
+            case VALUE_TEMPERATURE:
+                suffix = "temperature";
+                unit = "°C";
+                deviceClass = "temperature";
+                sensorName = "Temperature";
+                break;
+            case VALUE_HUMIDITY:
+                suffix = "humidity";
+                unit = "%";
+                deviceClass = "humidity";
+                sensorName = "Humidity";
+                break;
+            case VALUE_PRESSURE:
+                suffix = "pressure";
+                unit = "hPa";
+                deviceClass = "pressure";
+                sensorName = "Pressure";
+                break;
+            case VALUE_LIGHT:
+                suffix = "light";
+                unit = "lx";
+                deviceClass = "illuminance";
+                sensorName = "Light";
+                break;
+            case VALUE_VOLTAGE:
+                suffix = "voltage";
+                unit = "V";
+                deviceClass = "voltage";
+                sensorName = "Voltage";
+                break;
+            case VALUE_CURRENT:
+                suffix = "current";
+                unit = "mA";
+                deviceClass = "current";
+                sensorName = "Current";
+                break;
+            case VALUE_POWER:
+                suffix = "power";
+                unit = "mW";
+                deviceClass = "power";
+                sensorName = "Power";
+                break;
+            case VALUE_GAS_RESISTANCE:
+                suffix = "gas_resistance";
+                unit = "kΩ";
+                deviceClass = "";  // No standard device class
+                sensorName = "Gas Resistance";
+                break;
+            case VALUE_MOISTURE:
+                suffix = "moisture";
+                unit = "%";
+                deviceClass = "moisture";
+                sensorName = "Moisture";
+                break;
+            default:
+                // Skip unknown types
+                continue;
+        }
+        
+        configTopic = "homeassistant/sensor/" + deviceId + "_" + suffix + "/config";
+        
+        doc["name"] = deviceName + " " + sensorName;
+        doc["unique_id"] = deviceId + "_" + suffix;
+        doc["state_topic"] = buildSensorTopic(sensorId, suffix.c_str());
+        doc["unit_of_measurement"] = unit;
+        if (deviceClass.length() > 0) {
+            doc["device_class"] = deviceClass;
+        }
+        doc["value_template"] = "{{ value }}";
+        doc["device"] = device;
+        
+        String payload;
+        serializeJson(doc, payload);
+        publish(configTopic.c_str(), payload.c_str(), true);
+    }
+    
+    // Also publish battery and RSSI
+    StaticJsonDocument<512> battDoc;
+    battDoc["name"] = deviceName + " Battery";
+    battDoc["unique_id"] = deviceId + "_battery";
+    battDoc["state_topic"] = buildSensorTopic(sensorId, "battery");
+    battDoc["unit_of_measurement"] = "%";
+    battDoc["device_class"] = "battery";
+    battDoc["value_template"] = "{{ value }}";
+    battDoc["device"] = device;
+    
+    String battPayload;
+    serializeJson(battDoc, battPayload);
+    String battConfigTopic = "homeassistant/sensor/" + deviceId + "_battery/config";
+    publish(battConfigTopic.c_str(), battPayload.c_str(), true);
+    
+    StaticJsonDocument<512> rssiDoc;
+    rssiDoc["name"] = deviceName + " RSSI";
+    rssiDoc["unique_id"] = deviceId + "_rssi";
+    rssiDoc["state_topic"] = buildSensorTopic(sensorId, "rssi");
+    rssiDoc["unit_of_measurement"] = "dBm";
+    rssiDoc["device_class"] = "signal_strength";
+    rssiDoc["value_template"] = "{{ value }}";
+    rssiDoc["device"] = device;
+    
+    String rssiPayload;
+    serializeJson(rssiDoc, rssiPayload);
+    String rssiConfigTopic = "homeassistant/sensor/" + deviceId + "_rssi/config";
+    publish(rssiConfigTopic.c_str(), rssiPayload.c_str(), true);
+    
+    Serial.printf("Published Home Assistant multi-sensor discovery for sensor %d (%d types)\n", 
+                  sensorId, valueCount);
 }
 
 /**

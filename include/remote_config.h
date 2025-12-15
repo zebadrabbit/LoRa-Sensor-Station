@@ -15,6 +15,7 @@ enum CommandType : uint8_t {
     CMD_SET_MESH_CONFIG = 0x06,   // Enable/disable mesh
     CMD_RESTART = 0x07,           // Restart device
     CMD_FACTORY_RESET = 0x08,     // Factory reset
+    CMD_SET_LORA_PARAMS = 0x09,   // Set LoRa radio parameters (frequency, SF, BW, etc.)
     CMD_ACK = 0xA0,               // Acknowledgment
     CMD_NACK = 0xA1               // Negative acknowledgment
 };
@@ -120,6 +121,11 @@ namespace CommandBuilder {
     
     // Create RESTART command
     CommandPacket createRestart(uint8_t sensorId);
+    
+    // Create SET_LORA_PARAMS command
+    CommandPacket createSetLoRaParams(uint8_t sensorId, uint32_t frequency, 
+                                     uint8_t spreadingFactor, uint32_t bandwidth,
+                                     uint8_t txPower, uint8_t codingRate);
 }
 
 #endif // REMOTE_CONFIG_H

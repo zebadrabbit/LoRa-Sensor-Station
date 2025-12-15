@@ -5,6 +5,7 @@ A modular IoT sensor network built on Heltec WiFi LoRa 32 V3 boards with **zero-
 ## Overview
 
 This project implements a LoRa-based sensor network with:
+
 - **Base Station**: Receives and displays data from multiple remote sensors, with WiFi connectivity
 - **Sensor Nodes**: Transmit temperature and battery status at configurable intervals
 - **WiFi Captive Portal**: Easy setup without hardcoded credentials
@@ -29,6 +30,7 @@ Both devices feature OLED displays with automatic page cycling, inverse headers,
 ## Features
 
 ### � Web Dashboard & Monitoring (v2.1-v2.8)
+
 - **Real-time Dashboard**: Live sensor monitoring at http://[base-station-ip]/
 - **WebSocket Updates**: Instant data push (no polling delay)
 - **Historical Graphs**: Chart.js visualization for temperature, battery, RSSI trends
@@ -39,6 +41,7 @@ Both devices feature OLED displays with automatic page cycling, inverse headers,
 - **Web-Based Configuration**: All settings accessible via browser
 
 ### 📡 MQTT Publishing (v2.8.0)
+
 - **Flexible Broker Connection**: Any MQTT broker with authentication support
 - **Individual Topics**: Separate topics for temperature, battery, RSSI, SNR
 - **JSON State Topic**: Combined data for compatibility
@@ -50,6 +53,7 @@ Both devices feature OLED displays with automatic page cycling, inverse headers,
 - **Statistics Tracking**: Monitor publishes, failures, reconnects
 
 ### 📧 Alerts & Notifications (v2.3-v2.5)
+
 - **Zero-configuration setup**: No hardcoded WiFi credentials required
 - **First-boot automatic AP mode**: Device creates WiFi access point on first power-up
 - **QR code display**: Scan to instantly connect (http://10.8.4.1)
@@ -61,13 +65,15 @@ Both devices feature OLED displays with automatic page cycling, inverse headers,
 - **AP credentials**: SSID "LoRa-Sensor-XXXX" or "LoRa-Base-XXXX", password "configure"
 
 ### 🆕 Advanced Button Controls (v2.0)
+
 - **Single click** (screen off): Wake display
 - **Single click** (screen on): Cycle to next page
-- **Double click**: Reboot device
-- **Triple click**: Send immediate ping (sensors only)
+- **Double click**: Send immediate ping (sensors only)
+- **Triple click**: Reboot device
 - **5-second hold**: Factory reset
 
 ### 🆕 Sensor Health Monitoring (v2.0)
+
 - **Automatic timeout detection**: Base station monitors sensor activity
 - **Configurable thresholds**: 15-minute timeout (3x longest interval)
 - **Periodic health checks**: Every 30 seconds
@@ -75,6 +81,7 @@ Both devices feature OLED displays with automatic page cycling, inverse headers,
 - **Future-ready**: API for alert integration
 
 ### Base Station
+
 - **5-Page Cycling Display** (5-second intervals):
   1. Status: WiFi connectivity, active sensor count, last RX time
   2. Sensor List: Up to 4 sensors with temp/battery/age
@@ -87,6 +94,7 @@ Both devices feature OLED displays with automatic page cycling, inverse headers,
 - **Inverse headers**: White-on-black title bars for all pages
 
 ### Sensor Nodes
+
 - **3-Page Cycling Display** (5-second intervals):
   1. Status: Uptime, last transmission time
   2. TX Statistics: Attempts/success/failures/rate
@@ -101,6 +109,7 @@ Both devices feature OLED displays with automatic page cycling, inverse headers,
 ### ⚙️ WiFi Captive Portal Setup (v2.0)
 
 **First Boot (Unconfigured Devices):**
+
 1. Power on the device
 2. Display shows "First Boot!" and "Config Mode"
 3. Device creates WiFi access point:
@@ -112,6 +121,7 @@ Both devices feature OLED displays with automatic page cycling, inverse headers,
 6. Captive portal opens automatically at http://10.8.4.1
 
 **Sensor Configuration:**
+
 - Enter **Sensor ID** (1-255)
 - Enter **Location** name
 - Select **Transmit Interval**: 15s, 30s, 60s, or 300s (5min)
@@ -119,6 +129,7 @@ Both devices feature OLED displays with automatic page cycling, inverse headers,
 - Device saves config, reboots, and begins operation
 
 **Base Station Configuration:**
+
 - Click "Scan for WiFi Networks"
 - Select your network from the list
 - Enter WiFi password (leave blank for open networks)
@@ -127,6 +138,7 @@ Both devices feature OLED displays with automatic page cycling, inverse headers,
 - Device connects to WiFi and begins listening
 
 **Factory Reset:**
+
 - Hold PRG button for 5 seconds
 - Display shows "Factory Reset!"
 - Device clears all config and restarts in setup mode
@@ -134,13 +146,15 @@ Both devices feature OLED displays with automatic page cycling, inverse headers,
 ### 📟 Display & Button Controls
 
 **Button Actions:**
+
 - **Single click** (screen off): Wake display
 - **Single click** (screen on): Cycle to next page
-- **Double click**: Reboot device
-- **Triple click**: Send immediate ping (sensors only)
+- **Double click**: Send immediate ping (sensors only)
+- **Triple click**: Reboot device
 - **5-second hold**: Factory reset (clears all config)
 
 **Display Pages:**
+
 - Base Station: 5 pages (Status → Sensors → Statistics → Signal → Battery)
 - Sensor: 3 pages (Status → TX Stats → Battery)
 - Auto-advance every 5 seconds
@@ -149,6 +163,7 @@ Both devices feature OLED displays with automatic page cycling, inverse headers,
 ## Software Architecture
 
 ### Modular Structure
+
 ```
 include/
 ├── config.h              # Configuration constants
@@ -200,10 +215,12 @@ struct SensorData {
 ## Building and Uploading
 
 ### Prerequisites
+
 - [PlatformIO](https://platformio.org/)
 - USB drivers for ESP32-S3
 
 ### First Build
+
 ```bash
 # Build base station
 pio run -e base_station
@@ -213,6 +230,7 @@ pio run -e sensor
 ```
 
 ### Upload
+
 ```bash
 # Upload to base station (adjust COM port)
 pio run -e base_station -t upload
@@ -222,6 +240,7 @@ pio run -e sensor -t upload
 ```
 
 ### Monitor Serial Output
+
 ```bash
 # Monitor base station
 pio device monitor -b 115200
@@ -233,6 +252,7 @@ pio device monitor -b 115200
 ### First-Boot Configuration
 
 After upload, each device will:
+
 1. Boot into configuration mode (First Boot)
 2. Create WiFi access point with QR code
 3. Wait for user configuration via captive portal
@@ -244,29 +264,35 @@ After upload, each device will:
 ## Pin Assignments
 
 ### Radio (SX1262)
+
 - NSS: GPIO 8
 - RESET: GPIO 12
 - BUSY: GPIO 13
 - DIO1: GPIO 14
 
 ### Display (OLED)
+
 - SDA: GPIO 41
 - SCL: GPIO 42
 - VEXT: GPIO 36 (power control)
 
 ### LED (WS2812)
+
 - Data: GPIO 48
 
 ### Sensors
+
 - Thermistor: GPIO 1 (ADC)
 - Battery: GPIO 1 (ADC with voltage divider)
 
 ### User Interface
+
 - Button: GPIO 0 (USER button)
 
 ## Statistics Tracking
 
 The system tracks:
+
 - **TX Statistics**: Attempts, successes, failures, success rate
 - **RX Statistics**: Total packets, invalid packets, success rate
 - **Sensor Info**: Last seen time, RSSI, SNR, packet count, last readings
@@ -275,6 +301,7 @@ The system tracks:
 ## Display Timeout
 
 Both devices implement a 5-minute display timeout:
+
 - Display automatically turns off after 5 minutes of inactivity
 - Press the USER button to wake the display
 - Button press also cycles to the next page when display is active
@@ -282,12 +309,14 @@ Both devices implement a 5-minute display timeout:
 ## LED Color Codes
 
 ### Base Station (based on received sensor battery):
+
 - **Green**: Battery > 80%
 - **Yellow**: Battery 50-80%
 - **Orange**: Battery 20-50%
 - **Red**: Battery < 20%
 
 ### Sensor Node:
+
 - **Blue blink**: Transmission successful
 - **Red blink**: Transmission failed
 - **Green/Yellow/Orange/Red steady**: Battery level indicator
@@ -295,15 +324,18 @@ Both devices implement a 5-minute display timeout:
 ## Troubleshooting
 
 ### No Communication
+
 1. Verify both devices are on the same frequency (868 MHz)
 2. Check antenna connections
 3. Confirm SYNC_WORD matches (0xAB)
 4. Review serial output for transmission logs
 
 ### Display Issues
+
 ## Troubleshooting
 
 ### WiFi Connection Issues
+
 1. Verify WiFi credentials entered correctly in portal
 2. Check WiFi network is 2.4GHz (ESP32 doesn't support 5GHz)
 3. Try "Test Connection" before saving config
@@ -311,16 +343,19 @@ Both devices implement a 5-minute display timeout:
 5. Factory reset (5s hold) to reconfigure
 
 ### Display Issues
+
 1. Check Vext power control (GPIO 36)
 2. Verify I2C connections (SDA/SCL)
 3. Press USER button to wake from timeout
 
 ### Sensor Readings
+
 1. Thermistor should be 10kΩ NTC
 2. Battery ADC may need calibration
 3. Check ADC pin configuration (GPIO 1)
 
 ### Captive Portal Not Opening
+
 1. Disconnect from other WiFi networks first
 2. Manually navigate to http://10.8.4.1
 3. Check device is in "Config Mode" on display
@@ -328,6 +363,7 @@ Both devices implement a 5-minute display timeout:
 5. Some devices require "Stay connected" prompt acceptance
 
 ### Button Not Responding
+
 1. Verify debounce settings (50ms)
 2. Check GPIO 0 connection
 3. Try different click speeds (multi-click timeout is 400ms)
@@ -335,24 +371,28 @@ Both devices implement a 5-minute display timeout:
 ## Current Capabilities
 
 **✅ Real-Time Monitoring**
+
 - Live sensor dashboard with WebSocket updates
 - Historical data visualization (temperature, battery, RSSI)
 - Up to 10 concurrent sensors
 - 5-second refresh with instant updates
 
 **✅ Alerts & Notifications**
+
 - Microsoft Teams webhooks
 - Email notifications (SMTP)
 - Configurable thresholds
 - Rate limiting to prevent spam
 
 **✅ Data Integration**
+
 - MQTT publishing to any broker
 - Home Assistant auto-discovery
 - CSV/JSON data export
 - REST API endpoints
 
 **✅ Configuration**
+
 - Zero-configuration WiFi setup
 - Web-based settings (no code changes)
 - Factory reset capability
@@ -363,6 +403,7 @@ Both devices implement a 5-minute display timeout:
 See [FEATURES.md](FEATURES.md) for detailed roadmap.
 
 **Recommended Next Steps:**
+
 - [ ] Additional sensor types (DHT22, BME680, BH1750, INA219)
 - [ ] Runtime configuration page (intervals, thresholds)
 - [ ] Cloud data storage (InfluxDB via MQTT)
@@ -376,6 +417,7 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 **Current Version**: v2.8.0 (December 2025)
 
 **Major Releases:**
+
 - v2.8.0: MQTT Publishing with Home Assistant integration
 - v2.7.0: Historical data graphs with Chart.js
 - v2.6.0: WebSocket live updates

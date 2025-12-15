@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LoRa Radio Settings</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📻 LoRa Radio Settings</h1>
+            <p>Configure LoRa radio parameters and network settings</p>
+            <a href="/" class="btn btn-secondary">← Back to Dashboard</a>
+        </div>
+        
+        <div class="card">
+            <div class="card-title">📡 Current Configuration</div>
+            <div class="info-grid">
+                <div class="info-item">
+                    <strong>Network ID:</strong>
+                    <span id="currentNetworkId">Loading...</span>
+                </div>
+                <div class="info-item">
+                    <strong>Region:</strong>
+                    <span id="currentRegion">Loading...</span>
+                </div>
+                <div class="info-item">
+                    <strong>Frequency:</strong>
+                    <span id="currentFrequency">Loading...</span>
+                </div>
+                <div class="info-item">
+                    <strong>Spreading Factor:</strong>
+                    <span id="currentSF">Loading...</span>
+                </div>
+                <div class="info-item">
+                    <strong>Bandwidth:</strong>
+                    <span id="currentBW">Loading...</span>
+                </div>
+                <div class="info-item">
+                    <strong>TX Power:</strong>
+                    <span id="currentTxPower">Loading...</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-title">⚙️ LoRa Configuration</div>
+            <form id="loraForm">
+                <div class="form-group">
+                    <label for="region">Region</label>
+                    <select id="region" name="region" required>
+                        <option value="US915">US915 (902-928 MHz) - North America</option>
+                        <option value="EU868">EU868 (863-870 MHz) - Europe</option>
+                        <option value="AU915">AU915 (915-928 MHz) - Australia</option>
+                        <option value="AS923">AS923 (915-928 MHz) - Asia</option>
+                        <option value="CN470">CN470 (470-510 MHz) - China</option>
+                        <option value="IN865">IN865 (865-867 MHz) - India</option>
+                    </select>
+                    <p class="help-text">Select your regional frequency band (must match local regulations)</p>
+                </div>
+                
+                <div class="form-group">
+                    <label for="frequency">Center Frequency (Hz)</label>
+                    <input type="number" id="frequency" name="frequency" min="400000000" max="1000000000" value="915000000" required>
+                    <p class="help-text">Center frequency in Hz (e.g., 915000000 for 915 MHz)</p>
+                </div>
+                
+                <div class="form-group">
+                    <label for="spreadingFactor">Spreading Factor (SF)</label>
+                    <select id="spreadingFactor" name="spreadingFactor" required>
+                        <option value="7">SF7 (Fast, short range)</option>
+                        <option value="8">SF8</option>
+                        <option value="9">SF9</option>
+                        <option value="10">SF10 (Balanced)</option>
+                        <option value="11">SF11</option>
+                        <option value="12">SF12 (Slow, long range)</option>
+                    </select>
+                    <p class="help-text">Higher SF = longer range but slower data rate</p>
+                </div>
+                
+                <div class="form-group">
+                    <label for="bandwidth">Bandwidth (kHz)</label>
+                    <select id="bandwidth" name="bandwidth" required>
+                        <option value="125">125 kHz</option>
+                        <option value="250">250 kHz</option>
+                        <option value="500">500 kHz</option>
+                    </select>
+                    <p class="help-text">Signal bandwidth (125 kHz recommended for most applications)</p>
+                </div>
+                
+                <div class="form-group">
+                    <label for="txPower">TX Power (dBm)</label>
+                    <input type="number" id="txPower" name="txPower" min="2" max="20" value="14" required>
+                    <p class="help-text">Transmit power: 2-20 dBm (higher = more range but more power consumption)</p>
+                </div>
+                
+                <div class="form-group">
+                    <label for="codingRate">Coding Rate</label>
+                    <select id="codingRate" name="codingRate" required>
+                        <option value="1">4/5 (Minimal error correction)</option>
+                        <option value="2">4/6</option>
+                        <option value="3">4/7</option>
+                        <option value="4">4/8 (Maximum error correction)</option>
+                    </select>
+                    <p class="help-text">Error correction ratio (4/5 recommended)</p>
+                </div>
+                
+                <div class="form-group">
+                    <label for="preambleLength">Preamble Length</label>
+                    <input type="number" id="preambleLength" name="preambleLength" min="6" max="65535" value="8" required>
+                    <p class="help-text">Number of preamble symbols (8 is standard)</p>
+                </div>
+                
+                <button type="submit" class="btn">💾 Save Configuration</button>
+                <button type="button" class="btn btn-secondary" onclick="loadConfig()">🔄 Reset</button>
+            </form>
+        </div>
+        
+        <div class="card">
+            <div class="card-title">ℹ️ Information</div>
+            <p><strong>Note:</strong> Changing LoRa settings requires updating all devices in your network (base station and sensors).</p>
+            <p><strong>Warning:</strong> Using incorrect frequencies may violate local regulations. Ensure compliance with your country's RF laws.</p>
+            <p><strong>Range vs Speed:</strong> Higher spreading factors increase range but reduce data rate. SF10 with 125kHz bandwidth is a good balance.</p>
+        </div>
+        
+        <div id="statusMessage" class="message" style="display: none;"></div>
+    </div>
+    
+    <!-- Status Modal -->
+    <div id="statusModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center;">
+        <div style="background: white; padding: 30px; border-radius: 10px; max-width: 500px; width: 90%; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+            <h2 style="margin-top: 0; color: #333;">📡 Updating LoRa Configuration</h2>
+            <div id="statusSteps" style="margin: 20px 0;">
+                <div id="step1" class="status-step">⏳ Saving configuration to base station...</div>
+                <div id="step2" class="status-step" style="display: none;">⏳ Broadcasting to sensor nodes...</div>
+                <div id="step3" class="status-step" style="display: none;">⏳ Waiting for acknowledgments...</div>
+                <div id="step4" class="status-step" style="display: none;">⏳ Preparing to reboot...</div>
+                <div id="step5" class="status-step" style="display: none;">🔄 Rebooting base station...</div>
+            </div>
+            <div id="sensorInfo" style="margin-top: 15px; padding: 10px; background: #f5f5f5; border-radius: 5px; display: none;">
+                <strong>Sensors Updated:</strong> <span id="sensorCount">0</span><br>
+                <strong>Commands Sent:</strong> <span id="commandCount">0</span>
+            </div>
+            <div id="rebootTimer" style="margin-top: 15px; font-size: 14px; color: #666; display: none;">
+                Waiting for base station to come back online... <span id="countdown">30</span>s
+            </div>
+        </div>
+    </div>
+    
+    <style>
+        .status-step {
+            padding: 8px 0;
+            font-size: 15px;
+            color: #555;
+        }
+        .status-step.active {
+            color: #2196F3;
+            font-weight: bold;
+        }
+        .status-step.complete {
+            color: #4CAF50;
+        }
+        .status-step.complete::before {
+            content: '✅ ';
+        }
+    </style>
+    
+    <script>
+        async function loadConfig() {
+            try {
+                const response = await fetch('/api/lora/config');
+                const config = await response.json();
+                
+                // Update current values display
+                document.getElementById('currentNetworkId').textContent = config.networkId || 'Not set';
+                document.getElementById('currentRegion').textContent = config.region || 'US915';
+                document.getElementById('currentFrequency').textContent = (config.frequency || 915000000) / 1000000 + ' MHz';
+                document.getElementById('currentSF').textContent = 'SF' + (config.spreadingFactor || 10);
+                document.getElementById('currentBW').textContent = (config.bandwidth || 125) + ' kHz';
+                document.getElementById('currentTxPower').textContent = (config.txPower || 14) + ' dBm';
+                
+                // Update form fields
+                document.getElementById('region').value = config.region || 'US915';
+                document.getElementById('frequency').value = config.frequency || 915000000;
+                document.getElementById('spreadingFactor').value = config.spreadingFactor || 10;
+                document.getElementById('bandwidth').value = config.bandwidth || 125;
+                document.getElementById('txPower').value = config.txPower || 14;
+                document.getElementById('codingRate').value = config.codingRate || 1;
+                document.getElementById('preambleLength').value = config.preambleLength || 8;
+            } catch (error) {
+                console.error('Error loading configuration:', error);
+                showMessage('Failed to load configuration', 'error');
+            }
+        }
+        
+        document.getElementById('loraForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            const config = {
+                region: formData.get('region'),
+                frequency: parseInt(formData.get('frequency')),
+                spreadingFactor: parseInt(formData.get('spreadingFactor')),
+                bandwidth: parseInt(formData.get('bandwidth')),
+                txPower: parseInt(formData.get('txPower')),
+                codingRate: parseInt(formData.get('codingRate')),
+                preambleLength: parseInt(formData.get('preambleLength'))
+            };
+            
+            // Show status modal
+            const modal = document.getElementById('statusModal');
+            modal.style.display = 'flex';
+            
+            try {
+                // Step 1: Saving
+                setStepActive('step1');
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                const response = await fetch('/api/lora/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    setStepComplete('step1');
+                    
+                    // Step 2: Broadcasting
+                    setStepActive('step2');
+                    await new Promise(resolve => setTimeout(resolve, 800));
+                    setStepComplete('step2');
+                    
+                    // Show sensor info
+                    document.getElementById('sensorInfo').style.display = 'block';
+                    document.getElementById('sensorCount').textContent = result.sensorsFound || 0;
+                    document.getElementById('commandCount').textContent = result.commandsSent || 0;
+                    
+                    // Step 3: Waiting for ACKs
+                    setStepActive('step3');
+                    await new Promise(resolve => setTimeout(resolve, 1500));
+                    setStepComplete('step3');
+                    
+                    // Step 4: Preparing reboot
+                    setStepActive('step4');
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    setStepComplete('step4');
+                    
+                    // Step 5: Rebooting
+                    setStepActive('step5');
+                    document.getElementById('rebootTimer').style.display = 'block';
+                    
+                    // Start countdown
+                    let countdown = 30;
+                    const countdownInterval = setInterval(async () => {
+                        countdown--;
+                        document.getElementById('countdown').textContent = countdown;
+                        
+                        // Try to ping the server
+                        if (countdown % 2 === 0) {
+                            try {
+                                const pingResponse = await fetch('/api/status', { 
+                                    method: 'GET',
+                                    cache: 'no-cache'
+                                });
+                                if (pingResponse.ok) {
+                                    // Server is back online
+                                    clearInterval(countdownInterval);
+                                    setStepComplete('step5');
+                                    document.getElementById('rebootTimer').innerHTML = '<strong style="color: #4CAF50;">✅ Base station is back online! Redirecting...</strong>';
+                                    setTimeout(() => {
+                                        window.location.href = '/';
+                                    }, 1500);
+                                }
+                            } catch (e) {
+                                // Server not ready yet
+                            }
+                        }
+                        
+                        if (countdown <= 0) {
+                            clearInterval(countdownInterval);
+                            setStepComplete('step5');
+                            document.getElementById('rebootTimer').innerHTML = '<strong style="color: #4CAF50;">✅ Redirecting to dashboard...</strong>';
+                            setTimeout(() => {
+                                window.location.href = '/';
+                            }, 1000);
+                        }
+                    }, 1000);
+                    
+                } else {
+                    modal.style.display = 'none';
+                    showMessage('Failed to save configuration: ' + (result.error || 'Unknown error'), 'error');
+                }
+            } catch (error) {
+                console.error('Error saving configuration:', error);
+                modal.style.display = 'none';
+                showMessage('Failed to save configuration', 'error');
+            }
+        });
+        
+        function setStepActive(stepId) {
+            const step = document.getElementById(stepId);
+            step.style.display = 'block';
+            step.classList.add('active');
+        }
+        
+        function setStepComplete(stepId) {
+            const step = document.getElementById(stepId);
+            step.classList.remove('active');
+            step.classList.add('complete');
+            step.textContent = step.textContent.replace('⏳', '');
+        }
+        
+        function showMessage(text, type) {
+            const message = document.getElementById('statusMessage');
+            message.textContent = text;
+            message.className = 'message ' + type;
+            message.style.display = 'block';
+            
+            if (type === 'success') {
+                setTimeout(() => {
+                    message.style.display = 'none';
+                }, 5000);
+            }
+        }
+        
+        // Auto-update frequency when region changes
+        document.getElementById('region').addEventListener('change', (e) => {
+            const freqMap = {
+                'US915': 915000000,
+                'EU868': 868100000,
+                'AU915': 915000000,
+                'AS923': 923000000,
+                'CN470': 470000000,
+                'IN865': 865000000
+            };
+            document.getElementById('frequency').value = freqMap[e.target.value] || 915000000;
+        });
+        
+        loadConfig();
+    </script>
+</body>
+</html>

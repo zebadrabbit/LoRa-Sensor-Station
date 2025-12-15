@@ -18,7 +18,7 @@
 
 // Display Configuration
 #define DISPLAY_TIMEOUT_MS      300000  // 5 minutes in milliseconds
-#define DISPLAY_PAGE_CYCLE_MS   5000    // 5 seconds per page
+#define DISPLAY_PAGE_CYCLE_MS   10000   // 10 seconds per page
 
 // WiFi Configuration (optional - leave empty to disable)
 #define WIFI_SSID               ""      // Your WiFi SSID

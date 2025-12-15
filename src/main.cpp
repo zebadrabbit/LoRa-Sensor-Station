@@ -60,8 +60,6 @@ void setup() {
   // Initialize security module
   Serial.println("\n=== Initializing Security Module ===");
   securityManager.begin();
-  Serial.printf("Encryption: %s\n", securityManager.isEncryptionEnabled() ? "ENABLED" : "DISABLED");
-  Serial.printf("Whitelist: %s\n", securityManager.isWhitelistEnabled() ? "ENABLED" : "DISABLED");
   
   // Check if this is first boot or if we need configuration
   if (configStorage.isFirstBoot()) {
@@ -236,7 +234,7 @@ void loop() {
     
     uint32_t interval = sensorConfig.transmitInterval * 1000;
     
-    // Check for immediate ping request (triple click)
+    // Check for immediate ping request (double click)
     bool sendNow = shouldSendImmediatePing();
     if (sendNow) {
       clearImmediatePingFlag();
@@ -349,6 +347,9 @@ void loop() {
         } else {
           setLED(getColorRed());
         }
+        
+        // Record TX attempt for statistics
+        recordTxAttempt();
         
         // Send multi-sensor packet
         Radio.Send(buffer, packetSize);

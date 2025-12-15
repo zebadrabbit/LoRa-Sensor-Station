@@ -2,11 +2,14 @@
  * @file sensor_manager.cpp
  * @brief Implementation of SensorManager
  * 
- * @version 2.9.0
- * @date 2025-12-13
+ * @version 2.15.0
+ * @date 2025-12-14
  */
 
 #include "sensor_manager.h"
+#include "sensors/bme680_sensor.h"
+#include "sensors/bh1750_sensor.h"
+#include "sensors/ina219_sensor.h"
 #include <Preferences.h>
 
 SensorManager::SensorManager() 
@@ -261,9 +264,42 @@ bool SensorManager::getSensorValue(uint8_t sensorIndex, uint8_t valueIndex, Sens
 }
 
 ISensor* SensorManager::createSensorFromI2C(uint8_t address) {
-    // Phase 2: Will implement I2C sensor detection
-    // For now, return nullptr
-    Serial.printf("SensorManager: I2C sensor creation at 0x%02X not yet implemented\n", address);
+    ISensor* sensor = nullptr;
+    
+    // Try BME680 (0x76, 0x77)
+    if (address == 0x76 || address == 0x77) {
+        sensor = new BME680Sensor(address);
+        if (sensor && sensor->detect() && sensor->begin()) {
+            Serial.printf("SensorManager: Created BME680 at 0x%02X\n", address);
+            return sensor;
+        }
+        delete sensor;
+        sensor = nullptr;
+    }
+    
+    // Try BH1750 (0x23, 0x5C)
+    if (address == 0x23 || address == 0x5C) {
+        sensor = new BH1750Sensor(address);
+        if (sensor && sensor->detect() && sensor->begin()) {
+            Serial.printf("SensorManager: Created BH1750 at 0x%02X\n", address);
+            return sensor;
+        }
+        delete sensor;
+        sensor = nullptr;
+    }
+    
+    // Try INA219 (0x40-0x4F)
+    if (address >= 0x40 && address <= 0x4F) {
+        sensor = new INA219Sensor(address);
+        if (sensor && sensor->detect() && sensor->begin()) {
+            Serial.printf("SensorManager: Created INA219 at 0x%02X\n", address);
+            return sensor;
+        }
+        delete sensor;
+        sensor = nullptr;
+    }
+    
+    Serial.printf("SensorManager: No known sensor detected at 0x%02X\n", address);
     return nullptr;
 }
 

@@ -53,6 +53,38 @@ void initLoRa() {
   
   uint8_t syncWord = calculateSyncWord(currentNetworkId);
   
+  // Check for pending LoRa parameter changes (from SET_LORA_PARAMS command)
+  uint32_t frequency = RF_FREQUENCY;
+  uint8_t spreadingFactor = LORA_SPREADING_FACTOR;
+  uint32_t bandwidth = LORA_BANDWIDTH;
+  uint8_t txPower = TX_OUTPUT_POWER;
+  uint8_t codingRate = LORA_CODINGRATE;
+  
+  Preferences prefs;
+  prefs.begin("lora_params", true);  // Read-only
+  if (prefs.getBool("pending", false)) {
+    // Load new parameters from NVS
+    frequency = prefs.getUInt("frequency", RF_FREQUENCY);
+    spreadingFactor = prefs.getUChar("sf", LORA_SPREADING_FACTOR);
+    bandwidth = prefs.getUInt("bandwidth", LORA_BANDWIDTH);
+    txPower = prefs.getUChar("tx_power", TX_OUTPUT_POWER);
+    codingRate = prefs.getUChar("coding_rate", LORA_CODINGRATE);
+    
+    Serial.println("\n=== APPLYING NEW LORA PARAMETERS ===");
+    Serial.printf("Frequency: %u Hz\n", frequency);
+    Serial.printf("Spreading Factor: SF%d\n", spreadingFactor);
+    Serial.printf("Bandwidth: %u Hz\n", bandwidth);
+    Serial.printf("TX Power: %d dBm\n", txPower);
+    Serial.printf("Coding Rate: %d\n", codingRate);
+    Serial.println("====================================\n");
+    
+    // Clear pending flag
+    prefs.end();
+    prefs.begin("lora_params", false);  // Read-write
+    prefs.putBool("pending", false);
+  }
+  prefs.end();
+  
   RadioEvents.TxDone = OnTxDone;
   RadioEvents.RxDone = OnRxDone;
   RadioEvents.TxTimeout = OnTxTimeout;
@@ -60,30 +92,41 @@ void initLoRa() {
   RadioEvents.RxError = OnRxError;
   
   Radio.Init(&RadioEvents);
-  Radio.SetChannel(RF_FREQUENCY);
+  Radio.SetChannel(frequency);
   
   // Set hardware sync word for network isolation (SX1262 specific)
   // Note: SX1262 uses 2-byte sync word, we use the calculated byte twice
   Radio.SetSyncWord((syncWord << 8) | syncWord);
   
+  // Convert bandwidth from Hz to SX126x enum if needed
+  // Note: If bandwidth is saved as 0/1/2 enum, use it directly
+  // If saved as Hz (125000/250000/500000), convert to enum
+  uint8_t bwEnum = bandwidth;
+  if (bandwidth > 10) {
+    // Convert Hz to enum
+    if (bandwidth == 125000) bwEnum = 0;
+    else if (bandwidth == 250000) bwEnum = 1;
+    else if (bandwidth == 500000) bwEnum = 2;
+  }
+  
   Radio.SetTxConfig(
-    MODEM_LORA, TX_OUTPUT_POWER, 0, LORA_BANDWIDTH,
-    LORA_SPREADING_FACTOR, LORA_CODINGRATE,
+    MODEM_LORA, txPower, 0, bwEnum,
+    spreadingFactor, codingRate,
     LORA_PREAMBLE_LENGTH, false,  // Changed to variable length
     true, 0, 0, LORA_IQ_INVERSION_ON, 3000
   );
   
   Radio.SetRxConfig(
-    MODEM_LORA, LORA_BANDWIDTH, LORA_SPREADING_FACTOR,
-    LORA_CODINGRATE, 0, LORA_PREAMBLE_LENGTH,
+    MODEM_LORA, bwEnum, spreadingFactor,
+    codingRate, 0, LORA_PREAMBLE_LENGTH,
     LORA_SYMBOL_TIMEOUT, false,  // Changed to variable length
     0, true, 0, 0, LORA_IQ_INVERSION_ON, true  // Max payload 0 = use variable length mode
   );
   
   #ifdef BASE_STATION
     Serial.println("Base station ready - listening for sensors...");
-    Serial.printf("Frequency: %d Hz\n", RF_FREQUENCY);
-    Serial.printf("Bandwidth: %d, SF: %d, CR: %d\n", LORA_BANDWIDTH, LORA_SPREADING_FACTOR, LORA_CODINGRATE);
+    Serial.printf("Frequency: %u Hz\n", frequency);
+    Serial.printf("Bandwidth: %d, SF: %d, CR: %d\n", bwEnum, spreadingFactor, codingRate);
     Serial.printf("Network ID: %d (Sync Word: 0x%02X)\n", currentNetworkId, syncWord);
     Serial.printf("Expected packet size: %d bytes\n", sizeof(SensorData));
   #elif defined(SENSOR_NODE)
@@ -298,25 +341,33 @@ void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr) {
               
               updateSensorInfo(legacyData, rssi, snr);
               
+              // Store individual sensor readings
+              for (int i = 0; i < received.header.valueCount; i++) {
+                updateSensorReading(received.header.sensorId, i, 
+                                  received.values[i].type, received.values[i].value);
+              }
+              
               SensorInfo* sensor = getSensorInfo(received.header.sensorId);
               if (sensor != NULL) {
-                for (int i = 0; i < received.header.valueCount; i++) {
-                  if (received.values[i].type == VALUE_TEMPERATURE) {
-                    mqttClient.publishSensorData(
-                      received.header.sensorId,
-                      sensor->location,
-                      received.values[i].value,
-                      received.header.batteryPercent,
-                      rssi,
-                      snr
-                    );
-                    break;
-                  }
-                }
+                // Use new multi-sensor MQTT publish function
+                mqttClient.publishMultiSensorData(
+                  received.header.sensorId,
+                  sensor->location,
+                  received.values,
+                  received.header.valueCount,
+                  received.header.batteryPercent,
+                  rssi,
+                  snr
+                );
                 
                 static bool discoveryPublished[256] = {false};
                 if (!discoveryPublished[received.header.sensorId]) {
-                  mqttClient.publishHomeAssistantDiscovery(received.header.sensorId, sensor->location);
+                  mqttClient.publishHomeAssistantMultiSensorDiscovery(
+                    received.header.sensorId,
+                    sensor->location,
+                    received.values,
+                    received.header.valueCount
+                  );
                   discoveryPublished[received.header.sensorId] = true;
                 }
               }
@@ -564,28 +615,35 @@ void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr) {
         
         updateSensorInfo(legacyData, rssi, snr);
         
-        // Publish each sensor value to MQTT
+        // Store individual sensor readings in PhysicalSensor structures
+        for (int i = 0; i < received.header.valueCount; i++) {
+          updateSensorReading(received.header.sensorId, i, 
+                            received.values[i].type, received.values[i].value);
+        }
+        
+        // Publish sensor data to MQTT
         SensorInfo* sensor = getSensorInfo(received.header.sensorId);
         if (sensor != NULL) {
-          // Publish temperature if available (for legacy compatibility)
-          for (int i = 0; i < received.header.valueCount; i++) {
-            if (received.values[i].type == VALUE_TEMPERATURE) {
-              mqttClient.publishSensorData(
-                received.header.sensorId,
-                sensor->location,
-                received.values[i].value,
-                received.header.batteryPercent,
-                rssi,
-                snr
-              );
-              break;
-            }
-          }
+          // Use new multi-sensor MQTT publish function
+          mqttClient.publishMultiSensorData(
+            received.header.sensorId,
+            sensor->location,
+            received.values,
+            received.header.valueCount,
+            received.header.batteryPercent,
+            rssi,
+            snr
+          );
           
           // Publish Home Assistant discovery on first packet
           static bool discoveryPublished[256] = {false};
           if (!discoveryPublished[received.header.sensorId]) {
-            mqttClient.publishHomeAssistantDiscovery(received.header.sensorId, sensor->location);
+            mqttClient.publishHomeAssistantMultiSensorDiscovery(
+              received.header.sensorId, 
+              sensor->location,
+              received.values,
+              received.header.valueCount
+            );
             discoveryPublished[received.header.sensorId] = true;
           }
         }
@@ -744,6 +802,47 @@ void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr) {
               // Delay then restart (sensor won't send telemetry, but that's OK)
               delay(1000);
               ESP.restart();
+              break;
+            }
+            
+            case CMD_SET_LORA_PARAMS: {
+              if (cmd->dataLength >= 11) {
+                uint32_t frequency;
+                uint8_t spreadingFactor;
+                uint32_t bandwidth;
+                uint8_t txPower;
+                uint8_t codingRate;
+                
+                // Unpack parameters from data buffer
+                memcpy(&frequency, &cmd->data[0], sizeof(uint32_t));
+                spreadingFactor = cmd->data[4];
+                memcpy(&bandwidth, &cmd->data[5], sizeof(uint32_t));
+                txPower = cmd->data[9];
+                codingRate = cmd->data[10];
+                
+                Serial.println("===== LoRa Parameters Update =====");
+                Serial.printf("Frequency: %u Hz\n", frequency);
+                Serial.printf("Spreading Factor: SF%d\n", spreadingFactor);
+                Serial.printf("Bandwidth: %u Hz\n", bandwidth);
+                Serial.printf("TX Power: %d dBm\n", txPower);
+                Serial.printf("Coding Rate: %d\n", codingRate);
+                Serial.println("==================================");
+                
+                // Save to NVS for application after reboot
+                Preferences prefs;
+                prefs.begin("lora_params", false);
+                prefs.putUInt("frequency", frequency);
+                prefs.putUChar("sf", spreadingFactor);
+                prefs.putUInt("bandwidth", bandwidth);
+                prefs.putUChar("tx_power", txPower);
+                prefs.putUChar("coding_rate", codingRate);
+                prefs.putBool("pending", true);  // Flag that new params are waiting
+                prefs.end();
+                
+                success = true;
+                Serial.println("LoRa parameters saved! Will apply on next reboot.");
+                Serial.println("⚠️ IMPORTANT: Base station must also reboot with matching parameters!");
+              }
               break;
             }
             

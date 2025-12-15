@@ -2,7 +2,25 @@
 
 ## Version History
 
-### v2.13.0 (December 14, 2025) - Current Version
+### v2.14.0 (December 14, 2025) - Current Version
+
+- ✅ Multi-Sensor Support: Zones, Priority, Health Scoring
+- ✅ Sensor zone/area grouping (16-character field, NVS-persisted)
+- ✅ Sensor priority levels (LOW/MEDIUM/HIGH)
+- ✅ Advanced health scoring system (communication, battery, quality)
+- ✅ Health tracking: uptime, packet success rate, degradation
+- ✅ Zone filter on dashboard (group sensors by location)
+- ✅ Priority badges on dashboard (visual indicators)
+- ✅ Health indicators (color-coded: green/yellow/red)
+- ✅ Priority-based alert rate limiting (HIGH = 50%, LOW = 400%)
+- ✅ Captive portal zone/priority configuration
+- ✅ 5 new API endpoints (zone, priority, health)
+- ✅ LoRa settings configuration page (/lora-settings)
+- ✅ Regional frequency band selection (US915, EU868, AU915, etc.)
+- ✅ Configurable spreading factor, bandwidth, TX power
+- ✅ Automatic health score updates on packet reception
+
+### v2.13.0 (December 14, 2025)
 
 - ✅ Network Pairing Phase 2: Encryption & Whitelisting
 - ✅ AES-128-CBC encryption using ESP32 mbedTLS (hardware-accelerated)
@@ -154,6 +172,17 @@
 
   **Still TODO for Full Remote Config:**
 
+  - [ ] **Remote LoRa Settings Sync** ⚠️ CRITICAL - Required for /lora-settings page
+    - [ ] SET_LORA_PARAMS command (frequency, SF, BW, TX power)
+    - [ ] Coordinated reboot protocol:
+      1. Base station sends command to all registered clients
+      2. Wait for all clients to ACK receipt
+      3. Clients reboot to apply new settings
+      4. Base station reboots to apply new settings
+      5. All nodes come back online with matching parameters
+    - [ ] Timeout handling (clients that don't respond)
+    - [ ] Rollback mechanism if migration fails
+    - [ ] Without this: Changing base station LoRa settings breaks all sensor communication
   - [ ] Additional command types (location, thresholds, mesh config)
   - [ ] Web UI for remote configuration
   - [ ] Command history logging
@@ -305,14 +334,14 @@
   - isSensorTimedOut() API ready for alerts ✅
   - Configurable timeout based on transmission interval ✅
 
-- [ ] **Multi-Sensor Support**
+- [x] **Multi-Sensor Support**
 
   - Support for 20+ sensors (currently 10) ✅
-  - Sensor grouping/zones
-  - Sensor priority levels
+  - Sensor grouping/zones ✅ COMPLETED v2.14.0
+  - Sensor priority levels ✅ COMPLETED v2.14.0
   - Auto-discovery of new sensors ✅ (basic implementation)
   - Sensor naming/labeling via portal ✅ (location field)
-  - Advanced sensor health scoring
+  - Advanced sensor health scoring ✅ COMPLETED v2.14.0
 
 - [x] **Modular Sensor Architecture** ✅ COMPLETED v2.9.0 Phase 1
 
@@ -557,7 +586,7 @@
 - [x] LED status indicators
 - [x] QR code for easy AP connection (portrait mode)
 - [x] Multi-click button detection (5 actions)
-- [x] Immediate ping functionality (triple click)
+- [x] Immediate ping functionality (double click)
 - [x] Sensor timeout monitoring (15-minute threshold)
 - [x] Base station battery monitoring page
 - [x] Inverse display headers

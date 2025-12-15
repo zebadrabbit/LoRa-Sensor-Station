@@ -288,4 +288,32 @@ namespace CommandBuilder {
         cmd.dataLength = 0;
         return cmd;
     }
+    
+    CommandPacket createSetLoRaParams(uint8_t sensorId, uint32_t frequency, 
+                                     uint8_t spreadingFactor, uint32_t bandwidth,
+                                     uint8_t txPower, uint8_t codingRate) {
+        CommandPacket cmd;
+        cmd.syncWord = COMMAND_SYNC_WORD;
+        cmd.commandType = CMD_SET_LORA_PARAMS;
+        cmd.targetSensorId = sensorId;
+        cmd.dataLength = 14;  // 4 + 1 + 4 + 1 + 1 + 3 (padding for alignment)
+        
+        // Pack parameters into data buffer
+        // Frequency: 4 bytes (uint32_t)
+        memcpy(&cmd.data[0], &frequency, sizeof(uint32_t));
+        
+        // Spreading Factor: 1 byte (uint8_t)
+        cmd.data[4] = spreadingFactor;
+        
+        // Bandwidth: 4 bytes (uint32_t) - will be 125000, 250000, or 500000 Hz
+        memcpy(&cmd.data[5], &bandwidth, sizeof(uint32_t));
+        
+        // TX Power: 1 byte (uint8_t)
+        cmd.data[9] = txPower;
+        
+        // Coding Rate: 1 byte (uint8_t) - CR_4_5=1, CR_4_6=2, CR_4_7=3, CR_4_8=4
+        cmd.data[10] = codingRate;
+        
+        return cmd;
+    }
 }

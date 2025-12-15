@@ -32,6 +32,7 @@
 
 #ifdef BASE_STATION
 #include <ESP_Mail_Client.h>
+#include "sensor_config.h"  // For SensorConfigManager
 #endif
 
 // Global alert manager instance
@@ -220,8 +221,30 @@ bool AlertManager::shouldSendAlert(uint8_t sensorId, AlertType type) {
     // Always allow if it's a different alert type
     if (lastType != type) return true;
     
+    // Get sensor priority to adjust rate limit
+    #ifdef BASE_STATION
+        extern SensorConfigManager sensorConfigManager;
+        SensorPriority priority = sensorConfigManager.getSensorPriority(sensorId);
+        
+        uint32_t rateLimitMs;
+        switch(priority) {
+            case PRIORITY_HIGH:
+                rateLimitMs = config.rateLimitSeconds * 500;  // 50% of standard (more frequent alerts)
+                break;
+            case PRIORITY_LOW:
+                rateLimitMs = config.rateLimitSeconds * 4000; // 4x standard (less frequent alerts)
+                break;
+            case PRIORITY_MEDIUM:
+            default:
+                rateLimitMs = config.rateLimitSeconds * 1000; // Standard rate limit
+                break;
+        }
+    #else
+        uint32_t rateLimitMs = config.rateLimitSeconds * 1000;
+    #endif
+    
     // Check rate limit for same alert type
-    if (now - lastTime < (config.rateLimitSeconds * 1000)) {
+    if (now - lastTime < rateLimitMs) {
         return false;
     }
     

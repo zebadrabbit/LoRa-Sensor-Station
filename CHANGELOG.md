@@ -5,6 +5,235 @@ All notable changes to the LoRa Sensor Station project will be documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.15.0] - 2025-12-14
+
+### Added - Phase 2: I2C Sensor Support
+
+#### Multi-Sensor Support
+
+- **I2C sensor integration**: Support for BME680, BH1750, and INA219 sensors
+- **Auto-detection**: Automatic I2C bus scanning and sensor identification on boot
+- **Multi-value packets**: New `MultiSensorPacket` format supporting up to 16 sensor values
+- **Value types**: Temperature, humidity, pressure, gas resistance, light, voltage, current, power, and more
+- **Sensor manager**: `SensorManager` class for unified sensor lifecycle management
+- **Dynamic packet sizing**: Variable-length packets based on active sensor count
+
+#### BME680 Environmental Sensor
+
+- **4-in-1 sensor**: Temperature, humidity, pressure, and gas resistance
+- **I2C addresses**: Support for 0x76 and 0x77
+- **Gas measurement**: Indoor air quality indicator (kΩ)
+- **Automatic calibration**: Bosch BME680 library integration
+- **Value types**: `VALUE_TEMPERATURE`, `VALUE_HUMIDITY`, `VALUE_PRESSURE`, `VALUE_GAS_RESISTANCE`
+
+#### BH1750 Light Sensor
+
+- **Ambient light measurement**: 1-65535 lux range
+- **I2C addresses**: Support for 0x23 (default) and 0x5C (alternate)
+- **High-resolution mode**: CONTINUOUS_HIGH_RES_MODE for accurate readings
+- **Heltec library**: Uses built-in BH1750 library (conflicts with external library resolved)
+- **Value type**: `VALUE_LIGHT`
+
+#### INA219 Power Monitor
+
+- **3-in-1 sensor**: Voltage, current, and calculated power
+- **I2C address**: 0x40 (default)
+- **Measurement ranges**: 0-26V, 0-3.2A, 0-83W
+- **Calibration**: Pre-configured for 32V/2A range
+- **Value types**: `VALUE_VOLTAGE`, `VALUE_CURRENT`, `VALUE_POWER`
+
+#### Dashboard Enhancements
+
+- **New charts**: Humidity, pressure, gas resistance, light, voltage, current, power
+- **Real-time display**: All sensor types shown in live dashboard
+- **Chart initialization**: Auto-initialize charts for all supported sensor types
+- **Historical data**: Chart.js integration for time-series visualization
+- **Unit display**: Proper units (%, hPa, kΩ, lux, V, mA, mW) for each sensor type
+
+#### MQTT Integration
+
+- **Multi-sensor publishing**: New `publishMultiSensorData()` function
+- **Individual topics**: Each sensor value published to dedicated topic
+  - `lora/sensor/{id}/temperature`
+  - `lora/sensor/{id}/humidity`
+  - `lora/sensor/{id}/pressure`
+  - `lora/sensor/{id}/gas_resistance`
+  - `lora/sensor/{id}/light`
+  - `lora/sensor/{id}/voltage`
+  - `lora/sensor/{id}/current`
+  - `lora/sensor/{id}/power`
+- **Combined JSON state**: All readings in single JSON message at `lora/sensor/{id}/state`
+- **Home Assistant auto-discovery**: `publishHomeAssistantMultiSensorDiscovery()`
+- **Device classes**: Proper HA device classes (temperature, humidity, pressure, illuminance, voltage, current, power)
+- **Automatic units**: Correct units and icons in Home Assistant
+
+#### Sensor Data Storage
+
+- **PhysicalSensor tracking**: Individual sensor readings stored in `PhysicalSensor` structures
+- **Per-value history**: 100-point ring buffers for each sensor type
+- **updateSensorReading()**: Store readings by clientId, sensorIndex, type, and value
+- **getSensor()**: Retrieve individual sensor data
+- **Historical API**: Foundation for future history endpoints for all sensor types
+
+#### Firmware Changes
+
+- **Sensor firmware size**: 1,133,677 bytes (33.9% flash), 105,096 bytes (32.1% RAM)
+- **Library integration**: Heltec_BH1750 for light sensor (linker conflicts resolved)
+- **Multi-sensor packet handling**: Both direct and mesh-routed packets supported
+- **Sensor value printing**: Debug output for all received sensor values with type names
+
+#### Documentation
+
+- **SENSOR_WIRING.md**: Comprehensive 631-line wiring guide
+  - Pin reference (power, I2C, ADC, reserved pins)
+  - Thermistor voltage divider circuit (10kΩ resistor + thermistor)
+  - I2C sensor specifications (BME680, BH1750, INA219)
+  - JST connector pinout: Pin 1=GND, 2=3.3V, 3=SDA(41), 4=SCL(42)
+  - Troubleshooting steps and safety warnings
+  - Example multi-sensor setups and calibration info
+
+### Fixed
+
+- **NVS error spam**: Added `prefs.isKey()` check in `config_storage.cpp` before reading `sensor_zone`
+  - Prevents "nvs_get_str len fail: sensor_zone NOT_FOUND" errors on sensor nodes
+  - Zone field only exists on base station, not sensor nodes
+- **Duplicate boot output**: Removed redundant encryption/whitelist status from `main.cpp`
+  - Kept emoji version (🔒) from `security.cpp`
+  - Cleaner boot sequence with single security status display
+- **BH1750 linker conflict**: Removed external BH1750 library dependency
+  - Using Heltec's built-in BH1750 implementation instead
+  - Resolved "multiple definition" linker errors
+
+### Changed
+
+- **Packet format**: Transitioned from legacy `SensorData` to `MultiSensorPacket`
+- **MQTT publishing**: Base station now uses `publishMultiSensorData()` for new packets
+- **Home Assistant discovery**: Switched to `publishHomeAssistantMultiSensorDiscovery()` for multi-sensor devices
+- **Sensor storage**: Mesh-routed packets now store individual sensor readings via `updateSensorReading()`
+- **Dashboard layout**: Expanded grid to accommodate 10 chart types (temp, humid, pressure, gas, light, voltage, current, power, battery, RSSI)
+
+### Known Limitations
+
+- **Historical data**: Current history API returns battery/RSSI only
+  - Individual sensor readings stored but not yet exposed via `/api/history`
+  - Future enhancement: Add multi-sensor historical data endpoints
+- **Hardware testing**: Phase 2 features implemented but not tested with physical sensors
+  - 10kΩ resistors for thermistors ordered (arriving next week)
+  - BME680, BH1750, INA219 sensors ordered (arriving next week)
+- **Chart updates**: Dashboard charts show historical battery/RSSI data
+  - Sensor value charts will populate once historical API enhanced
+
+### Critical TODO
+
+- **⚠️ LoRa Settings Sync Protocol**: Changing base station LoRa settings currently breaks sensor communication
+  - Need: `SET_LORA_PARAMS` command to propagate settings to all sensors
+  - Required: Coordinated reboot protocol (broadcast → ACK → clients reboot → base reboots)
+  - Impact: Without this, changing frequency/SF/BW orphans all sensors
+  - Documented in FEATURES.md as CRITICAL priority
+
+## [2.14.0] - 2025-12-14
+
+### Added - Multi-Sensor Support: Zones, Priority, and Health Scoring
+
+#### Sensor Zones and Organization
+
+- **Zone field**: 16-character zone/area field for sensor grouping (e.g., "Outdoor", "Garage", "Bedroom")
+- **Zone configuration**: Added zone input field to sensor captive portal
+- **Zone API endpoints**: GET/POST `/api/sensors/{id}/zone` for reading/updating zones
+- **Zone filtering**: Dropdown filter on dashboard to show only sensors in specific zone
+- **Zone badges**: Visual zone indicators on dashboard sensor cards
+- **NVS persistence**: Zones stored in both sensor config and metadata namespaces
+
+#### Sensor Priority Levels
+
+- **Priority enum**: LOW (0), MEDIUM (1), HIGH (2) priority levels
+- **Priority configuration**: Priority selector in sensor captive portal (Low/Medium/High)
+- **Priority API endpoints**: GET/POST `/api/sensors/{id}/priority` for priority management
+- **Priority badges**: Color-coded badges on dashboard (gray=Low, blue=Medium, red=High)
+- **Priority-based alerts**: Alert rate limiting adjusted by priority:
+  - HIGH: 50% of standard rate (more frequent alerts)
+  - MEDIUM: 100% of standard rate (default 15 minutes)
+  - LOW: 400% of standard rate (1 hour cooldown)
+- **NVS persistence**: Priority stored in both sensor config and metadata
+
+#### Advanced Health Scoring System
+
+- **Health score structure**: 8-field SensorHealthScore with comprehensive metrics:
+  - `communicationReliability` (0.0-1.0): Packet success rate with sample penalty
+  - `readingQuality` (0.0-1.0): Variance-based sensor quality metric
+  - `batteryHealth` (0.0-1.0): Voltage-based with 1%/month degradation
+  - `overallHealth` (0.0-1.0): Weighted average (50% comms, 20% quality, 30% battery)
+  - `uptimeSeconds`: Time since first packet received
+  - `lastSeenTimestamp`: Timestamp of last contact (millis)
+  - `totalPackets`: Count of all received packets
+  - `failedPackets`: Count of lost/failed packets
+- **Health calculation algorithms**:
+  - Communication reliability: `(successPackets / totalPackets) * min(totalPackets, 10)/10`
+  - Battery health: `((voltage - 3.0) / 1.2) * (1 - uptimeMonths * 0.01)`
+  - Reading quality: `1.0 / (1.0 + variance)` (variance-based)
+- **Health tracking NVS keys** (per sensor):
+  - `s{id}_htot`: Total packets received
+  - `s{id}_hfail`: Failed packet count
+  - `s{id}_hupt`: Uptime in seconds
+  - `s{id}_hlast`: Last seen timestamp
+  - `s{id}_hfirst`: First seen timestamp
+  - `s{id}_hbatt`: Battery voltage reading
+  - `s{id}_htemp`: Temperature reading
+- **Health API endpoint**: GET `/api/sensors/{id}/health` returns complete health metrics
+- **Automatic updates**: `updateHealthScore()` called on every packet reception in `updateSensorInfo()`
+- **Dashboard health indicators**: Color-coded badges (green >0.8, yellow 0.5-0.8, red <0.5)
+
+#### Dashboard Enhancements
+
+- **Updated API**: `/api/sensors` now includes zone, priority, priorityLevel, and health object
+- **Zone filter**: Dropdown automatically populated with unique zones from active sensors
+- **Enhanced sensor cards**: Display location, ID, zone badge, priority badge, health badge
+- **Health tooltips**: Hover to see detailed health percentage
+- **Battery format**: Maintains existing "On AC/15%/Charging" format
+- **Auto-refresh**: Zone filter preserved across auto-refresh cycles
+
+#### LoRa Settings Configuration Page
+
+- **New page**: `/lora-settings` route with comprehensive radio configuration
+- **Dashboard card**: "📻 LoRa Settings" card added to main dashboard
+- **Regional frequency bands**: US915, EU868, AU915, AS923, CN470, IN865
+- **Configurable parameters**:
+  - Region selection (auto-updates center frequency)
+  - Center frequency (Hz)
+  - Spreading factor (SF7-SF12)
+  - Bandwidth (125/250/500 kHz)
+  - TX power (2-20 dBm)
+  - Coding rate (4/5, 4/6, 4/7, 4/8)
+  - Preamble length (6-65535)
+- **API endpoints**: GET/POST `/api/lora/config` for configuration management
+- **Current values display**: Shows active LoRa configuration at top of page
+- **Helpful descriptions**: Detailed explanations for each parameter
+- **Auto-fill**: Region selection automatically updates frequency field
+- **Compliance warnings**: Reminders about RF regulations
+
+#### Memory and Performance
+
+- **Memory impact**: ~49 bytes per sensor (~1.5KB for 32 sensors)
+- **NVS usage**: Health data in separate "sensor-health" namespace
+- **Efficient storage**: Short NVS keys to conserve flash space
+- **No external dependencies**: Uses existing NVS and ESP32 APIs
+
+### Changed
+
+- **SensorConfig structure**: Added `zone[16]` and `priority` fields
+- **SensorMetadata structure**: Added `zone[16]`, `priority`, and `health` fields
+- **Alert rate limiting**: Now priority-aware with dynamic cooldown periods
+- **Statistics tracking**: Health scores updated on every packet reception
+
+### Technical Details
+
+- **Backward compatible**: Existing sensors work without zone/priority configuration
+- **Default values**: Zone defaults to empty string, priority defaults to MEDIUM
+- **Health initialization**: Health scores start tracking on first packet
+- **Degradation model**: 1% per month battery degradation (realistic for Li-ion)
+- **Sample penalty**: Low packet counts (<10) penalized to avoid false confidence
+- **NVS namespaces**: "sensor-meta" for config, "sensor-health" for tracking
+
 ## [2.13.0] - 2025-12-14
 
 ### Added - Network Pairing Phase 2: Encryption & Whitelisting
@@ -55,7 +284,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Display Enhancements
 
 - **Security indicator**: Shows `[E]` on sensor status page when encryption enabled
-- **Display format**: "ID: 1  Net: 12345 [E]" for encrypted sensors
+- **Display format**: "ID: 1 Net: 12345 [E]" for encrypted sensors
 - **ASCII indicator**: Uses `[E]` instead of emoji for C++ string compatibility
 
 #### Technical Implementation
@@ -230,8 +459,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Single click** (screen off): Wake display
 - **Single click** (screen on): Cycle to next page
-- **Double click** (screen on): Reboot device
-- **Triple click** (screen on): Send immediate ping (sensors only)
+- **Double click** (screen on): Send immediate ping (sensors only)
+- **Triple click** (screen on): Reboot device
 - **5-second hold** (screen on): Factory reset and return to AP mode
 - **Debouncing**: 50ms debounce with 400ms multi-click detection window
 - **Hold detection**: Distinguishes between quick clicks and long holds

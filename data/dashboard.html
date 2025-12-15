@@ -36,8 +36,16 @@
             <div class="card" style="grid-column: 1 / -1;">
                 <div class="card-title">
                     📡 Active Clients
-                    <div style="margin-left: auto; font-size: 12px; color: #999;">
-                        Auto-refresh: <span id="countdown">5</span>s
+                    <div style="margin-left: auto; display: flex; align-items: center; gap: 15px;">
+                        <div style="font-size: 12px; color: #999;">
+                            Zone Filter:
+                            <select id="zoneFilter" style="padding: 4px 8px; border-radius: 4px; border: 1px solid #ddd; font-size: 12px;">
+                                <option value="">All Zones</option>
+                            </select>
+                        </div>
+                        <div style="font-size: 12px; color: #999;">
+                            Auto-refresh: <span id="countdown">5</span>s
+                        </div>
                     </div>
                 </div>
                 <div id="sensorList">
@@ -88,6 +96,14 @@
                     <a href="/security" class="btn">⚙️ Security</a>
                 </div>
             </div>
+            
+            <div class="card">
+                <div class="card-title">📻 LoRa Settings</div>
+                <p>Configure radio parameters</p>
+                <div class="export-buttons">
+                    <a href="/lora-settings" class="btn">⚙️ LoRa</a>
+                </div>
+            </div>
         </div>
         
         <div class="card">
@@ -113,7 +129,42 @@
             </div>
             
             <div class="card" style="grid-column: 1 / -1;">
-                <div class="card-title">🔋 Battery</div>
+                <div class="card-title">� Humidity</div>
+                <canvas id="humidityChart" style="max-height: 300px;"></canvas>
+            </div>
+            
+            <div class="card" style="grid-column: 1 / -1;">
+                <div class="card-title">🌪️ Pressure</div>
+                <canvas id="pressureChart" style="max-height: 300px;"></canvas>
+            </div>
+            
+            <div class="card" style="grid-column: 1 / -1;">
+                <div class="card-title">💨 Gas Resistance</div>
+                <canvas id="gasChart" style="max-height: 300px;"></canvas>
+            </div>
+            
+            <div class="card" style="grid-column: 1 / -1;">
+                <div class="card-title">💡 Light Intensity</div>
+                <canvas id="lightChart" style="max-height: 300px;"></canvas>
+            </div>
+            
+            <div class="card" style="grid-column: 1 / -1;">
+                <div class="card-title">⚡ Voltage</div>
+                <canvas id="voltageChart" style="max-height: 300px;"></canvas>
+            </div>
+            
+            <div class="card" style="grid-column: 1 / -1;">
+                <div class="card-title">🔌 Current</div>
+                <canvas id="currentChart" style="max-height: 300px;"></canvas>
+            </div>
+            
+            <div class="card" style="grid-column: 1 / -1;">
+                <div class="card-title">⚙️ Power</div>
+                <canvas id="powerChart" style="max-height: 300px;"></canvas>
+            </div>
+            
+            <div class="card" style="grid-column: 1 / -1;">
+                <div class="card-title">�🔋 Battery</div>
                 <canvas id="battChart" style="max-height: 300px;"></canvas>
             </div>
             

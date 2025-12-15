@@ -29,15 +29,18 @@ void initStats() {
 
 void recordTxAttempt() {
   stats.totalTxAttempts++;
+  Serial.printf("📊 TX Attempt recorded: %d\n", stats.totalTxAttempts);
 }
 
 void recordTxSuccess() {
   stats.totalTxSuccess++;
   stats.lastTxTime = millis();
+  Serial.printf("📊 TX Success recorded: %d\n", stats.totalTxSuccess);
 }
 
 void recordTxFailure() {
   stats.totalTxFailed++;
+  Serial.printf("📊 TX Failure recorded: %d\n", stats.totalTxFailed);
 }
 
 void recordRxPacket(int16_t rssi) {
@@ -334,6 +337,17 @@ void updateSensorInfo(const SensorData& data, int16_t rssi, int8_t snr) {
     client->sensorId = data.sensorId;  // Populate legacy alias
     client->lastTemperature = data.temperature;  // Populate legacy field
   }
+  
+  // Update health score tracking
+  #ifdef BASE_STATION
+    extern SensorConfigManager sensorConfigManager;
+    sensorConfigManager.updateHealthScore(
+      data.sensorId,
+      true,  // Packet received successfully
+      data.batteryVoltage,
+      data.temperature
+    );
+  #endif
   
   // If there's a valid temperature reading, update sensor
   if (data.temperature > -127.0f) {
