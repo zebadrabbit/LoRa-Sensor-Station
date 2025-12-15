@@ -287,8 +287,8 @@
   - [x] Historical data graphs (hourly/daily/weekly) ✅ COMPLETED v2.7.0
   - [x] WebSocket for live updates (currently polling) ✅ COMPLETED v2.6.0
   - [x] Alert configuration interface ✅ COMPLETED v2.3.0
-  - [x] Configuration page for runtime settings ✅ COMPLETED v2.15.0
-  - [ ] OTA firmware update interface
+  - [x] Configuration page for runtime settings ✅ COMPLETED v2.15.0- [x] Pico-inspired CSS framework ✅ COMPLETED v2.15.1
+- [x] Dashboard chart visibility fixes ✅ COMPLETED v2.15.1  - [ ] OTA firmware update interface
   - [ ] Network diagnostics page
 
   **Note:** Base station now serves live dashboard at http://[IP]/ showing real-time sensor data with auto-refresh.
