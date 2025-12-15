@@ -273,21 +273,23 @@
 
   **Still TODO for Full Remote Config:**
 
-  - [ ] **Remote LoRa Settings Sync** ⚠️ CRITICAL - Required for /lora-settings page
-    - [ ] SET_LORA_PARAMS command (frequency, SF, BW, TX power)
-    - [ ] Coordinated reboot protocol:
-      1. Base station sends command to all registered clients
-      2. Wait for all clients to ACK receipt
-      3. Clients reboot to apply new settings
-      4. Base station reboots to apply new settings
-      5. All nodes come back online with matching parameters
-    - [ ] Timeout handling (clients that don't respond)
-    - [ ] Rollback mechanism if migration fails
-    - [ ] Without this: Changing base station LoRa settings breaks all sensor communication
-  - [ ] Additional command types (location, thresholds, mesh config)
-  - [ ] Web UI for remote configuration
+  - [x] **Remote LoRa Settings Sync** ✅ COMPLETED v2.16.0
+    - [x] SET_LORA_PARAMS command (frequency, SF, BW, TX power) ✅
+    - [x] Coordinated reboot protocol: ✅
+      1. Base station sends command to all registered clients ✅
+      2. Wait for all clients to ACK receipt ✅
+      3. Clients reboot to apply new settings (5s after ACK) ✅
+      4. Base station reboots to apply new settings (8s after all ACKs) ✅
+      5. All nodes come back online with matching parameters ✅
+    - [x] Timeout handling (20-second timeout, proceeds with partial ACKs) ✅
+    - [x] Real-time progress monitoring via `/api/lora/reboot-status` ✅
+    - [x] Frontend modal with live ACK tracking per sensor ✅
+    - [ ] Rollback mechanism if migration fails (not implemented - manual recovery)
+  - [x] Additional command types: location ✅, interval ✅, restart ✅ (v2.15.3)
+  - [x] Web UI for remote configuration ✅ (/runtime-config page, v2.15.0)
+  - [ ] Additional command types: thresholds, mesh config (future)
   - [ ] Command history logging
-  - [ ] Batch commands (multiple sensors)
+  - [ ] Batch commands (send same command to multiple sensors simultaneously)
 
 ### WiFi Configuration & Management
 
@@ -796,37 +798,37 @@
 
 ## Implementation Priority Matrix
 
-| Feature Category            | Complexity | Impact       | Priority       | Status                             |
-| --------------------------- | ---------- | ------------ | -------------- | ---------------------------------- |
-| WiFi Captive Portal         | Medium     | High         | ⭐⭐⭐⭐⭐     | ✅ Completed v2.0.0                |
-| Sensor Health Monitoring    | Low        | High         | ⭐⭐⭐⭐⭐     | ✅ Completed v2.0.0                |
-| Display Enhancements        | Low        | Medium       | ⭐⭐⭐⭐       | ✅ Completed v2.0.0                |
-| Multi-Click Buttons         | Low        | Medium       | ⭐⭐⭐⭐       | ✅ Completed v2.0.0                |
-| Web Dashboard (Basic)       | Medium     | High         | ⭐⭐⭐⭐⭐     | ✅ Completed v2.1.0                |
-| Teams Notifications         | Low        | High         | ⭐⭐⭐⭐⭐     | ✅ Completed v2.3.0                |
-| Email Alerts Phase 1\*\*    | **Medium** | **High**     | **⭐⭐⭐⭐⭐** | **✅ Completed v2.12.0**           |
-| **Network Pairing Phase 2** | Low        | High         | ⭐⭐⭐⭐⭐     | ✅ Completed v2.5.0                |
-| WebSocket Live Updates      | Low        | Medium       | ⭐⭐⭐⭐       | ✅ Completed v2.6.0                |
-| In-Memory Historical Data   | Medium     | High         | ⭐⭐⭐⭐       | ✅ Completed v2.7.0                |
-| MQTT Publishing             | Low        | High         | ⭐⭐⭐⭐⭐     | ✅ Completed v2.8.0                |
-| Home Assistant Integration  | Low        | High         | ⭐⭐⭐⭐⭐     | ✅ Completed v2.8.0                |
-| Modular Sensor Architecture | Medium     | High         | ⭐⭐⭐⭐⭐     | ✅ Completed v2.9.0                |
-| Remote LoRa Configuration   | Medium     | High         | ⭐⭐⭐⭐⭐     | ✅ Completed v2.10.0               |
-| Network Pairing/Security    | Medium     | High         | ⭐⭐⭐⭐⭐     | ✅ Completed v2.13.0               |
-| I2C Sensor Implementations  | Low        | High         | ⭐⭐⭐⭐⭐     | ✅ Completed v2.15.0               |
-| Display Enhancements        | Low        | Medium       | ⭐⭐⭐⭐       | ✅ Completed v2.15.0               |
-| UI Standardization/UX       | Low        | Medium       | ⭐⭐⭐⭐       | ✅ Completed v2.15.3               |
-| **LoRa Settings Sync**      | **Medium** | **CRITICAL** | **⭐⭐⭐⭐⭐** | **✅ Completed v2.16.0**           |
-| **Hardware Sensor Testing** | **Low**    | **High**     | **⭐⭐⭐⭐⭐** | **🟡 RECOMMENDED NEXT**            |
-| **Mesh Network Testing**    | **Low**    | **High**     | **⭐⭐⭐⭐**   | **🟢 READY FOR TESTING**           |
-| **Hardware Sensor Testing** | **Low**    | **High**     | **⭐⭐⭐⭐⭐** | **🟡 RECOMMENDED NEXT**            |
-| **Mesh Network Testing**    | **Low**    | **High**     | **⭐⭐⭐⭐**   | **🟢 READY FOR TESTING**           |
-| **Runtime Config Web UI**   | **Medium** | **Medium**   | **⭐⭐⭐⭐**   | **🔵 FUTURE**                      |
-| Deep Sleep Mode             | Medium     | High         | ⭐⭐⭐⭐       | ⚪ Shelved (lab use, not remote)   |
-| OTA Firmware Updates        | Medium     | High         | ⭐⭐⭐⭐⭐     | ⚪ Shelved (USB preferred)         |
-| SMS Alerts (Twilio)         | Low        | Medium       | ⭐⭐⭐         | ⚪ Shelved (deferred)              |
-| SD Card Logging             | Low        | Medium       | ⭐⭐⭐⭐       | ⚪ Shelved (no hardware)           |
-| Mobile App                  | Very High  | Medium       | ⭐⭐           | ⚪ Future                          |
+| Feature Category            | Complexity | Impact       | Priority       | Status                           |
+| --------------------------- | ---------- | ------------ | -------------- | -------------------------------- |
+| WiFi Captive Portal         | Medium     | High         | ⭐⭐⭐⭐⭐     | ✅ Completed v2.0.0              |
+| Sensor Health Monitoring    | Low        | High         | ⭐⭐⭐⭐⭐     | ✅ Completed v2.0.0              |
+| Display Enhancements        | Low        | Medium       | ⭐⭐⭐⭐       | ✅ Completed v2.0.0              |
+| Multi-Click Buttons         | Low        | Medium       | ⭐⭐⭐⭐       | ✅ Completed v2.0.0              |
+| Web Dashboard (Basic)       | Medium     | High         | ⭐⭐⭐⭐⭐     | ✅ Completed v2.1.0              |
+| Teams Notifications         | Low        | High         | ⭐⭐⭐⭐⭐     | ✅ Completed v2.3.0              |
+| Email Alerts Phase 1\*\*    | **Medium** | **High**     | **⭐⭐⭐⭐⭐** | **✅ Completed v2.12.0**         |
+| **Network Pairing Phase 2** | Low        | High         | ⭐⭐⭐⭐⭐     | ✅ Completed v2.5.0              |
+| WebSocket Live Updates      | Low        | Medium       | ⭐⭐⭐⭐       | ✅ Completed v2.6.0              |
+| In-Memory Historical Data   | Medium     | High         | ⭐⭐⭐⭐       | ✅ Completed v2.7.0              |
+| MQTT Publishing             | Low        | High         | ⭐⭐⭐⭐⭐     | ✅ Completed v2.8.0              |
+| Home Assistant Integration  | Low        | High         | ⭐⭐⭐⭐⭐     | ✅ Completed v2.8.0              |
+| Modular Sensor Architecture | Medium     | High         | ⭐⭐⭐⭐⭐     | ✅ Completed v2.9.0              |
+| Remote LoRa Configuration   | Medium     | High         | ⭐⭐⭐⭐⭐     | ✅ Completed v2.10.0             |
+| Network Pairing/Security    | Medium     | High         | ⭐⭐⭐⭐⭐     | ✅ Completed v2.13.0             |
+| I2C Sensor Implementations  | Low        | High         | ⭐⭐⭐⭐⭐     | ✅ Completed v2.15.0             |
+| Display Enhancements        | Low        | Medium       | ⭐⭐⭐⭐       | ✅ Completed v2.15.0             |
+| UI Standardization/UX       | Low        | Medium       | ⭐⭐⭐⭐       | ✅ Completed v2.15.3             |
+| **LoRa Settings Sync**      | **Medium** | **CRITICAL** | **⭐⭐⭐⭐⭐** | **✅ Completed v2.16.0**         |
+| **Hardware Sensor Testing** | **Low**    | **High**     | **⭐⭐⭐⭐⭐** | **🟡 RECOMMENDED NEXT**          |
+| **Mesh Network Testing**    | **Low**    | **High**     | **⭐⭐⭐⭐**   | **🟢 READY FOR TESTING**         |
+| **Hardware Sensor Testing** | **Low**    | **High**     | **⭐⭐⭐⭐⭐** | **🟡 RECOMMENDED NEXT**          |
+| **Mesh Network Testing**    | **Low**    | **High**     | **⭐⭐⭐⭐**   | **🟢 READY FOR TESTING**         |
+| **Runtime Config Web UI**   | **Medium** | **Medium**   | **⭐⭐⭐⭐**   | **🔵 FUTURE**                    |
+| Deep Sleep Mode             | Medium     | High         | ⭐⭐⭐⭐       | ⚪ Shelved (lab use, not remote) |
+| OTA Firmware Updates        | Medium     | High         | ⭐⭐⭐⭐⭐     | ⚪ Shelved (USB preferred)       |
+| SMS Alerts (Twilio)         | Low        | Medium       | ⭐⭐⭐         | ⚪ Shelved (deferred)            |
+| SD Card Logging             | Low        | Medium       | ⭐⭐⭐⭐       | ⚪ Shelved (no hardware)         |
+| Mobile App                  | Very High  | Medium       | ⭐⭐           | ⚪ Future                        |
 
 ---
 
