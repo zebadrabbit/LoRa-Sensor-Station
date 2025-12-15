@@ -697,6 +697,222 @@ void setup() {
 
 ---
 
+## Piezo Buzzer
+
+### Overview
+
+A piezo buzzer provides audio feedback for alerts, status changes, and user interactions. Both sensor nodes and base stations can be equipped with buzzers for different use cases.
+
+### Pinout
+
+**Piezo Buzzer (Passive or Active):**
+
+| Buzzer Pin | Wire Color | Function          |
+|------------|------------|-------------------|
+| +          | Red        | Signal (GPIO)     |
+| -          | Black      | Ground            |
+
+**Note:** 
+- **Active buzzers** - Have built-in oscillator, simply turn on/off (easier)
+- **Passive buzzers** - Require PWM signal for tone generation (more flexible)
+
+### Wiring Connections
+
+**Sensor Node:**
+
+| Heltec Pin | Buzzer Pin | Notes                           |
+|------------|------------|---------------------------------|
+| GPIO 5     | + (Red)    | PWM-capable pin for tones       |
+| GND        | - (Black)  | Ground connection               |
+
+**Base Station:**
+
+| Heltec Pin | Buzzer Pin | Notes                           |
+|------------|------------|---------------------------------|
+| GPIO 6     | + (Red)    | PWM-capable pin for tones       |
+| GND        | - (Black)  | Ground connection               |
+
+**Wiring Diagram:**
+
+```
+Heltec Board                Piezo Buzzer
+┌─────────────┐
+│             │
+│  GPIO 5/6 ──┼────────────── + (Red)
+│             │
+│  GND      ──┼────────────── - (Black)
+│             │
+└─────────────┘
+```
+
+### GPIO Pin Selection
+
+**Why GPIO 5 (Sensor) and GPIO 6 (Base Station)?**
+
+- ✅ PWM-capable for tone generation
+- ✅ Not used by LoRa, I2C, or Display
+- ✅ Available on both board variants
+- ✅ 3.3V logic level (safe for buzzers)
+
+### Buzzer Types
+
+**Active Buzzer (Recommended for Beginners):**
+- Has built-in oscillator
+- Fixed frequency (typically 2-4 kHz)
+- Simple on/off control via `digitalWrite()`
+- Louder and more consistent
+- **Best for:** Alerts, warnings, confirmations
+
+**Passive Buzzer (Advanced):**
+- Requires external PWM signal
+- Variable frequency for tones and melodies
+- Use `ledcSetup()` and `ledcWriteTone()` on ESP32
+- More flexible sound options
+- **Best for:** Musical tones, multi-tone alerts
+
+### Code Example (Active Buzzer)
+
+```cpp
+#define BUZZER_PIN 5  // GPIO 5 for sensor, GPIO 6 for base station
+
+void setup() {
+    pinMode(BUZZER_PIN, OUTPUT);
+    digitalWrite(BUZZER_PIN, LOW);  // Off by default
+}
+
+void beep(int duration_ms) {
+    digitalWrite(BUZZER_PIN, HIGH);  // On
+    delay(duration_ms);
+    digitalWrite(BUZZER_PIN, LOW);   // Off
+}
+
+void doubleBeep() {
+    beep(100);
+    delay(50);
+    beep(100);
+}
+
+void alertBeep() {
+    for (int i = 0; i < 3; i++) {
+        beep(200);
+        delay(100);
+    }
+}
+```
+
+### Code Example (Passive Buzzer with PWM)
+
+```cpp
+#define BUZZER_PIN 5
+#define BUZZER_CHANNEL 0
+#define BUZZER_RESOLUTION 8  // 8-bit resolution
+
+void setup() {
+    ledcSetup(BUZZER_CHANNEL, 2000, BUZZER_RESOLUTION);  // 2kHz, 8-bit
+    ledcAttachPin(BUZZER_PIN, BUZZER_CHANNEL);
+    ledcWrite(BUZZER_CHANNEL, 0);  // Off
+}
+
+void playTone(int frequency, int duration_ms) {
+    ledcWriteTone(BUZZER_CHANNEL, frequency);
+    ledcWrite(BUZZER_CHANNEL, 128);  // 50% duty cycle
+    delay(duration_ms);
+    ledcWrite(BUZZER_CHANNEL, 0);    // Off
+}
+
+void successTone() {
+    playTone(1000, 100);  // 1kHz for 100ms
+    delay(50);
+    playTone(1500, 150);  // 1.5kHz for 150ms
+}
+
+void errorTone() {
+    playTone(500, 300);   // Low tone
+    delay(100);
+    playTone(500, 300);   // Repeat
+}
+```
+
+### Use Cases
+
+**Sensor Node:**
+- Configuration saved (double beep)
+- LoRa packet sent successfully (short beep)
+- Low battery warning (3 beeps every minute)
+- Sensor error detected (long beep)
+- Button press confirmation (short chirp)
+- Remote command received (ascending tone)
+
+**Base Station:**
+- Sensor timeout alert (3 beeps)
+- Alert condition triggered (continuous beeping)
+- Network connection lost (descending tone)
+- New sensor discovered (success tone)
+- Web configuration saved (double beep)
+- Critical system error (rapid beeping)
+
+### Power Considerations
+
+**Current Draw:**
+- Active buzzer: 20-30 mA @ 3.3V
+- Passive buzzer: 10-20 mA @ 3.3V
+
+**Battery Impact:**
+- Minimal when used sparingly
+- Consider reducing volume or duration for battery-powered sensors
+- Use only for critical alerts on remote sensors
+
+### Volume Control
+
+**Hardware:**
+- Add a series resistor (100Ω - 1kΩ) to reduce volume
+- Larger resistor = quieter buzzer
+
+**Software (Passive Buzzer only):**
+```cpp
+// Reduce duty cycle for quieter sound
+ledcWrite(BUZZER_CHANNEL, 64);  // 25% duty = quieter
+ledcWrite(BUZZER_CHANNEL, 32);  // 12.5% duty = very quiet
+```
+
+### Troubleshooting
+
+**No sound:**
+- Check polarity (+ to GPIO, - to GND)
+- Verify GPIO pin not in use by other peripherals
+- Test with simple digitalWrite() HIGH/LOW
+- Confirm buzzer is working (test with 3.3V directly)
+
+**Quiet or distorted:**
+- Check if active vs passive buzzer
+- Passive buzzers need PWM signal
+- Try different frequencies (1-5 kHz typical range)
+- Add series resistor to reduce volume if too loud
+
+**Buzzer stays on:**
+- Ensure pinMode() set to OUTPUT
+- Call digitalWrite(LOW) or ledcWrite(0) to turn off
+- Check for infinite loops or missing delays
+
+### Recommended Products
+
+**Active Buzzers:**
+- 5V active buzzer with 3.3V compatible input
+- Built-in oscillator, easy to use
+- ~85dB @ 10cm
+
+**Passive Buzzers:**
+- 3.3V passive piezo element
+- Requires PWM signal
+- More versatile for tones
+
+**Mounting:**
+- Self-adhesive back
+- PCB mount with through-holes
+- Wire leads for flexible placement
+
+---
+
 ## Additional Resources
 
 ### Datasheets
