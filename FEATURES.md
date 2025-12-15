@@ -2,7 +2,34 @@
 
 ## Version History
 
-### v2.15.2 (December 14, 2025) - Current Version
+### v2.16.0 (December 15, 2025) - Current Version
+
+- ✅ **LoRa Settings Coordinated Reboot** 🎯 COMPLETED
+- ✅ ACK tracking system for multi-sensor coordination
+- ✅ Base station waits for all sensors to ACK before rebooting
+- ✅ Real-time progress monitoring: "Waiting for sensor ACKs... (2/4)"
+- ✅ 20-second timeout with partial ACK handling
+- ✅ Sensors auto-reboot 5s after ACK
+- ✅ Base station reboots 8s after all ACKs (or timeout)
+- ✅ API endpoint `/api/lora/reboot-status` for status polling
+- ✅ Frontend modal shows live ACK progress per sensor
+- ✅ **UNBLOCKS**: /lora-settings page now fully functional
+- ✅ **Flash**: 43.7% (1,460,953 bytes), RAM: 33.2% (108,792 bytes)
+
+### v2.15.3 (December 15, 2025)
+
+- ✅ **UI Standardization Complete**
+- ✅ Semantic HTML across all config pages (header/article tags)
+- ✅ pico-custom.css applied consistently
+- ✅ Removed duplicate Config button from dashboard
+- ✅ **Enhanced UX**
+- ✅ 5px colored tab border on client cards
+- ✅ Location sync bug fixed (base station updates immediately)
+- ✅ Loading states on runtime-config buttons (spinner: "⏳ Waiting for ACK...")
+- ✅ Button disabling during command execution
+- ✅ Auto-refresh after successful commands (2-3s delay)
+
+### v2.15.2 (December 14, 2025)
 
 - ✅ **Client Type Selection**: Initial setup configuration
 - ✅ Three client types: Standard (AC+battery), Rugged (solar+battery), Deep Sleep (ultra low power)
@@ -697,42 +724,39 @@
 
 ## 🔵 Current Focus - Phase 3: Advanced Features
 
-### Recently Completed (v2.15.0):
+### Recently Completed (v2.16.0):
 
-- [x] I2C Sensor Implementations ✅
-- [x] BME680 environmental sensor (temp/humidity/pressure/gas) ✅
-- [x] BH1750 light intensity sensor ✅
-- [x] INA219 current/power monitoring ✅
-- [x] Multi-sensor MQTT publishing ✅
-- [x] Home Assistant multi-sensor auto-discovery ✅
-- [x] Sensor wiring documentation (SENSOR_WIRING.md) ✅
+- [x] **LoRa Settings Coordinated Reboot** ✅ COMPLETED
+- [x] ACK tracking for all sensors before base station reboot ✅
+- [x] Real-time progress monitoring in web UI ✅
+- [x] 20-second timeout with partial ACK handling ✅
+- [x] `/api/lora/reboot-status` endpoint for live status ✅
+- [x] Frontend modal with per-sensor ACK display ✅
+- [x] Sensors auto-reboot 5s after ACK, base 8s after all ACKs ✅
+- [x] **UNBLOCKED**: /lora-settings page now fully functional ✅
+
+### Previous Milestones (v2.15.0-v2.15.3):
+
+- [x] I2C Sensor Implementations (BME680, BH1750, INA219) ✅
+- [x] UI Standardization (semantic HTML, pico-custom.css) ✅
+- [x] Runtime Config UX (loading states, auto-refresh) ✅
+- [x] Location sync between sensor and base station ✅
 - [x] Display improvements (welcome pages, 10s cycle) ✅
-- [x] Button action swap (2=ping, 3=reboot) ✅
 
 ### Next Priority Options:
 
-1. **LoRa Settings Sync - CRITICAL** (Medium effort, BLOCKING) ⭐⭐⭐ HIGHEST PRIORITY
-   - [ ] Complete SET_LORA_PARAMS command implementation
-   - [ ] Coordinated reboot protocol:
-     - Send command to all active sensors
-     - Wait for ACKs from all sensors
-     - Sensors reboot with new parameters
-     - Base station reboots with new parameters
-     - All nodes reconnect on new frequency/SF/BW
-   - [ ] Status modal already built in /lora-settings.html
-   - [ ] Without this: Changing LoRa settings breaks all communication
-   - **BLOCKING**: /lora-settings page exists but doesn't fully work
-2. **Hardware Testing with Real Sensors** (Low effort, high validation) ⭐⭐ RECOMMENDED
+1. **Hardware Testing with Real Sensors** (Low effort, high validation) ⭐⭐⭐ HIGHEST PRIORITY
 
-   - [ ] Test BME680 with actual hardware (ordered, arriving next week)
+   - [ ] Test BME680 with actual hardware (ordered, arriving soon)
    - [ ] Test BH1750 light sensor
    - [ ] Test INA219 power monitor
    - [ ] Validate multi-sensor packets over LoRa
    - [ ] Verify MQTT publishing with all sensor types
    - [ ] Test adaptive font sizing with various names
-   - **VALIDATES**: All the code we just wrote
+   - [ ] Test LoRa settings changes with multiple sensors
+   - **VALIDATES**: All recent code (I2C sensors, UI improvements, LoRa sync)
 
-3. **Mesh Network Testing** (Low effort, high value) ⭐⭐
+2. **Mesh Network Testing** (Low effort, high value) ⭐⭐
 
    - [ ] Code complete (v3.0.0), just needs 3-node testing
    - [ ] Validate route discovery and forwarding
@@ -741,9 +765,10 @@
    - [ ] Web dashboard mesh status page
    - **ADVANTAGE**: Already implemented, just needs validation
 
-4. **Runtime Configuration Page** (Medium effort, medium value)
-   - [ ] Web UI for all remote config commands
-   - [ ] Adjust transmission intervals without reset
+3. **Additional Sensor Types** (Medium effort, medium value)
+   - [ ] DS18B20 1-Wire temperature (Phase 3)
+   - [ ] DHT22 humidity sensor (Phase 4)
+   - [ ] Additional ADC sensors (photoresistor, soil moisture) (Phase 5)
    - [ ] Change sensor location names
    - [ ] Modify alert thresholds
    - [ ] LoRa parameters tuning (via #1 above)
@@ -790,7 +815,10 @@
 | Network Pairing/Security    | Medium     | High         | ⭐⭐⭐⭐⭐     | ✅ Completed v2.13.0               |
 | I2C Sensor Implementations  | Low        | High         | ⭐⭐⭐⭐⭐     | ✅ Completed v2.15.0               |
 | Display Enhancements        | Low        | Medium       | ⭐⭐⭐⭐       | ✅ Completed v2.15.0               |
-| **LoRa Settings Sync**      | **Medium** | **CRITICAL** | **⭐⭐⭐⭐⭐** | **🔴 BLOCKING - HIGHEST PRIORITY** |
+| UI Standardization/UX       | Low        | Medium       | ⭐⭐⭐⭐       | ✅ Completed v2.15.3               |
+| **LoRa Settings Sync**      | **Medium** | **CRITICAL** | **⭐⭐⭐⭐⭐** | **✅ Completed v2.16.0**           |
+| **Hardware Sensor Testing** | **Low**    | **High**     | **⭐⭐⭐⭐⭐** | **🟡 RECOMMENDED NEXT**            |
+| **Mesh Network Testing**    | **Low**    | **High**     | **⭐⭐⭐⭐**   | **🟢 READY FOR TESTING**           |
 | **Hardware Sensor Testing** | **Low**    | **High**     | **⭐⭐⭐⭐⭐** | **🟡 RECOMMENDED NEXT**            |
 | **Mesh Network Testing**    | **Low**    | **High**     | **⭐⭐⭐⭐**   | **🟢 READY FOR TESTING**           |
 | **Runtime Config Web UI**   | **Medium** | **Medium**   | **⭐⭐⭐⭐**   | **🔵 FUTURE**                      |
