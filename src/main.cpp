@@ -12,10 +12,13 @@
 #include "alerts.h"
 #include "mesh_routing.h"
 #include "security.h"
+#include "logger.h"
 #ifdef BASE_STATION
 #include "mqtt_client.h"
 #include "sensor_config.h"
 #include "remote_config.h"
+#include <time.h>
+#include "time_status.h"
 #endif
 #ifdef SENSOR_NODE
 #include "sensor_manager.h"
@@ -50,6 +53,15 @@ const char* FIRMWARE_VERSION = "v3.0.0 - Mesh Network Support";
 void setup() {
   Serial.begin(115200);
   delay(1000);
+  // Initialize unified logger (Serial + LittleFS optional)
+  LoggerConfig logCfg;
+  logCfg.level = LOG_INFO;
+  logCfg.toSerial = true;
+  logCfg.toLittleFS = true; // persist logs to LittleFS
+  logCfg.toSD = false;      // enable when SD support is available
+  logCfg.littlefsPath = "/logs.txt";
+  logCfg.sdPath = "/logs.txt";
+  loggerBegin(logCfg);
   
   // Initialize Heltec board hardware
   Mcu.begin(HELTEC_BOARD, SLOW_CLK_TPYE);
@@ -62,12 +74,12 @@ void setup() {
   configStorage.begin();
   
   // Initialize security module
-  Serial.println("\n=== Initializing Security Module ===");
+  LOGI("BOOT", "Initializing Security Module");
   securityManager.begin();
   
   // Check if this is first boot or if we need configuration
   if (configStorage.isFirstBoot()) {
-    Serial.println("=== First Boot - Starting Configuration Portal ===");
+    LOGW("BOOT", "First Boot - Starting Configuration Portal");
     displayMessage("First Boot", "Connect to WiFi AP", "to configure", 2000);
     
     // Start captive portal
@@ -86,11 +98,11 @@ void setup() {
   DeviceMode mode = configStorage.getDeviceMode();
   
   if (mode == MODE_SENSOR) {
-    Serial.println("=== Heltec LoRa V3 Sensor Node ===");
+    LOGI("SENSOR", "Heltec LoRa V3 Sensor Node");
     SensorConfig sensorConfig = configStorage.getSensorConfig();
-    Serial.printf("Sensor ID: %d\n", sensorConfig.sensorId);
-    Serial.printf("Location: %s\n", sensorConfig.location);
-    Serial.printf("Interval: %d seconds\n", sensorConfig.transmitInterval);
+    LOGI("SENSOR", "Sensor ID: %d", sensorConfig.sensorId);
+    LOGI("SENSOR", "Location: %s", sensorConfig.location);
+    LOGI("SENSOR", "Interval: %d seconds", sensorConfig.transmitInterval);
     
     blinkLED(getColorBlue(), 3, 200);
     initStats();
@@ -98,9 +110,9 @@ void setup() {
     initLoRa();
     
     // Initialize mesh router (sensor mode)
-    Serial.println("\n=== Initializing Mesh Router ===");
-    Serial.printf("Mesh Enabled: %s\n", sensorConfig.meshEnabled ? "YES" : "NO");
-    Serial.printf("Mesh Forwarding: %s\n", sensorConfig.meshForwarding ? "YES" : "NO");
+    LOGI("MESH", "Initializing Mesh Router");
+    LOGI("MESH", "Mesh Enabled: %s", sensorConfig.meshEnabled ? "YES" : "NO");
+    LOGI("MESH", "Mesh Forwarding: %s", sensorConfig.meshForwarding ? "YES" : "NO");
     meshRouter.begin(sensorConfig.sensorId, false);  // Not a base station
     meshRouter.setForwardingEnabled(sensorConfig.meshForwarding);
     
@@ -113,9 +125,9 @@ void setup() {
     ThermistorSensor* thermistor = new ThermistorSensor(1, "Thermistor");
     if (thermistor->begin()) {
       sensorManager.addSensor(thermistor);
-      Serial.println("Thermistor sensor added successfully");
+      LOGI("SENSOR", "Thermistor sensor added successfully");
     } else {
-      Serial.println("Failed to initialize thermistor sensor");
+      LOGE("SENSOR", "Failed to initialize thermistor sensor");
       delete thermistor;
     }
     
@@ -126,9 +138,9 @@ void setup() {
     setLED(getColorPurple());
     
   } else if (mode == MODE_BASE_STATION) {
-    Serial.println("=== Heltec LoRa V3 Base Station ===");
+    LOGI("BASE", "Heltec LoRa V3 Base Station");
     BaseStationConfig baseConfig = configStorage.getBaseStationConfig();
-    Serial.printf("WiFi SSID: %s\n", baseConfig.ssid);
+    LOGI("BASE", "WiFi SSID: %s", baseConfig.ssid);
     
     blinkLED(getColorBlue(), 3, 200);
     
@@ -146,17 +158,29 @@ void setup() {
       
       // Initialize remote configuration manager
       remoteConfigManager.init();
-      Serial.println("Remote configuration manager initialized");
+      LOGI("REMOTE", "Remote configuration manager initialized");
       #endif
       
       // Start web dashboard
       wifiPortal.startDashboard();
-      Serial.println("Web dashboard started");
-      Serial.println(FIRMWARE_VERSION);
+      LOGI("WEB", "Web dashboard started");
+      LOGI("BOOT", "%s", FIRMWARE_VERSION);
+      
+      // Initialize NTP if enabled
+      NTPConfig ntp = configStorage.getNTPConfig();
+      if (ntp.enabled) {
+        LOGI("TIME", "NTP Setup - Server: %s, TZ offset: %d min", ntp.server, ntp.tzOffsetMinutes);
+        long gmtOffsetSec = (long)ntp.tzOffsetMinutes * 60;
+        configTime(gmtOffsetSec, 0, ntp.server);
+        #ifdef BASE_STATION
+        // Register SNTP sync callback to track last NTP sync time
+        registerNtpTimeSyncCallback();
+        #endif
+      }
       
     } else {
       // Failed to connect, start portal
-      Serial.println("WiFi connection failed - Starting portal");
+      LOGW("WEB", "WiFi connection failed - Starting portal");
       displayMessage("WiFi Failed", "Starting AP", "for reconfiguration", 2000);
       wifiPortal.startPortal();
       
@@ -173,14 +197,56 @@ void setup() {
     initLoRa();
     
     // Initialize mesh router (base station mode)
-    Serial.println("\n=== Initializing Mesh Router ===");
-    Serial.printf("Mesh Enabled: %s\n", baseConfig.meshEnabled ? "YES" : "NO");
+    LOGI("MESH", "Initializing Mesh Router");
+    LOGI("MESH", "Mesh Enabled: %s", baseConfig.meshEnabled ? "YES" : "NO");
     meshRouter.begin(1, true);  // Base station ID = 1
+    
+    // Wait for NTP sync and broadcast time to all sensors on startup
+    NTPConfig ntpConfig = configStorage.getNTPConfig();
+    if (ntpConfig.enabled) {
+      LOGI("TIME", "Waiting for NTP sync before broadcasting to sensors...");
+      displayMessage("Time Sync", "Waiting for", "NTP...", 0);
+      
+      // Wait up to 30 seconds for NTP to sync
+      uint32_t ntpWaitStart = millis();
+      while (millis() - ntpWaitStart < 30000) {
+        time_t now = time(nullptr);
+        if (now > 1000000000) {  // Valid time (after year 2001)
+          setLastNtpSyncEpoch(now);
+          LOGI("TIME", "NTP synced at startup: %lu", (unsigned long)now);
+          
+          // Broadcast time to all sensors
+          extern RemoteConfigManager remoteConfigManager;
+          uint8_t payload[6];
+          memcpy(&payload[0], &now, sizeof(uint32_t));
+          int16_t tz = ntpConfig.tzOffsetMinutes;
+          memcpy(&payload[4], &tz, sizeof(int16_t));
+          
+          int sent = 0;
+          for (int i = 1; i < 256; i++) {  // Start from 1 (skip base station)
+            if (remoteConfigManager.queueCommand(i, CMD_TIME_SYNC, payload, 6)) {
+              sent++;
+            }
+          }
+          LOGI("TIME", "Startup time broadcast queued for %d sensors (epoch=%lu, tz=%d)", sent, (unsigned long)now, (int)tz);
+          char msg[32];
+          snprintf(msg, sizeof(msg), "%d sensors", sent);
+          displayMessage("Time Sync", "Broadcast to", msg, 2000);
+          break;
+        }
+        delay(100);
+      }
+      
+      if (getLastNtpSyncEpoch() == 0) {
+        LOGW("TIME", "NTP sync timeout - continuing without time");
+        displayMessage("Time Warning", "NTP timeout", "Continuing...", 2000);
+      }
+    }
     
     setLED(getColorGreen());
     
   } else {
-    Serial.println("ERROR: Invalid device mode!");
+    LOGE("BOOT", "Invalid device mode!");
     displayMessage("ERROR", "Invalid Mode", "Reset device", 0);
     while(1) delay(1000);
   }
@@ -211,6 +277,13 @@ void loop() {
   // Handle WiFi portal if active
   if (wifiPortal.isPortalActive()) {
     wifiPortal.handleClient();
+  }
+  
+  // Cleanup WebSocket clients periodically
+  static uint32_t lastWsCleanup = 0;
+  if (wifiPortal.isDashboardActive() && millis() - lastWsCleanup > 2000) {
+    wifiPortal.cleanupWebSocket();
+    lastWsCleanup = millis();
   }
   
   if (!setupComplete) {
@@ -260,7 +333,7 @@ void loop() {
     if (interval != configuredInterval) {
       static uint32_t lastForcedLog = 0;
       if (millis() - lastForcedLog > 30000) {  // Log every 30s
-        Serial.printf("⚡ Using forced 10s interval (configured: %lus)\n", configuredInterval / 1000);
+        LOGW("TX", "Using forced 10s interval (configured: %lus)", configuredInterval / 1000);
         lastForcedLog = millis();
       }
     }
@@ -272,14 +345,14 @@ void loop() {
     bool sendNow = shouldSendImmediatePing();
     if (sendNow) {
       clearImmediatePingFlag();
-      Serial.println("Immediate ping requested!");
+      LOGI("TX", "Immediate ping requested");
     }
     
     // Check for immediate ACK send after command processing
     #ifdef SENSOR_NODE
     if (!sendNow && shouldSendImmediateAck()) {
       sendNow = true;
-      Serial.println("Immediate ACK send requested!");
+      LOGI("TX", "Immediate ACK send requested");
     }
     #endif
     
@@ -300,14 +373,15 @@ void loop() {
         sensorData.batteryVoltage = readBatteryVoltage();
         sensorData.batteryPercent = calculateBatteryPercent(sensorData.batteryVoltage);
         sensorData.powerState = getPowerState();
+        // Copy location and zone from config
+        strncpy(sensorData.location, sensorConfig.location, sizeof(sensorData.location) - 1);
+        sensorData.location[sizeof(sensorData.location) - 1] = '\0';
+        strncpy(sensorData.zone, sensorConfig.zone, sizeof(sensorData.zone) - 1);
+        sensorData.zone[sizeof(sensorData.zone) - 1] = '\0';
         sensorData.checksum = calculateChecksum(&sensorData);
         
         // Display readings
-        Serial.println("\n--- Sensor Reading (Legacy Format) ---");
-        Serial.printf("Temperature: %.2f°C\n", sensorData.temperature);
-        Serial.printf("Battery Voltage: %.2fV\n", sensorData.batteryVoltage);
-        Serial.printf("Battery Percent: %d%%\n", sensorData.batteryPercent);
-        Serial.printf("Power State: %s\n", sensorData.powerState ? "Charging" : "Discharging");
+        LOGD("READ", "Legacy Reading: T=%.2fC V=%.2fV B=%d%% P=%s", sensorData.temperature, sensorData.batteryVoltage, sensorData.batteryPercent, sensorData.powerState ? "Charging" : "Discharging");
         
         // Visual feedback based on battery level
         if (sensorData.batteryPercent > 80) {
@@ -333,6 +407,11 @@ void loop() {
         packet.header.powerState = getPowerState();
         packet.header.lastCommandSeq = lastProcessedCommandSeq;
         packet.header.ackStatus = lastCommandAckStatus;
+        // Copy location and zone from config
+        strncpy(packet.header.location, sensorConfig.location, sizeof(packet.header.location) - 1);
+        packet.header.location[sizeof(packet.header.location) - 1] = '\0';
+        strncpy(packet.header.zone, sensorConfig.zone, sizeof(packet.header.zone) - 1);
+        packet.header.zone[sizeof(packet.header.zone) - 1] = '\0';
         
         // Copy sensor values
         for (int i = 0; i < packet.header.valueCount; i++) {
@@ -361,15 +440,11 @@ void loop() {
         memcpy(buffer + headerSize + valuesSize, &checksum, sizeof(uint16_t));
         
         // Display readings
-        Serial.println("\n--- Sensor Reading (Multi-Sensor Format) ---");
-        Serial.printf("Sensor ID: %d\n", packet.header.sensorId);
-        Serial.printf("Value Count: %d\n", packet.header.valueCount);
+        LOGD("READ", "Multi Reading: sensor=%d values=%d", packet.header.sensorId, packet.header.valueCount);
         for (int i = 0; i < packet.header.valueCount; i++) {
-          Serial.printf("  Value %d: %.2f (type %d)\n", i, packet.values[i].value, packet.values[i].type);
+          LOGD("READ", "  Value %d: %.2f (type %d)", i, packet.values[i].value, packet.values[i].type);
         }
-        Serial.printf("Battery Percent: %d%%\n", packet.header.batteryPercent);
-        Serial.printf("Power State: %s\n", packet.header.powerState ? "Charging" : "Discharging");
-        Serial.printf("Checksum: 0x%04X\n", checksum);
+        LOGD("READ", "Battery=%d%% Power=%s Checksum=0x%04X", packet.header.batteryPercent, packet.header.powerState ? "Charging" : "Discharging", checksum);
         
         // Visual feedback based on battery level
         if (packet.header.batteryPercent > 80) {
@@ -387,7 +462,7 @@ void loop() {
         
         // Send multi-sensor packet
         Radio.Send(buffer, packetSize);
-        Serial.printf("Sending multi-sensor packet (%d bytes)\n", packetSize);
+        LOGI("TX", "Sending multi-sensor packet (%d bytes)", (int)packetSize);
       }
       #else
       // Legacy sensor reading for base station (shouldn't be reached)
@@ -407,6 +482,7 @@ void loop() {
     enterRxMode();
     
     BaseStationConfig baseConfig = configStorage.getBaseStationConfig();
+    NTPConfig ntp = configStorage.getNTPConfig();
     
     // Run mesh router loop only if mesh is enabled
     if (baseConfig.meshEnabled) {
@@ -417,6 +493,42 @@ void loop() {
     #ifdef BASE_STATION
     mqttClient.loop();
     #endif
+    
+    // Periodic time broadcast to sensors if NTP enabled
+    static uint32_t lastTimeBroadcast = 0;
+    if (ntp.enabled) {
+      uint32_t intervalMs = (ntp.intervalSec < 60 ? 60 : ntp.intervalSec) * 1000UL;
+      if (millis() - lastTimeBroadcast >= intervalMs) {
+        lastTimeBroadcast = millis();
+        #ifdef BASE_STATION
+        setLastTimeBroadcastMs(lastTimeBroadcast);
+        #endif
+        time_t now = time(nullptr);
+        if (now > 1700000000) { // sanity check: after 2023-11
+          #ifdef BASE_STATION
+          setLastNtpSyncEpoch(now); // mark that base has valid NTP-derived time
+          #endif
+          // Broadcast to all active sensors
+          extern RemoteConfigManager remoteConfigManager;
+          uint8_t payload[6];
+          memcpy(&payload[0], &now, sizeof(uint32_t));
+          int16_t tz = ntp.tzOffsetMinutes;
+          memcpy(&payload[4], &tz, sizeof(int16_t));
+          int sent = 0;
+          for (int i = 0; i < 256; i++) {
+            SensorInfo* sensor = getSensorInfo(i);
+            if (sensor != NULL && !isSensorTimedOut(i)) {
+              if (remoteConfigManager.queueCommand(i, CMD_TIME_SYNC, payload, 6)) {
+                sent++;
+              }
+            }
+          }
+          LOGI("TIME", "Time broadcast sent to %d sensors (epoch=%lu, tz=%d)", sent, (unsigned long)now, (int)tz);
+        } else {
+          LOGW("TIME", "NTP not synced yet; skipping time broadcast");
+        }
+      }
+    }
     
     // Check for sensor timeouts and alerts every 30 seconds
     static uint32_t lastTimeoutCheck = 0;

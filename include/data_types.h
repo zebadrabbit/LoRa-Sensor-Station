@@ -14,6 +14,8 @@ struct SensorData {
   float batteryVoltage;     // Battery voltage
   uint8_t batteryPercent;   // Battery percentage
   bool powerState;          // Power state (charging/discharging)
+  char location[32];        // Device location/name (v2.12+)
+  char zone[16];            // Zone/group name (v2.12+)
   uint16_t checksum;        // Simple checksum for validation
 };
 
@@ -42,6 +44,8 @@ struct MultiSensorHeader {
     uint8_t powerState;     // Power state (charging/discharging)
     uint8_t lastCommandSeq; // Sequence number of last processed command (0 = none)
     uint8_t ackStatus;      // ACK status: 0 = success, non-zero = error code
+    char location[32];      // Device location/name (v2.12+)
+    char zone[16];          // Zone/group name (v2.12+)
 } __attribute__((packed));
 
 /**

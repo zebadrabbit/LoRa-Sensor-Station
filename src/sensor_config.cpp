@@ -19,6 +19,9 @@ SensorMetadata SensorConfigManager::getSensorMetadata(uint8_t sensorId) {
     metadata.configured = false;
     
     if (!prefs.begin("sensor-meta", true)) {  // Read-only
+        // Initialize namespace if missing, then provide defaults
+        prefs.begin("sensor-meta", false);
+        prefs.end();
         strcpy(metadata.location, "Unknown");
         strcpy(metadata.notes, "");
         metadata.transmitInterval = 15;
@@ -83,7 +86,11 @@ SensorMetadata SensorConfigManager::getSensorMetadata(uint8_t sensorId) {
 
 bool SensorConfigManager::setSensorMetadata(uint8_t sensorId, const SensorMetadata& metadata) {
     if (!prefs.begin("sensor-meta", false)) {  // Read-write
-        return false;
+        // Try creating the namespace
+        prefs.begin("sensor-meta", false);
+        if (!prefs.begin("sensor-meta", false)) {
+            return false;
+        }
     }
     
     // Mark as configured
@@ -123,7 +130,12 @@ bool SensorConfigManager::setSensorMetadata(uint8_t sensorId, const SensorMetada
 
 bool SensorConfigManager::hasSensorMetadata(uint8_t sensorId) {
     if (!prefs.begin("sensor-meta", true)) {
-        return false;
+        // Initialize namespace if missing, then reopen read-only
+        prefs.begin("sensor-meta", false);
+        prefs.end();
+        if (!prefs.begin("sensor-meta", true)) {
+            return false;
+        }
     }
     
     String configKey = getSensorKey(sensorId, "cfg");

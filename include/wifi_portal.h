@@ -35,15 +35,29 @@ public:
     // WebSocket broadcast for real-time updates
     void broadcastSensorUpdate();
     
+    // WebSocket cleanup (call periodically)
+    void cleanupWebSocket();
+    
     // Public JSON generators (used by WebSocket)
     String generateSensorsJSON();
     String generateStatsJSON();
     
+    // Diagnostics hooks (used by LoRa comms)
+    void diagnosticsRecordSent(uint8_t sensorId, uint8_t sequenceNumber);
+    void diagnosticsRecordAck(uint8_t sensorId, uint8_t sequenceNumber, int16_t rssi, int8_t snr);
+
+    // Optional: check if diagnostics are active
+    bool isDiagnosticsActive();
+
 private:
     DNSServer dnsServer;
     AsyncWebServer webServer;
     bool portalActive;
     bool dashboardActive;
+    
+    // WiFi connection helpers
+    bool isNetworkUsable();
+    void resetWiFiStack();
     
     // Setup web server routes
     void setupWebServer();

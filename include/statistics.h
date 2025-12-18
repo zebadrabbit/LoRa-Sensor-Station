@@ -30,6 +30,7 @@ struct ClientHistory {
 struct ClientInfo {
   uint8_t clientId;  // Physical device ID
   char location[32];  // Device location/name
+  char zone[16];  // Device zone/grouping
   uint32_t lastSeen;
   int16_t lastRssi;
   int8_t lastSnr;
@@ -38,6 +39,8 @@ struct ClientInfo {
   bool powerState;  // true = charging, false = discharging
   bool active;
   ClientHistory history;
+  // Time sync tracking (base station usage)
+  uint32_t lastTimeSyncMs;   // millis() when last time-sync ACK was observed
   
   // Legacy compatibility fields (deprecated - for old code that expects these)
   uint8_t sensorId;  // Alias for clientId
@@ -127,6 +130,11 @@ SensorHistory* getSensorHistory(uint8_t clientId, uint8_t sensorIndex);
 
 // Get statistics
 SystemStats* getStats();
+
+// Time sync tracking helpers (base station)
+void recordClientTimeSync(uint8_t clientId);
+uint8_t countClientsWithTimeSync();
+uint32_t getMostRecentClientTimeSyncMs();
 
 // Legacy compatibility (deprecated)
 void updateSensorInfo(const SensorData& data, int16_t rssi, int8_t snr);

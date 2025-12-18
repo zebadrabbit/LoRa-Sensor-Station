@@ -1,4 +1,5 @@
 #include "remote_config.h"
+#include "logger.h"
 #include <cstring>
 
 static RemoteConfigManager* instance = nullptr;
@@ -27,7 +28,7 @@ uint16_t RemoteConfigManager::calculateChecksum(const uint8_t* data, size_t leng
 
 bool RemoteConfigManager::queueCommand(uint8_t sensorId, CommandType cmdType, const uint8_t* data, uint8_t dataLen) {
     if (dataLen > 248) {
-        Serial.printf("Command data too large: %d bytes\n", dataLen);
+        LOGE("CMD", "Command data too large: %d bytes", dataLen);
         return false;
     }
     
@@ -53,7 +54,7 @@ bool RemoteConfigManager::queueCommand(uint8_t sensorId, CommandType cmdType, co
     
     commandQueues[sensorId].push(cmd);
     
-    Serial.printf("Queued command type %d for sensor %d (seq %d)\n", 
+    LOGI("CMD", "Queued command type %d for sensor %d (seq %d)", 
                   cmdType, sensorId, cmd.packet.sequenceNumber);
     
     // Send immediately since sensor is always listening
@@ -76,20 +77,20 @@ CommandPacket* RemoteConfigManager::getPendingCommand(uint8_t sensorId) {
     if (cmd.waitingForAck) {
         // Check timeout
         if (millis() - cmd.lastAttempt > cmd.timeout) {
-            Serial.printf("Command timeout for sensor %d (seq %d), retry %d/%d\n", 
+            LOGW("CMD", "Command timeout for sensor %d (seq %d), retry %d/%d", 
                          sensorId, cmd.packet.sequenceNumber, cmd.retryCount + 1, MAX_RETRY_COUNT);
             cmd.waitingForAck = false;
             cmd.retryCount++;
             
             if (cmd.retryCount >= MAX_RETRY_COUNT) {
-                Serial.printf("❌ COMMAND FAILED: Max retries (%d) reached for sensor %d (seq %d)\n", 
+                LOGE("CMD", "COMMAND FAILED: Max retries (%d) reached for sensor %d (seq %d)", 
                              MAX_RETRY_COUNT, sensorId, cmd.packet.sequenceNumber);
-                Serial.println("Command dropped - sensor may be out of range or offline");
+                LOGW("CMD", "Command dropped - sensor may be out of range or offline");
                 commandQueues[sensorId].pop();
                 return nullptr;
             }
             
-            Serial.printf("🔄 Retrying command to sensor %d...\n", sensorId);
+            LOGI("CMD", "Retrying command to sensor %d...", sensorId);
         } else {
             // Still waiting, don't send yet
             return nullptr;
@@ -110,7 +111,13 @@ void RemoteConfigManager::markCommandAcked(uint8_t sensorId, uint8_t sequenceNum
     
     QueuedCommand& cmd = commandQueues[sensorId].front();
     if (cmd.packet.sequenceNumber == sequenceNumber) {
-        Serial.printf("Command ACKed for sensor %d (seq %d)\n", sensorId, sequenceNumber);
+        LOGI("CMD", "Command ACKed for sensor %d (seq %d)", sensorId, sequenceNumber);
+        // Record time-sync ACKs for display if applicable
+        if (cmd.packet.commandType == CMD_TIME_SYNC) {
+            extern void recordClientTimeSync(uint8_t clientId);
+            recordClientTimeSync(sensorId);
+            LOGD("CMD", "Recorded client %d time sync", sensorId);
+        }
         commandQueues[sensorId].pop();
     }
 }
@@ -122,12 +129,12 @@ void RemoteConfigManager::markCommandFailed(uint8_t sensorId, uint8_t sequenceNu
     
     QueuedCommand& cmd = commandQueues[sensorId].front();
     if (cmd.packet.sequenceNumber == sequenceNumber) {
-        Serial.printf("Command NACK for sensor %d (seq %d)\n", sensorId, sequenceNumber);
+        LOGW("CMD", "Command NACK for sensor %d (seq %d)", sensorId, sequenceNumber);
         cmd.waitingForAck = false;
         cmd.retryCount++;
         
         if (cmd.retryCount >= MAX_RETRY_COUNT) {
-            Serial.printf("Max retries after NACK, dropping command\n");
+            LOGW("CMD", "Max retries after NACK, dropping command");
             commandQueues[sensorId].pop();
         }
     }
@@ -139,26 +146,28 @@ void RemoteConfigManager::processAck(const AckPacket* ack) {
     uint16_t expectedChecksum = calculateChecksum((const uint8_t*)ack, checksumLength);
     
     if (ack->checksum != expectedChecksum) {
-        Serial.printf("Invalid ACK checksum: received=0x%04X, expected=0x%04X\n",
+        LOGW("CMD", "Invalid ACK checksum: received=0x%04X, expected=0x%04X",
                      ack->checksum, expectedChecksum);
         return;
     }
     
     if (ack->commandType == CMD_ACK) {
         markCommandAcked(ack->sensorId, ack->sequenceNumber);
-        Serial.printf("ACK from sensor %d: status=%d\n", ack->sensorId, ack->statusCode);
+        LOGI("CMD", "ACK from sensor %d: status=%d", ack->sensorId, ack->statusCode);
         
         // Process any response data
         if (ack->dataLength > 0) {
-            Serial.printf("ACK data (%d bytes): ", ack->dataLength);
+            String hex = "";
             for (int i = 0; i < ack->dataLength && i < 32; i++) {
-                Serial.printf("%02X ", ack->data[i]);
+                char buf[4];
+                snprintf(buf, sizeof(buf), "%02X ", ack->data[i]);
+                hex += buf;
             }
-            Serial.println();
+            LOGD("CMD", "ACK data (%d bytes): %s", ack->dataLength, hex.c_str());
         }
     } else if (ack->commandType == CMD_NACK) {
         markCommandFailed(ack->sensorId, ack->sequenceNumber);
-        Serial.printf("NACK from sensor %d: error code=%d\n", ack->sensorId, ack->statusCode);
+        LOGW("CMD", "NACK from sensor %d: error code=%d", ack->sensorId, ack->statusCode);
     }
 }
 
@@ -167,11 +176,11 @@ void RemoteConfigManager::handleAck(uint8_t sensorId, uint8_t sequenceNumber, ui
     if (status == 0) {
         // Success
         markCommandAcked(sensorId, sequenceNumber);
-        Serial.printf("✅ Command executed successfully by sensor %d (seq %d)\n", sensorId, sequenceNumber);
+        LOGI("CMD", "Command executed successfully by sensor %d (seq %d)", sensorId, sequenceNumber);
     } else {
         // Error
         markCommandFailed(sensorId, sequenceNumber);
-        Serial.printf("⚠️  Command failed on sensor %d (seq %d): error code=%d\n", sensorId, sequenceNumber, status);
+        LOGW("CMD", "Command failed on sensor %d (seq %d): error code=%d", sensorId, sequenceNumber, status);
     }
 }
 
@@ -182,7 +191,7 @@ void RemoteConfigManager::processRetries() {
             QueuedCommand& cmd = commandQueues[i].front();
             
             if (cmd.waitingForAck && (millis() - cmd.lastAttempt > cmd.timeout)) {
-                Serial.printf("Retry timeout check for sensor %d\n", i);
+                LOGD("CMD", "Retry timeout check for sensor %d", i);
                 cmd.waitingForAck = false;
             }
         }
@@ -193,7 +202,7 @@ void RemoteConfigManager::clearCommands(uint8_t sensorId) {
     while (!commandQueues[sensorId].empty()) {
         commandQueues[sensorId].pop();
     }
-    Serial.printf("Cleared command queue for sensor %d\n", sensorId);
+    LOGI("CMD", "Cleared command queue for sensor %d", sensorId);
 }
 
 uint8_t RemoteConfigManager::getQueuedCount(uint8_t sensorId) {
@@ -314,6 +323,17 @@ namespace CommandBuilder {
         // Coding Rate: 1 byte (uint8_t) - CR_4_5=1, CR_4_6=2, CR_4_7=3, CR_4_8=4
         cmd.data[10] = codingRate;
         
+        return cmd;
+    }
+    
+    CommandPacket createTimeSync(uint8_t sensorId, uint32_t epochSeconds, int16_t tzOffsetMinutes) {
+        CommandPacket cmd;
+        cmd.syncWord = COMMAND_SYNC_WORD;
+        cmd.commandType = CMD_TIME_SYNC;
+        cmd.targetSensorId = sensorId;
+        cmd.dataLength = 6;
+        memcpy(&cmd.data[0], &epochSeconds, sizeof(uint32_t));
+        memcpy(&cmd.data[4], &tzOffsetMinutes, sizeof(int16_t));
         return cmd;
     }
 }

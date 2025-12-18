@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Base Station Configuration</title>
+    <link rel="stylesheet" href="/pico-custom.css">
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body class="gradient-bg">
+    <div class="container">
+        <h1>🏠 Base Station Configuration</h1>
+        <form action="/base" method="POST" id="wifiForm">
+            <div class="form-group">
+                <label for="ssid">WiFi Network Name (SSID)</label>
+                <input type="text" id="ssid" name="ssid" required placeholder="Enter WiFi network name">
+                <p class="help-text">Enter the exact name of your WiFi network</p>
+            </div>
+            
+            <div class="form-group">
+                <label for="password">WiFi Password</label>
+                <input type="password" id="password" name="password" placeholder="Enter WiFi password">
+                <p class="help-text">Leave empty for open networks</p>
+            </div>
+            
+            <div class="form-group">
+                <label for="networkId">Network ID (1-65535)</label>
+                <input type="number" id="networkId" name="networkId" min="1" max="65535" value="12345" required>
+                <p class="help-text">🔒 Must match all client devices in your network</p>
+            </div>
+            
+            <button type="submit" class="btn">🔌 Connect & Configure</button>
+        </form>
+        
+        <div class="status" id="status">
+            Testing connection...
+        </div>
+    </div>
+    
+    <script>
+        document.getElementById('wifiForm').addEventListener('submit', function() {
+            document.getElementById('status').className = 'status testing';
+        });
+    </script>
+</body>
+</html>

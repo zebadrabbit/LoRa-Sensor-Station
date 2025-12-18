@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MQTT Configuration - LoRa Sensor Station</title>
+    <link rel="stylesheet" href="/pico-custom.css">
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📡 MQTT Configuration</h1>
+            <p>Connect to MQTT broker for data publishing</p>
+        </div>
+        
+        <!-- Navigation Menu -->
+        <div class="nav-menu">
+            <a href="/" class="nav-btn">📊 Dashboard</a>
+            <a href="/alerts" class="nav-btn">🔔 Alerts</a>
+            <a href="/mqtt" class="nav-btn active">📡 MQTT</a>
+            <a href="/time" class="nav-btn">⏱️ Time</a>
+            <a href="/security" class="nav-btn">🔒 Security</a>
+            <a href="/lora-settings" class="nav-btn">📻 LoRa Settings</a>
+        </div>
+        
+        <div id="messageBox" class="message hidden"></div>
+        
+        <article>
+            <header><h2>📢 MQTT Connection</h2></header>
+            <form id="mqttForm">
+                <div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="enabled">
+                        <label for="enabled">Enable MQTT Publishing</label>
+                    </div>
+                </div>
+                
+                <div>
+                    <label for="broker">MQTT Broker</label>
+                    <input type="text" id="broker" placeholder="192.168.1.100 or mqtt.example.com">
+                </div>
+                
+                <div>
+                    <label for="port">Port</label>
+                    <input type="number" id="port" value="1883">
+                </div>
+                
+                <div>
+                    <label for="username">Username (optional)</label>
+                    <input type="text" id="username" placeholder="mqtt_user">
+                </div>
+                
+                <div>
+                    <label for="password">Password (optional)</label>
+                    <input type="password" id="password" placeholder="mqtt_password">
+                </div>
+                
+                <div>
+                    <label for="topicPrefix">Topic Prefix</label>
+                    <input type="text" id="topicPrefix" value="lora" placeholder="lora">
+                    <div class="help-text">Topics: {prefix}/sensor/{id}/temperature</div>
+                </div>
+                
+                <div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="haDiscovery" checked>
+                        <label for="haDiscovery">Enable Home Assistant Auto-Discovery</label>
+                    </div>
+                </div>
+                
+                <div>
+                    <label for="qos">QoS Level</label>
+                    <input type="number" id="qos" value="0" min="0" max="2">
+                    <div class="help-text">0 = At most once, 1 = At least once, 2 = Exactly once</div>
+                </div>
+                
+                <div style="margin-top: 20px;">
+                    <button type="submit">💾 Save Configuration</button>
+                    <button type="button" class="secondary" onclick="testConnection()">🔌 Test Connection</button>
+                </div>
+            </form>
+        </article>
+        
+        <article>
+            <header><h2>📊 MQTT Statistics</h2></header>
+            <div class="stats">
+                <div class="stat-box">
+                    <div class="stat-label">Status</div>
+                    <div class="stat-value" id="mqttStatus">-</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Published</div>
+                    <div class="stat-value" id="mqttPublishes">0</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Failed</div>
+                    <div class="stat-value" id="mqttFailures">0</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Reconnects</div>
+                    <div class="stat-value" id="mqttReconnects">0</div>
+                </div>
+            </div>
+        </article>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const script = document.createElement('script');
+            script.src = '/mqtt.js';
+            script.defer = true;
+            document.body.appendChild(script);
+        });
+    </script>
+</body>
+</html>

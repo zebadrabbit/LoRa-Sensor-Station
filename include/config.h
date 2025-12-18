@@ -31,7 +31,7 @@
 // ============================================================================
 // LORA PARAMETERS
 // ============================================================================
-#define RF_FREQUENCY                868000000   // Hz (adjust for your region: 433, 868, 915 MHz)
+#define RF_FREQUENCY                915000000   // Hz (default 915.0 MHz for US915)
 #define TX_OUTPUT_POWER             14          // dBm
 #define LORA_BANDWIDTH              125000      // Hz (125000, 250000, or 500000)
 #define LORA_SPREADING_FACTOR       10          // [SF7..SF12] - SF10 needed for 200-byte packets

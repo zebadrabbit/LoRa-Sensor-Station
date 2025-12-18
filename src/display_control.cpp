@@ -3,11 +3,13 @@
 #include "statistics.h"
 #include "config_storage.h"
 #include "security.h"
+#include "time_status.h"
 #include <Wire.h>
 #include <WiFi.h>
 #include "HT_SSD1306Wire.h"
 #include <qrcode.h>
 #include <Preferences.h>
+#include <time.h>
 
 static SSD1306Wire display(0x3c, 500000, SDA_OLED, SCL_OLED, GEOMETRY_128_64, RST_OLED);
 static bool displayOn = true;
@@ -25,9 +27,9 @@ static bool factoryResetTriggered = false;
 static bool immediatePingRequested = false;
 
 #ifdef BASE_STATION
-  #define NUM_PAGES 7  // Welcome, Status, Active Sensors, Statistics, LoRa Config, Battery, WiFi Info
+  #define NUM_PAGES 8  // + Time & NTP
 #else
-  #define NUM_PAGES 5  // Welcome, Client Status, Statistics, Battery, LoRa Info
+  #define NUM_PAGES 6  // + Time & Sync
 #endif
 
 void initDisplay() {
@@ -316,6 +318,7 @@ void drawWifiStatus(bool connected, int x, int y) {
 }
 
 // Base station display pages
+#ifdef BASE_STATION
 void displayBaseStationPage() {
   if (!displayOn) return;
   
@@ -522,15 +525,73 @@ void displayBaseStationPage() {
         drawWifiStatus(false, 110, 38);
       }
       
-      display.drawString(110, 54, "7/7");
+      display.drawString(110, 54, "7/8");
+      break;
+    }
+
+    case 7: {
+      // TIME & NTP page
+      display.setFont(ArialMT_Plain_10);
+      display.setColor(WHITE);
+      display.fillRect(0, 0, 128, 11);
+      display.setColor(BLACK);
+      display.drawString(0, 0, "TIME & NTP");
+      display.setColor(WHITE);
+
+      // Current local time
+      time_t now = time(nullptr);
+      if (now > 1000) {
+        struct tm tmnow;
+        localtime_r(&now, &tmnow);
+        char buf1[20];
+        strftime(buf1, sizeof(buf1), "%H:%M:%S", &tmnow);
+        char buf2[20];
+        strftime(buf2, sizeof(buf2), "%Y-%m-%d", &tmnow);
+        display.drawString(0, 12, String("Now: ") + buf1);
+        display.drawString(0, 24, String("Date: ") + buf2);
+      } else {
+        display.drawString(0, 12, "Now: --:--:--");
+      }
+
+      NTPConfig cfg = configStorage.getNTPConfig();
+      String ntpLine = String("NTP: ") + (cfg.enabled ? "ON" : "OFF");
+      if (cfg.enabled) {
+        String server = String(cfg.server);
+        if (server.length() > 10) server = server.substring(0, 10) + "...";
+        ntpLine += String(" ") + server;
+      }
+      display.drawString(0, 36, ntpLine);
+
+      // Last syncs
+      time_t lastNtp = getLastNtpSyncEpoch();
+      uint32_t lastBc = getLastTimeBroadcastMs();
+      String line = "Sync: ";
+      if (lastNtp > 0) {
+        uint32_t ago = (uint32_t)difftime(time(nullptr), lastNtp);
+        line += String(ago/60) + "m";
+      } else {
+        line += "--";
+      }
+      line += " / BC: ";
+      if (lastBc > 0) {
+        uint32_t agoMs = millis() - lastBc;
+        line += String((agoMs/1000)/60) + "m";
+      } else {
+        line += "--";
+      }
+      display.drawString(0, 48, line);
+
+      display.drawString(110, 54, "8/8");
       break;
     }
   }
   
   display.display();
 }
+#endif // BASE_STATION
 
 // Sensor display pages
+#ifdef SENSOR_NODE
 void displaySensorPage() {
   if (!displayOn) return;
   
@@ -667,10 +728,47 @@ void displaySensorPage() {
       // Display TX power
       display.drawString(0, 48, "Power: " + String(txPower) + " dBm");
       
-      display.drawString(110, 54, "5/5");
+      display.drawString(110, 54, "5/6");
+      break;
+    }
+
+    case 5: {
+      // Sensor TIME & SYNC page
+      display.setFont(ArialMT_Plain_10);
+      display.setColor(WHITE);
+      display.fillRect(0, 0, 128, 11);
+      display.setColor(BLACK);
+      display.drawString(0, 0, "TIME SYNC");
+      display.setColor(WHITE);
+
+      time_t now = time(nullptr);
+      if (now > 1000) {
+        struct tm tmnow;
+        localtime_r(&now, &tmnow);
+        char buf1[20];
+        strftime(buf1, sizeof(buf1), "%H:%M:%S", &tmnow);
+        char buf2[20];
+        strftime(buf2, sizeof(buf2), "%Y-%m-%d", &tmnow);
+        display.drawString(0, 14, String("Now: ") + buf1);
+        display.drawString(0, 26, String("Date: ") + buf2);
+      } else {
+        display.drawString(0, 14, "Now: --:--:--");
+      }
+
+      uint32_t lastEpoch = getSensorLastTimeSyncEpoch();
+      if (lastEpoch > 0) {
+        time_t te = (time_t)lastEpoch;
+        uint32_t ago = (uint32_t)difftime(time(nullptr), te);
+        display.drawString(0, 40, String("Last Sync: ") + String(ago/60) + "m ago");
+      } else {
+        display.drawString(0, 40, "Last Sync: --");
+      }
+
+      display.drawString(110, 54, "6/6");
       break;
     }
   }
   
   display.display();
 }
+#endif // SENSOR_NODE

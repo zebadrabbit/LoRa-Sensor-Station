@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Time & NTP</title>
+  <link rel="stylesheet" href="/pico-custom.css">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>⏱️ Time & NTP</h1>
+      <p>Configure base station NTP sync and broadcast to nodes</p>
+    </div>
+    
+    <!-- Navigation Menu -->
+    <div class="nav-menu">
+      <a href="/" class="nav-btn">📊 Dashboard</a>
+      <a href="/alerts" class="nav-btn">🔔 Alerts</a>
+      <a href="/mqtt" class="nav-btn">📡 MQTT</a>
+      <a href="/time" class="nav-btn active">⏱️ Time</a>
+      <a href="/security" class="nav-btn">🔒 Security</a>
+      <a href="/lora-settings" class="nav-btn">📻 LoRa Settings</a>
+    </div>
+
+    <article>
+      <h2>⚙️ NTP Settings</h2>
+      <div class="form-group">
+        <div class="checkbox-group">
+          <input id="ntp-enabled" type="checkbox">
+          <label for="ntp-enabled">Enable NTP Sync</label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="ntp-server">NTP Server</label>
+        <input id="ntp-server" type="text" placeholder="pool.ntp.org">
+      </div>
+      <div class="form-group">
+        <label for="ntp-interval">Broadcast Interval (seconds)</label>
+        <input id="ntp-interval" type="number" min="60" value="3600">
+        <div class="help-text">How often to broadcast time to sensors (minimum 60 seconds)</div>
+      </div>
+      <div class="form-group">
+        <label for="tz-offset">Timezone Offset (minutes)</label>
+        <input id="tz-offset" type="number" value="0">
+        <div class="help-text">Positive east of UTC, negative west (e.g., -300 for EST, 60 for CET)</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:15px;">
+        <button id="btn-browser" class="btn secondary">Use Browser Time Zone</button>
+        <button id="btn-save" class="btn">💾 Save</button>
+        <span id="save-status" class="muted"></span>
+      </div>
+    </article>
+
+    <article>
+
+      <h2>📡 Sync Now</h2>
+      <div class="form-group">
+        <label for="ts-sensor">Sensor ID (leave blank for all sensors)</label>
+        <input id="ts-sensor" type="number" min="1" max="255" placeholder="Optional - specific sensor ID">
+        <div class="help-text">Send time sync command to a specific sensor or leave blank to sync all sensors</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:15px;">
+        <button id="btn-sync" class="btn">🔄 Sync Time Now</button>
+        <span id="sync-status" class="muted"></span>
+      </div>
+    </article>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const script = document.createElement('script');
+      script.src = '/time.js';
+      script.defer = true;
+      document.body.appendChild(script);
+    });
+  </script>
+</body>
+</html>

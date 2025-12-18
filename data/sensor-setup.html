@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sensor Configuration</title>
+    <link rel="stylesheet" href="/pico-custom.css">
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body class="gradient-bg">
+    <div class="container">
+        <h1>Client Configuration</h1>
+        <form action="/sensor" method="POST">
+            <div class="form-group">
+                <label for="sensorId">Client ID (1-255)</label>
+                <input type="number" id="sensorId" name="sensorId" min="1" max="255" required>
+                <p class="help-text">Unique identifier for this client device</p>
+            </div>
+            
+            <div class="form-group">
+                <label for="location">Location / Name</label>
+                <input type="text" id="location" name="location" maxlength="31" placeholder="e.g., Living Room, Garage" required>
+                <p class="help-text">Descriptive name for the client location</p>
+            </div>
+            
+            <div class="form-group">
+                <label for="zone">Zone / Area (Optional)</label>
+                <input type="text" id="zone" name="zone" maxlength="15" placeholder="e.g., Outdoor, Garage, Bedroom">
+                <p class="help-text">Group sensors by physical area or zone for filtering on dashboard</p>
+            </div>
+            
+            <div class="form-group">
+                <label for="priority">Sensor Priority</label>
+                <select id="priority" name="priority" required>
+                    <option value="0">Low Priority</option>
+                    <option value="1" selected>Medium Priority</option>
+                    <option value="2">High Priority</option>
+                </select>
+                <p class="help-text">Affects alert urgency and polling frequency</p>
+            </div>
+            
+            <div class="form-group">
+                <label for="clientType">Client Type</label>
+                <select id="clientType" name="clientType" required>
+                    <option value="0" selected>Standard (AC Power + Battery)</option>
+                    <option value="1">Rugged (Solar + Battery Outdoor)</option>
+                    <option value="2">Deep Sleep (Ultra Low Power)</option>
+                </select>
+                <p class="help-text">
+                    <strong>Standard:</strong> AC power with battery backup, normal operation<br>
+                    <strong>Rugged:</strong> Solar-powered outdoor sensor with weather-resistant battery<br>
+                    <strong>Deep Sleep:</strong> Battery-only with deep sleep mode for extended battery life
+                </p>
+            </div>
+            
+            <div class="form-group">
+                <label for="networkId">Network ID (1-65535)</label>
+                <input type="number" id="networkId" name="networkId" min="1" max="65535" value="12345" required>
+                <p class="help-text">🔒 All devices in the same network must use the same Network ID</p>
+            </div>
+            
+            <div class="form-group">
+                <label for="interval">Transmission Interval</label>
+                <select id="interval" name="interval" required>
+                    <option value="15">Every 15 seconds</option>
+                    <option value="30" selected>Every 30 seconds</option>
+                    <option value="60">Every 60 seconds</option>
+                    <option value="300">Every 5 minutes</option>
+                </select>
+                <p class="help-text">How often to send data to base station</p>
+            </div>
+
+            <h2 style="margin: 20px 0 10px; font-size: 18px;">LoRa Radio Settings</h2>
+            <div class="form-group">
+                <label for="region">Region</label>
+                <select id="region" name="region" required>
+                    <option value="US915" selected>US915</option>
+                    <option value="EU868">EU868</option>
+                </select>
+                <p class="help-text">Used to compute frequency from channel. Override with custom frequency if needed.</p>
+            </div>
+            <div class="form-group">
+                <label for="channel">Channel</label>
+                <input type="number" id="channel" name="channel" min="0" max="63" value="8" required>
+                <p class="help-text">US915: 0-63 (902.3 MHz + 200 kHz × ch). EU868: 0-7 (868.1 MHz + 200 kHz × ch).</p>
+            </div>
+            <div class="form-group">
+                <label for="freqMHz">Custom Frequency (MHz, optional)</label>
+                <input type="text" id="freqMHz" name="freqMHz" placeholder="e.g., 915.0">
+                <p class="help-text">If provided, overrides region/channel. Example: 915.0</p>
+            </div>
+            <div class="form-group">
+                <label for="bandwidthKHz">Bandwidth</label>
+                <select id="bandwidthKHz" name="bandwidthKHz" required>
+                    <option value="125" selected>125 kHz</option>
+                    <option value="250">250 kHz</option>
+                    <option value="500">500 kHz</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="sf">Spreading Factor</label>
+                <select id="sf" name="sf" required>
+                    <option value="7">SF7</option>
+                    <option value="8">SF8</option>
+                    <option value="9" selected>SF9</option>
+                    <option value="10">SF10</option>
+                    <option value="11">SF11</option>
+                    <option value="12">SF12</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="codingRate">Coding Rate</label>
+                <select id="codingRate" name="codingRate" required>
+                    <option value="1" selected>4/5</option>
+                    <option value="2">4/6</option>
+                    <option value="3">4/7</option>
+                    <option value="4">4/8</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Quick Fill from Base Station</label>
+                <div style="display:flex;gap:8px;">
+                    <input type="text" id="baseUrl" placeholder="http://192.168.x.x" style="flex:1;">
+                    <button type="button" class="btn" onclick="fillFromBase()" style="flex:0 0 auto;">Use Base Settings</button>
+                </div>
+                <p class="help-text">Fetches LoRa settings from base at /api/lora/config and fills fields.</p>
+            </div>
+            <div class="form-group">
+                <label for="txPower">TX Power (dBm)</label>
+                <input type="number" id="txPower" name="txPower" min="2" max="20" value="14" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="encryptionKey">Encryption Key (Optional)</label>
+                <input type="text" id="encryptionKey" name="encryptionKey" maxlength="32" placeholder="32 hex characters (leave empty to disable)" style="font-family: monospace;">
+                <p class="help-text">32-character hex key from base station security settings. Leave empty for no encryption.</p>
+            </div>
+            
+            <button type="submit" class="btn">Save & Reboot</button>
+        </form>
+    </div>
+    <script>
+    async function fillFromBase(){
+        const url = document.getElementById('baseUrl').value.trim();
+        if(!url){ alert('Enter base URL (e.g., http://192.168.8.178)'); return; }
+        try{
+            const resp = await fetch(url + '/api/lora/config');
+            if(!resp.ok){ throw new Error('HTTP '+resp.status); }
+            const cfg = await resp.json();
+            // cfg fields: frequency (Hz), spreadingFactor, bandwidth (kHz), txPower, codingRate
+            document.getElementById('freqMHz').value = (cfg.frequency/1e6).toFixed(3);
+            document.getElementById('sf').value = cfg.spreadingFactor;
+            document.getElementById('bandwidthKHz').value = cfg.bandwidth;
+            document.getElementById('codingRate').value = cfg.codingRate;
+            document.getElementById('txPower').value = cfg.txPower;
+        }catch(e){
+            alert('Failed to fetch base settings: '+e);
+        }
+    }
+    </script>
+</body>
+</html>

@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LoRa Sensor Station Setup</title>
+    <link rel="stylesheet" href="/pico-custom.css">
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body class="gradient-bg">
+    <div class="container">
+        <h1>🎯 LoRa Sensor Station</h1>
+        <p class="subtitle">Choose your device mode</p>
+        
+        <form action="/mode" method="POST">
+            <div class="mode-card">
+                <h3>📡 Sensor Client</h3>
+                <p>Configure as a remote sensor node that transmits temperature and battery data to the base station.</p>
+                <button type="submit" name="mode" value="sensor" class="btn">Configure as Sensor</button>
+            </div>
+            
+            <div class="mode-card">
+                <h3>🏠 Base Station</h3>
+                <p>Configure as the central hub that receives data from all sensors and provides web interface.</p>
+                <button type="submit" name="mode" value="base" class="btn">Configure as Base Station</button>
+            </div>
+        </form>
+        
+        <p class="info">Hold USER button for 10s to reset configuration</p>
+    </div>
+</body>
+</html>

@@ -16,6 +16,7 @@ enum CommandType : uint8_t {
     CMD_RESTART = 0x07,           // Restart device
     CMD_FACTORY_RESET = 0x08,     // Factory reset
     CMD_SET_LORA_PARAMS = 0x09,   // Set LoRa radio parameters (frequency, SF, BW, etc.)
+    CMD_TIME_SYNC = 0x0A,         // Synchronize sensor time (epoch + tz offset)
     CMD_ACK = 0xA0,               // Acknowledgment
     CMD_NACK = 0xA1               // Negative acknowledgment
 };
@@ -126,6 +127,9 @@ namespace CommandBuilder {
     CommandPacket createSetLoRaParams(uint8_t sensorId, uint32_t frequency, 
                                      uint8_t spreadingFactor, uint32_t bandwidth,
                                      uint8_t txPower, uint8_t codingRate);
+    
+    // Create TIME_SYNC command
+    CommandPacket createTimeSync(uint8_t sensorId, uint32_t epochSeconds, int16_t tzOffsetMinutes);
 }
 
 #endif // REMOTE_CONFIG_H

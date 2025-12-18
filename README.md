@@ -1,6 +1,6 @@
 # LoRa Sensor Station
 
-A modular IoT sensor network built on Heltec WiFi LoRa 32 V3 boards with **zero-configuration WiFi captive portal**, enabling remote temperature and battery monitoring with multi-page cycling displays and comprehensive statistics tracking.
+A modular IoT sensor network built on Heltec WiFi LoRa 32 V3 boards with **zero-configuration WiFi captive portal**, enabling remote temperature and battery monitoring with multi-page cycling displays, comprehensive statistics tracking, and **dark mode web interface**.
 
 ## Overview
 
@@ -11,8 +11,13 @@ This project implements a LoRa-based sensor network with:
 - **WiFi Captive Portal**: Easy setup without hardcoded credentials
 - **Dynamic Configuration**: All settings configurable via web interface
 - **Real-time Web Dashboard**: WebSocket-based live monitoring with historical graphs
+- **Dark Mode UI**: Eye-friendly dark theme with muted colors across all pages
+- **Runtime Configuration**: Per-sensor configuration via web interface with LoRa commands
+- **Multi-Sensor Support**: Variable-length packets supporting multiple sensor readings
+- **Mesh Routing**: Multi-hop LoRa communication for extended range
 - **MQTT Publishing**: Home Assistant integration with auto-discovery
 - **Dual-Channel Alerts**: Teams webhooks and email notifications
+- **Time Synchronization**: NTP sync with automatic broadcast to all sensors
 - **Advanced Button Controls**: Multi-click detection with immediate ping functionality
 - **Sensor Health Monitoring**: Automatic timeout detection and alerting
 
@@ -29,16 +34,43 @@ Both devices feature OLED displays with automatic page cycling, inverse headers,
 
 ## Features
 
-### � Web Dashboard & Monitoring (v2.1-v2.8)
+### 🎨 Web Dashboard & Monitoring (v2.1-v2.12)
 
 - **Real-time Dashboard**: Live sensor monitoring at http://[base-station-ip]/
+- **Dark Mode Theme**: Eye-friendly dark grey background with softly muted colors
 - **WebSocket Updates**: Instant data push (no polling delay)
 - **Historical Graphs**: Chart.js visualization for temperature, battery, RSSI trends
+- **Per-Sensor Configuration**: Direct config access via ⚙️ button on each sensor card
+- **Runtime Configuration**: Change sensor location, intervals, and settings via LoRa commands
+- **Live Clock Display**: Current time shown in dashboard header
 - **Data Export**: CSV and JSON download for analysis
 - **Configurable Alerts**: Teams webhooks and email notifications
 - **MQTT Publishing**: Publish to any MQTT broker
 - **Home Assistant Integration**: Auto-discovery with proper device classes
 - **Web-Based Configuration**: All settings accessible via browser
+- **Navigation Menu**: Consistent navigation across all pages (Dashboard, Alerts, MQTT, Time, Security, LoRa Settings)
+
+### 🕐 Time Synchronization (v2.12)
+
+- **NTP Integration**: Automatic time sync on startup
+- **Sensor Time Broadcast**: Base station sends time to all sensors after NTP sync
+- **Timezone Support**: Configurable timezone offset (minutes east/west of UTC)
+- **Broadcast Interval**: Configurable periodic time sync (minimum 60 seconds)
+- **Web Configuration**: Easy setup at http://[base-station-ip]/time
+- **Browser Timezone Detection**: Automatically use browser's timezone
+- **Startup Sync**: Waits up to 30 seconds for NTP before broadcasting to sensors
+- **LoRa Time Commands**: CMD_TIME_SYNC with epoch timestamp and timezone offset
+
+### ⚙️ Runtime Configuration (v2.11)
+
+- **Per-Sensor Pages**: Direct link from dashboard sensor cards
+- **LoRa Configuration Commands**: Send config changes wirelessly
+- **Location Update**: Change sensor location/name via web interface
+- **Interval Adjustment**: Remotely change transmit intervals
+- **Remote Restart**: Trigger sensor restart via LoRa
+- **Config Retrieval**: Query current sensor configuration
+- **Command Queue**: Reliable delivery with retries and acknowledgments
+- **Status Tracking**: Monitor pending commands and completion
 
 ### 📡 MQTT Publishing (v2.8.0)
 
@@ -167,25 +199,49 @@ Both devices feature OLED displays with automatic page cycling, inverse headers,
 ```
 include/
 ├── config.h              # Configuration constants
-├── config_storage.h      # NVS persistent storage
+├── config_storage.h      # NVS persistent storage (includes NTP config)
 ├── wifi_portal.h         # Captive portal web interface
-├── data_types.h          # Data structures and packet format
+├── data_types.h          # Multi-sensor packet format + legacy support
 ├── led_control.h         # WS2812 LED interface
 ├── display_control.h     # OLED display + button control
 ├── sensor_readings.h     # ADC and sensor interfaces
-├── lora_comm.h           # LoRa communication
-└── statistics.h          # Statistics tracking + health monitoring
+├── lora_comm.h           # LoRa communication + mesh routing
+├── statistics.h          # Statistics tracking + health monitoring
+├── remote_config.h       # LoRa configuration command manager
+├── mesh_router.h         # Multi-hop mesh routing
+└── time_status.h         # NTP sync tracking
 
 src/
-├── main.cpp              # Main program with dynamic configuration
-├── config_storage.cpp    # NVS read/write operations
-├── wifi_portal.cpp       # Web server + captive portal logic
-├── data_types.cpp        # Checksum utilities
+├── main.cpp              # Main program with dynamic configuration + time sync
+├── config_storage.cpp    # NVS read/write operations (NTP, sensor, base config)
+├── wifi_portal.cpp       # Web server + API endpoints (time, runtime config)
+├── data_types.cpp        # Checksum utilities + packet validation
 ├── led_control.cpp       # LED control implementation
 ├── display_control.cpp   # Multi-page display + multi-click buttons
 ├── sensor_readings.cpp   # Thermistor and battery reading
-├── lora_comm.cpp         # Radio initialization and callbacks
-└── statistics.cpp        # TX/RX statistics + sensor timeout detection
+├── lora_comm.cpp         # Radio + multi-sensor packet handling + mesh
+├── statistics.cpp        # TX/RX statistics + sensor timeout detection
+├── remote_config.cpp     # Command queue + retry logic + ACK tracking
+├── mesh_router.cpp       # Mesh routing table + hop management
+└── time_status.cpp       # NTP callback + time sync state
+
+data/                      # Web interface files (served via LittleFS)
+├── dashboard.html        # Main dashboard with live updates
+├── dashboard.js          # WebSocket client + Chart.js + clock
+├── alerts.html           # Alert configuration
+├── alerts.js             # Teams + email setup
+├── mqtt.html             # MQTT broker configuration
+├── mqtt.js               # MQTT settings + testing
+├── time.html             # NTP and time sync settings
+├── time.js               # Time configuration + manual sync
+├── security.html         # Security settings
+├── security.js           # Authentication configuration
+├── lora-settings.html    # LoRa radio parameters
+├── lora-settings.js      # LoRa config + reboot orchestration
+├── runtime-config.html   # Per-sensor configuration page
+├── runtime-config.js     # LoRa command sending + status polling
+├── pico-custom.css       # Dark mode theme + form styling
+└── style.css             # Additional styles
 ```
 
 ## Radio Configuration
@@ -199,6 +255,33 @@ src/
 - **Preamble**: 8 symbols
 
 ## Packet Structure
+
+### Multi-Sensor Packet Format (v2.12+)
+
+```c
+struct MultiSensorHeader {
+    uint16_t syncWord;         // 0xABCD
+    uint16_t networkId;        // Network identification
+    uint8_t packetType;        // PACKET_MULTI_SENSOR (0x02)
+    uint8_t sensorId;          // Unique sensor ID
+    uint8_t valueCount;        // Number of sensor readings
+    uint8_t batteryPercent;    // Battery percentage
+    uint8_t powerState;        // Charging state
+    uint8_t lastCommandSeq;    // Last received command sequence
+    uint8_t ackStatus;         // Acknowledgment status
+    char location[32];         // Device location/name
+    char zone[16];             // Zone/group name
+} __attribute__((packed));
+
+struct SensorValuePacket {
+    uint8_t sensorType;        // Type of sensor (TEMP, HUMIDITY, etc.)
+    float value;               // Sensor reading
+} __attribute__((packed));
+
+// Complete packet: [Header][Value1][Value2]...[Checksum]
+```
+
+### Legacy Single-Sensor Format (backward compatible)
 
 ```c
 struct SensorData {
@@ -414,10 +497,13 @@ See [FEATURES.md](FEATURES.md) for detailed roadmap.
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history.
 
-**Current Version**: v2.8.0 (December 2025)
+**Current Version**: v2.12.0 (December 2025)
 
 **Major Releases:**
 
+- v2.12.0: Time synchronization with NTP + Dark mode UI
+- v2.11.0: Runtime configuration via LoRa commands
+- v2.10.0: Multi-sensor packet format + Mesh routing
 - v2.8.0: MQTT Publishing with Home Assistant integration
 - v2.7.0: Historical data graphs with Chart.js
 - v2.6.0: WebSocket live updates
@@ -440,4 +526,4 @@ Created for IoT sensor monitoring applications using Heltec LoRa V3 hardware.
 
 ---
 
-**Last Updated**: December 13, 2025
+**Last Updated**: December 18, 2025

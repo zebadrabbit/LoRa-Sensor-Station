@@ -61,7 +61,13 @@ void MQTTClientManager::begin() {
  */
 void MQTTClientManager::loadConfig() {
     Preferences prefs;
-    prefs.begin("mqtt", true);  // Read-only
+    bool roOK = prefs.begin("mqtt", true);  // Read-only
+    if (!roOK) {
+        // Initialize namespace if missing, then reopen read-only
+        prefs.begin("mqtt", false);
+        prefs.end();
+        prefs.begin("mqtt", true);
+    }
     
     config.enabled = prefs.getBool("enabled", false);
     prefs.getString("broker", config.broker, sizeof(config.broker));

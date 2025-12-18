@@ -16,6 +16,9 @@
 #include "remote_config.h"
 #endif
 #include <Arduino.h>
+#include <sys/time.h>
+#include "time_status.h"
+#include "logger.h"
 
 static RadioEvents_t RadioEvents;
 static bool lora_idle = true;
@@ -64,7 +67,13 @@ void initLoRa() {
   uint8_t codingRate = LORA_CODINGRATE;
   
   Preferences prefs;
-  prefs.begin("lora_params", true);  // Read-only
+  bool roOK = prefs.begin("lora_params", true);  // Read-only
+  if (!roOK) {
+    // Initialize namespace if missing, then reopen read-only
+    prefs.begin("lora_params", false);
+    prefs.end();
+    prefs.begin("lora_params", true);
+  }
   
   // Always check if custom parameters are stored in NVS
   // If frequency is set in NVS (non-zero), use stored parameters
@@ -79,7 +88,7 @@ void initLoRa() {
     
     // Validate bandwidth (must be at least 10000 Hz)
     if (bandwidth < 10000) {
-      Serial.printf("⚠️  Invalid bandwidth detected: %u Hz - using default %u Hz\n", bandwidth, LORA_BANDWIDTH);
+      LOGW("LORA", "Invalid bandwidth: %u Hz; using default %u Hz", bandwidth, LORA_BANDWIDTH);
       bandwidth = LORA_BANDWIDTH;
       
       // Write corrected value back to NVS
@@ -88,24 +97,22 @@ void initLoRa() {
       prefs.putUInt("bandwidth", bandwidth);
       prefs.end();
       prefs.begin("lora_params", true);  // Back to read-only
-      Serial.println("✓ Corrected bandwidth saved to NVS");
+      LOGI("LORA", "Corrected bandwidth saved to NVS");
     }
     
-    Serial.println("\n=== LOADING LORA PARAMETERS FROM NVS ===");
-    Serial.printf("Frequency: %u Hz\n", frequency);
-    Serial.printf("Spreading Factor: SF%d\n", spreadingFactor);
-    Serial.printf("Bandwidth: %u Hz\n", bandwidth);
-    Serial.printf("TX Power: %d dBm\n", txPower);
-    Serial.printf("Coding Rate: %d\n", codingRate);
-    Serial.println("=========================================\n");
+    LOGI("LORA", "LOADING LORA PARAMETERS FROM NVS");
+    LOGI("LORA", "Frequency: %u Hz", frequency);
+    LOGI("LORA", "Spreading Factor: SF%d", spreadingFactor);
+    LOGI("LORA", "Bandwidth: %u Hz", bandwidth);
+    LOGI("LORA", "TX Power: %d dBm", txPower);
+    LOGI("LORA", "Coding Rate: %d", codingRate);
   } else {
-    Serial.println("\n=== USING DEFAULT LORA PARAMETERS ===");
-    Serial.printf("Frequency: %u Hz\n", frequency);
-    Serial.printf("Spreading Factor: SF%d\n", spreadingFactor);
-    Serial.printf("Bandwidth: %u Hz\n", bandwidth);
-    Serial.printf("TX Power: %d dBm\n", txPower);
-    Serial.printf("Coding Rate: %d\n", codingRate);
-    Serial.println("======================================\n");
+    LOGI("LORA", "USING DEFAULT LORA PARAMETERS");
+    LOGI("LORA", "Frequency: %u Hz", frequency);
+    LOGI("LORA", "Spreading Factor: SF%d", spreadingFactor);
+    LOGI("LORA", "Bandwidth: %u Hz", bandwidth);
+    LOGI("LORA", "TX Power: %d dBm", txPower);
+    LOGI("LORA", "Coding Rate: %d", codingRate);
   }
   
   // Check if there's a pending parameter update that needs confirmation
@@ -117,7 +124,7 @@ void initLoRa() {
     prefs.begin("lora_params", false);  // Read-write
     prefs.putBool("pending", false);
     prefs.end();
-    Serial.println("✓ Pending LoRa parameter update applied and confirmed");
+    LOGI("LORA", "Pending LoRa parameter update applied and confirmed");
   }
   
   RadioEvents.TxDone = OnTxDone;
@@ -159,14 +166,14 @@ void initLoRa() {
   );
   
   #ifdef BASE_STATION
-    Serial.println("Base station ready - listening for sensors...");
-    Serial.printf("Frequency: %u Hz\n", frequency);
-    Serial.printf("Bandwidth: %d, SF: %d, CR: %d\n", bwEnum, spreadingFactor, codingRate);
-    Serial.printf("Network ID: %d (Sync Word: 0x%02X)\n", currentNetworkId, syncWord);
-    Serial.printf("Expected packet size: %d bytes\n", sizeof(SensorData));
+    LOGI("LORA", "Base ready; listening for sensors");
+    LOGI("LORA", "Frequency: %u Hz", frequency);
+    LOGI("LORA", "BW: %d, SF: %d, CR: %d", bwEnum, spreadingFactor, codingRate);
+    LOGI("LORA", "Network ID: %d (Sync Word: 0x%02X)", currentNetworkId, syncWord);
+    LOGI("LORA", "Expected packet size: %d bytes", sizeof(SensorData));
   #elif defined(SENSOR_NODE)
-    Serial.println("Sensor node ready - preparing to send data...");
-    Serial.printf("Network ID: %d (Sync Word: 0x%02X)\n", currentNetworkId, syncWord);
+    LOGI("LORA", "Sensor ready; preparing to send");
+    LOGI("LORA", "Network ID: %d (Sync Word: 0x%02X)", currentNetworkId, syncWord);
   #endif
 }
 
@@ -179,7 +186,7 @@ void setLoRaIdle(bool idle) {
 }
 
 void sendSensorData(const SensorData& data) {
-  Serial.println("Transmitting...");
+  LOGI("TX", "Transmitting packet");
   
   recordTxAttempt();
   
@@ -188,7 +195,7 @@ void sendSensorData(const SensorData& data) {
   
   // Check if encryption is enabled
   if (securityManager.isEncryptionEnabled()) {
-    Serial.println("🔐 Encrypting packet...");
+    LOGD("TX", "Encrypting packet...");
     EncryptedPacket encryptedPkt;
     uint16_t encLen = securityManager.encryptPacket(
       (const uint8_t*)&data, 
@@ -199,14 +206,14 @@ void sendSensorData(const SensorData& data) {
     );
     
     if (encLen > 0) {
-      Serial.printf("Encrypted packet size: %d bytes\n", encLen);
+      LOGD("TX", "Encrypted packet size: %d bytes", encLen);
       Radio.Send((uint8_t*)&encryptedPkt, encLen);
     } else {
-      Serial.println("❌ Encryption failed!");
+      LOGE("TX", "Encryption failed");
       return;
     }
   } else {
-    Serial.printf("Packet size: %d bytes (unencrypted)\n", sizeof(SensorData));
+    LOGD("TX", "Packet size: %d bytes (unencrypted)", sizeof(SensorData));
     Radio.Send((uint8_t*)&data, sizeof(SensorData));
   }
   
@@ -216,7 +223,7 @@ void sendSensorData(const SensorData& data) {
 void enterRxMode() {
   if (lora_idle) {
     lora_idle = false;
-    Serial.println("Entering RX mode...");
+    LOGI("RX", "Entering RX mode");
     Radio.Rx(0);
   }
 }
@@ -225,7 +232,7 @@ void enterRxMode() {
 // RADIO CALLBACKS
 // ============================================================================
 void OnTxDone() {
-  Serial.println("TX Done - Packet sent successfully!");
+  LOGI("TX", "TX Done - Packet sent successfully");
   recordTxSuccess();
   #ifdef SENSOR_NODE
     blinkLED(getColorBlue(), 2, 100);
@@ -236,7 +243,7 @@ void OnTxDone() {
     // Use Standby to properly reset radio state after TX
     Radio.Standby();
     delay(100);
-    Serial.println("Back to RX mode, listening for commands...");
+    LOGD("RX", "Back to RX mode, listening for commands");
     Radio.Rx(0);
     lora_idle = true;  // Ready to receive
   #else
@@ -249,26 +256,21 @@ void OnTxDone() {
 void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr) {
   // Check for null payload first
   if (payload == nullptr) {
-    Serial.println("ERROR: OnRxDone called with null payload!");
+    LOGE("RX", "OnRxDone called with null payload");
     return;
   }
   
   // Ignore 0-byte packets (CRC errors or sync word mismatches)
   if (size == 0) {
-    Serial.println("RX: Received 0 bytes (CRC error or sync mismatch) - ignoring");
+    LOGW("RX", "Received 0 bytes (CRC error or sync mismatch) - ignoring");
     return;
   }
   
   #ifdef BASE_STATION
-    Serial.printf("RX: Received %d bytes, RSSI: %d, SNR: %d\n", size, rssi, snr);
-    Serial.printf("Expected legacy size: %d bytes\n", sizeof(SensorData));
+    LOGI("RX", "Received %d bytes, RSSI: %d, SNR: %d", size, rssi, snr);
+    LOGD("RX", "Expected legacy size: %d bytes", sizeof(SensorData));
   #elif defined(SENSOR_NODE)
-    Serial.printf("RX: Received %d bytes, RSSI: %d, SNR: %d\n", size, rssi, snr);
-    Serial.print("DEBUG: First 20 bytes: ");
-    for (int i = 0; i < min(20, (int)size); i++) {
-      Serial.printf("%02X ", payload[i]);
-    }
-    Serial.println();
+    LOGI("RX", "Received %d bytes, RSSI: %d, SNR: %d", size, rssi, snr);
   #endif
   
   #ifdef BASE_STATION
@@ -278,13 +280,13 @@ void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr) {
     
     // Only check for mesh packets if mesh is enabled
     BaseStationConfig baseConfig = configStorage.getBaseStationConfig();
-    Serial.printf("Mesh enabled: %s\n", baseConfig.meshEnabled ? "YES" : "NO");
+    LOGD("MESH", "Mesh enabled: %s", baseConfig.meshEnabled ? "YES" : "NO");
     
     // Check if it's a mesh packet (first byte is MeshPacketType enum)
     if (baseConfig.meshEnabled && size >= sizeof(MeshHeader)) {
       MeshHeader* meshHdr = (MeshHeader*)payload;
       if (meshHdr->packetType >= MESH_DATA && meshHdr->packetType <= MESH_NEIGHBOR_BEACON) {
-        Serial.println("Mesh packet detected, processing...");
+        LOGI("MESH", "Mesh packet detected, processing");
         meshRouter.processReceivedPacket(payload, size, rssi);
         
         // If it's a data packet for us, extract and process the payload
@@ -366,6 +368,11 @@ void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr) {
               legacyData.batteryVoltage = 0.0f;
               legacyData.batteryPercent = received.header.batteryPercent;
               legacyData.powerState = received.header.powerState;
+              // Copy location and zone from packet header
+              strncpy(legacyData.location, received.header.location, sizeof(legacyData.location) - 1);
+              legacyData.location[sizeof(legacyData.location) - 1] = '\0';
+              strncpy(legacyData.zone, received.header.zone, sizeof(legacyData.zone) - 1);
+              legacyData.zone[sizeof(legacyData.zone) - 1] = '\0';
               
               for (int i = 0; i < received.header.valueCount; i++) {
                 if (received.values[i].type == VALUE_TEMPERATURE) {
@@ -639,6 +646,11 @@ void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr) {
         legacyData.batteryPercent = received.header.batteryPercent;
         legacyData.powerState = received.header.powerState;
         legacyData.temperature = -127.0f;  // Initialize to invalid/no reading
+        // Copy location and zone from packet header
+        strncpy(legacyData.location, received.header.location, sizeof(legacyData.location) - 1);
+        legacyData.location[sizeof(legacyData.location) - 1] = '\0';
+        strncpy(legacyData.zone, received.header.zone, sizeof(legacyData.zone) - 1);
+        legacyData.zone[sizeof(legacyData.zone) - 1] = '\0';
         
         // Find temperature value for backward compatibility
         for (int i = 0; i < received.header.valueCount; i++) {
@@ -727,6 +739,9 @@ void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr) {
           remoteConfigManager.handleAck(received.header.sensorId, received.header.lastCommandSeq, 
                                        received.header.ackStatus);
           
+          // Diagnostics hook: record observed ACK with link stats
+          wifiPortal.diagnosticsRecordAck(received.header.sensorId, received.header.lastCommandSeq, rssi, snr);
+          
           if (received.header.ackStatus == 0) {
             Serial.println("Command executed successfully!");
             
@@ -787,6 +802,35 @@ void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr) {
           bool success = false;
           
           switch (cmd->commandType) {
+            case CMD_PING: {
+              // Simple ping: ACK via immediate telemetry
+              Serial.println("Ping command received - responding with ACK telemetry");
+              success = true;
+              break;
+            }
+            
+            case CMD_TIME_SYNC: {
+              if (cmd->dataLength >= 6) {
+                uint32_t epochSec;
+                int16_t tzOffsetMin;
+                memcpy(&epochSec, &cmd->data[0], sizeof(uint32_t));
+                memcpy(&tzOffsetMin, &cmd->data[4], sizeof(int16_t));
+                Serial.printf("Time sync received: epoch=%lu, tzOffset=%d min\n", (unsigned long)epochSec, (int)tzOffsetMin);
+                
+                // Apply system time
+                struct timeval tv;
+                tv.tv_sec = epochSec;
+                tv.tv_usec = 0;
+                settimeofday(&tv, NULL);
+                #ifdef SENSOR_NODE
+                setSensorLastTimeSyncEpoch(epochSec);
+                #endif
+                
+                success = true;
+                Serial.println("System time updated via LoRa time sync");
+              }
+              break;
+            }
             case CMD_SET_INTERVAL: {
               if (cmd->dataLength == 2) {
                 uint16_t interval = cmd->data[0] | (cmd->data[1] << 8);
@@ -1026,6 +1070,9 @@ void sendCommandNow(uint8_t sensorId) {
   
   // Put radio in Standby if it's in RX mode
   Radio.Standby();
+  
+  // Diagnostics hook: record command send for link testing
+  wifiPortal.diagnosticsRecordSent(sensorId, cmd->sequenceNumber);
   
   Radio.Send((uint8_t*)cmd, cmdSize);
   lora_idle = false;

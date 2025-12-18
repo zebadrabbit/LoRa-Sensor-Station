@@ -105,6 +105,7 @@ void updateClientInfo(uint8_t clientId, uint8_t batteryPercent, bool powerState,
     client->packetsReceived++;
     client->lastBatteryPercent = batteryPercent;
     client->powerState = powerState;
+    // Keep lastTimeSyncMs intact; only updated via recordClientTimeSync
     
     // Store client telemetry history
     uint8_t idx = client->history.index;
@@ -336,6 +337,12 @@ void updateSensorInfo(const SensorData& data, int16_t rssi, int8_t snr) {
   if (client != NULL) {
     client->sensorId = data.sensorId;  // Populate legacy alias
     client->lastTemperature = data.temperature;  // Populate legacy field
+    
+    // Store location and zone from packet
+    strncpy(client->location, data.location, sizeof(client->location) - 1);
+    client->location[sizeof(client->location) - 1] = '\0';
+    strncpy(client->zone, data.zone, sizeof(client->zone) - 1);
+    client->zone[sizeof(client->zone) - 1] = '\0';
   }
   
   // Update health score tracking
@@ -357,4 +364,33 @@ void updateSensorInfo(const SensorData& data, int16_t rssi, int8_t snr) {
 
 SystemStats* getStats() {
   return &stats;
+}
+
+// ============================================================================
+// TIME SYNC TRACKING (BASE)
+// ============================================================================
+
+void recordClientTimeSync(uint8_t clientId) {
+  ClientInfo* c = getClientInfo(clientId);
+  if (c != NULL) {
+    c->lastTimeSyncMs = millis();
+  }
+}
+
+uint8_t countClientsWithTimeSync() {
+  uint8_t n = 0;
+  for (int i = 0; i < MAX_CLIENTS; i++) {
+    if (clients[i].active && clients[i].lastTimeSyncMs > 0) n++;
+  }
+  return n;
+}
+
+uint32_t getMostRecentClientTimeSyncMs() {
+  uint32_t latest = 0;
+  for (int i = 0; i < MAX_CLIENTS; i++) {
+    if (clients[i].active && clients[i].lastTimeSyncMs > latest) {
+      latest = clients[i].lastTimeSyncMs;
+    }
+  }
+  return latest;
 }

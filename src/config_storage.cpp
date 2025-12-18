@@ -21,7 +21,14 @@ void ConfigStorage::setDeviceMode(DeviceMode mode) {
 SensorConfig ConfigStorage::getSensorConfig() {
     SensorConfig config;
     config.sensorId = prefs.getUChar("sensor_id", 0);
-    prefs.getString("sensor_loc", config.location, sizeof(config.location));
+    
+    // Initialize location with default if not set
+    if (prefs.isKey("sensor_loc")) {
+        prefs.getString("sensor_loc", config.location, sizeof(config.location));
+    } else {
+        snprintf(config.location, sizeof(config.location), "Sensor %d", config.sensorId);
+    }
+    
     // Zone is managed by base station, only read if key exists to avoid error spam
     if (prefs.isKey("sensor_zone")) {
         prefs.getString("sensor_zone", config.zone, sizeof(config.zone));
@@ -73,4 +80,30 @@ void ConfigStorage::clearAll() {
 
 bool ConfigStorage::isFirstBoot() {
     return (getDeviceMode() == MODE_UNCONFIGURED);
+}
+
+NTPConfig ConfigStorage::getNTPConfig() {
+    NTPConfig cfg;
+    cfg.enabled = prefs.getBool("ntp_en", true);
+    
+    // Check if key exists to avoid error spam in logs
+    if (prefs.isKey("ntp_srv")) {
+        String srv = prefs.getString("ntp_srv", "pool.ntp.org");
+        srv.toCharArray(cfg.server, sizeof(cfg.server));
+    } else {
+        // Default NTP server
+        strncpy(cfg.server, "pool.ntp.org", sizeof(cfg.server) - 1);
+        cfg.server[sizeof(cfg.server) - 1] = '\0';
+    }
+    
+    cfg.intervalSec = prefs.getUInt("ntp_int", 3600); // default 1 hour
+    cfg.tzOffsetMinutes = (int16_t)prefs.getShort("tz_offset", 0);
+    return cfg;
+}
+
+void ConfigStorage::setNTPConfig(const NTPConfig& cfg) {
+    prefs.putBool("ntp_en", cfg.enabled);
+    prefs.putString("ntp_srv", cfg.server);
+    prefs.putUInt("ntp_int", cfg.intervalSec);
+    prefs.putShort("tz_offset", cfg.tzOffsetMinutes);
 }

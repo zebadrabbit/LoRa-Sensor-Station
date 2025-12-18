@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LoRa Diagnostics</title>
+  <link rel="stylesheet" href="/pico-custom.css">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🔎 LoRa Diagnostics</h1>
+      <p>Run link tests and sync time across nodes</p>
+      <a href="/" class="btn secondary">← Back to Dashboard</a>
+    </header>
+
+    <article>
+      <header><h2>📡 Link Test</h2></header>
+      <div class="row">
+        <div>
+          <label>Sensor ID</label>
+          <input id="lt-sensor" type="number" min="1" max="255" value="1">
+        </div>
+        <div>
+          <label>Count</label>
+          <input id="lt-count" type="number" min="1" max="500" value="20">
+        </div>
+        <div>
+          <label>Interval (ms)</label>
+          <input id="lt-interval" type="number" min="50" max="10000" value="1000">
+        </div>
+        <div style="align-self:flex-end">
+          <button id="lt-start" class="btn">Start Test</button>
+        </div>
+      </div>
+      <div id="lt-status" style="margin-top:12px"></div>
+      <table style="margin-top:12px">
+        <thead>
+          <tr><th>Seq</th><th>Latency (ms)</th><th>RSSI</th><th>SNR</th><th>Status</th></tr>
+        </thead>
+        <tbody id="lt-table"></tbody>
+      </table>
+    </article>
+
+    <article>
+      <header><h2>⏱️ Time Sync</h2></header>
+      <div class="row">
+        <div>
+          <label>Sensor ID (blank = all)</label>
+          <input id="ts-sensor" type="number" min="1" max="255">
+        </div>
+        <div>
+          <label>Timezone Offset (min)</label>
+          <input id="ts-offset" type="number" value="0">
+          <p class="muted">Tip: positive = east of UTC, negative = west</p>
+        </div>
+        <div style="align-self:flex-end; display:flex; gap:8px;">
+          <button id="ts-browser" class="btn secondary" title="Use your browser's time zone">Use Browser Time Zone</button>
+          <button id="ts-sync" class="btn">Sync Time</button>
+        </div>
+      </div>
+      <div class="muted" id="ts-browser-note" style="margin-top:6px"></div>
+      <div id="ts-status" style="margin-top:12px"></div>
+    </article>
+  </div>
+
+<script>
+let ltTimer = null;
+function startLinkTest() {
+  const sensorId = parseInt(document.getElementById('lt-sensor').value, 10);
+  const count = parseInt(document.getElementById('lt-count').value, 10);
+  const intervalMs = parseInt(document.getElementById('lt-interval').value, 10);
+  fetch('/api/diagnostics/link-test', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sensorId, count, intervalMs })
+  }).then(r => r.json()).then(resp => {
+    document.getElementById('lt-status').textContent = resp.message || (resp.success ? 'Started' : 'Failed');
+    if (resp.success) {
+      if (ltTimer) clearInterval(ltTimer);
+      ltTimer = setInterval(refreshLinkStatus, 500);
+    }
+  }).catch(e => {
+    document.getElementById('lt-status').textContent = 'Error: ' + e;
+  });
+}
+
+function refreshLinkStatus() {
+  fetch('/api/diagnostics/status').then(r => r.json()).then(s => {
+    const status = `Active: ${s.active} | Sent: ${s.sent}/${s.total} | Received: ${s.received} | Lost: ${s.lost} | Avg Latency: ${s.avgLatencyMs?.toFixed?.(1) || 0} ms | RSSI: ${s.minRssi}…${s.maxRssi} | SNR: ${s.minSnr}…${s.maxSnr}`;
+    document.getElementById('lt-status').textContent = status;
+    const rows = s.results.map(e => `<tr><td>${e.seq}</td><td>${e.latencyMs}</td><td>${e.rssi}</td><td>${e.snr}</td><td>${e.success ? 'OK' : 'FAIL'}</td></tr>`).join('');
+    document.getElementById('lt-table').innerHTML = rows;
+    if (!s.active) {
+      if (ltTimer) clearInterval(ltTimer);
+      ltTimer = null;
+    }
+  });
+}
+
+function syncTime() {
+  const sensorIdStr = document.getElementById('ts-sensor').value.trim();
+  const tzOffsetMinutes = parseInt(document.getElementById('ts-offset').value, 10) || 0;
+  const body = sensorIdStr ? { sensorId: parseInt(sensorIdStr, 10), tzOffsetMinutes } : { all: true, tzOffsetMinutes };
+  fetch('/api/time/sync', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  }).then(r => r.json()).then(resp => {
+    document.getElementById('ts-status').textContent = resp.success ? `Sent ${resp.commandsSent} time sync commands` : 'Failed to send';
+  }).catch(e => {
+    document.getElementById('ts-status').textContent = 'Error: ' + e;
+  });
+}
+
+function useBrowserTz() {
+  const minutesWest = new Date().getTimezoneOffset();
+  const minutesEast = -minutesWest; // minutes east of UTC
+  document.getElementById('ts-offset').value = minutesEast;
+  const sign = minutesEast >= 0 ? '+' : '-';
+  const abs = Math.abs(minutesEast);
+  const hh = String(Math.floor(abs / 60)).padStart(2, '0');
+  const mm = String(abs % 60).padStart(2, '0');
+  document.getElementById('ts-browser-note').textContent = `Detected browser TZ offset: UTC${sign}${hh}:${mm} (${minutesEast} min)`;
+}
+
+document.getElementById('lt-start').addEventListener('click', startLinkTest);
+document.getElementById('ts-sync').addEventListener('click', syncTime);
+document.getElementById('ts-browser').addEventListener('click', function(e){ e.preventDefault(); useBrowserTz(); });
+</script>
+</body>
+</html>

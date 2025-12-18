@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuration Saved</title>
+    <link rel="stylesheet" href="/pico-custom.css">
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body class="gradient-bg">
+    <div class="container">
+        <div class="success-icon">✓</div>
+        <h1>Setup Complete!</h1>
+        <p id="message"></p>
+        <div class="countdown" id="countdown">3</div>
+        <p class="status-message" id="status">Device will reboot in <span id="seconds">3</span> seconds...</p>
+    </div>
+    
+    <script>
+        // Get message from URL parameter
+        const urlParams = new URLSearchParams(window.location.search);
+        const message = urlParams.get('message') || 'Configuration saved successfully';
+        document.getElementById('message').textContent = message;
+        
+        let seconds = 3;
+        const countdownEl = document.getElementById('countdown');
+        const statusEl = document.getElementById('status');
+        const secondsEl = document.getElementById('seconds');
+        
+        const interval = setInterval(() => {
+            seconds--;
+            countdownEl.textContent = seconds;
+            secondsEl.textContent = seconds;
+            
+            if (seconds <= 0) {
+                clearInterval(interval);
+                countdownEl.textContent = '🔄';
+                statusEl.textContent = 'Device is rebooting...';
+            }
+        }, 1000);
+    </script>
+</body>
+</html>

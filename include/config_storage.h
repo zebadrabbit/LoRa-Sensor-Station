@@ -48,6 +48,14 @@ struct BaseStationConfig {
     bool configured;
 };
 
+// NTP / Time synchronization configuration
+struct NTPConfig {
+    bool enabled;               // Enable NTP sync on base station
+    char server[64];            // NTP server hostname
+    uint32_t intervalSec;       // Broadcast interval to sensors
+    int16_t tzOffsetMinutes;    // Minutes east of UTC
+};
+
 // Configuration storage class
 class ConfigStorage {
 public:
@@ -67,6 +75,10 @@ public:
     // Base station configuration
     BaseStationConfig getBaseStationConfig();
     void setBaseStationConfig(const BaseStationConfig& config);
+
+    // NTP configuration
+    NTPConfig getNTPConfig();
+    void setNTPConfig(const NTPConfig& cfg);
     
     // Factory reset
     void clearAll();

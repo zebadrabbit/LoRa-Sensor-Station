@@ -3,6 +3,7 @@
 #include "statistics.h"
 #include "alerts.h"
 #include "security.h"
+#include "logger.h"
 #ifdef BASE_STATION
 #include "mqtt_client.h"
 #include "sensor_config.h"
@@ -84,18 +85,46 @@ void WiFiPortal::startPortal() {
     portalActive = true;
 }
 
+// Forward declaration
+void onWebSocketEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len);
+
 void WiFiPortal::setupWebServer() {
-    // Serve main page
-    webServer.on("/", HTTP_GET, [this](AsyncWebServerRequest *request) {
-        request->send(200, "text/html", generateMainPage());
+    // Initialize LittleFS for serving static files
+    if (!LittleFS.begin(true)) {
+        Serial.println("ERROR: LittleFS Mount Failed!");
+        Serial.println("You must upload filesystem with: pio run --target uploadfs");
+    } else {
+        Serial.println("LittleFS mounted successfully");
+        
+        // List files to verify they exist
+        File root = LittleFS.open("/");
+        if (root) {
+            Serial.println("Files in LittleFS:");
+            File file = root.openNextFile();
+            while(file) {
+                Serial.print("  ");
+                Serial.println(file.name());
+                file.close();
+                file = root.openNextFile();
+            }
+            root.close();
+        }
+    }
+    
+    // Serve main page from LittleFS
+    webServer.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+        Serial.println("Request: /");
+        request->send(LittleFS, "/setup.html", "text/html");
     });
     
     // Captive portal detection
-    webServer.on("/generate_204", HTTP_GET, [this](AsyncWebServerRequest *request) {
-        request->send(200, "text/html", generateMainPage());
+    webServer.on("/generate_204", HTTP_GET, [](AsyncWebServerRequest *request) {
+        Serial.println("Request: /generate_204");
+        request->send(LittleFS, "/setup.html", "text/html");
     });
-    webServer.on("/hotspot-detect.html", HTTP_GET, [this](AsyncWebServerRequest *request) {
-        request->send(200, "text/html", generateMainPage());
+    webServer.on("/hotspot-detect.html", HTTP_GET, [](AsyncWebServerRequest *request) {
+        Serial.println("Request: /hotspot-detect.html");
+        request->send(LittleFS, "/setup.html", "text/html");
     });
     
     // Mode selection
@@ -104,8 +133,9 @@ void WiFiPortal::setupWebServer() {
     });
     
     // Sensor configuration page
-    webServer.on("/sensor", HTTP_GET, [this](AsyncWebServerRequest *request) {
-        request->send(200, "text/html", generateSensorConfigPage());
+    webServer.on("/sensor", HTTP_GET, [](AsyncWebServerRequest *request) {
+        Serial.println("Request: /sensor");
+        request->send(LittleFS, "/sensor-setup.html", "text/html");
     });
     
     webServer.on("/sensor", HTTP_POST, [this](AsyncWebServerRequest *request) {
@@ -113,509 +143,27 @@ void WiFiPortal::setupWebServer() {
     });
     
     // Base station configuration page
-    webServer.on("/base", HTTP_GET, [this](AsyncWebServerRequest *request) {
-        request->send(200, "text/html", generateBaseStationConfigPage());
+    webServer.on("/base", HTTP_GET, [](AsyncWebServerRequest *request) {
+        Serial.println("Request: /base");
+        request->send(LittleFS, "/base-setup.html", "text/html");
     });
     
     webServer.on("/base", HTTP_POST, [this](AsyncWebServerRequest *request) {
         handleBaseStationConfig(request);
     });
     
-    // Catch-all for captive portal
-    webServer.onNotFound([this](AsyncWebServerRequest *request) {
-        request->send(200, "text/html", generateMainPage());
+    // Success page
+    webServer.on("/success.html", HTTP_GET, [](AsyncWebServerRequest *request) {
+        Serial.println("Request: /success.html");
+        request->send(LittleFS, "/success.html", "text/html");
     });
-}
-
-String WiFiPortal::generateMainPage() {
-    String html = R"rawliteral(
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LoRa Sensor Station Setup</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-        .container {
-            background: white;
-            border-radius: 20px;
-            padding: 40px;
-            max-width: 500px;
-            width: 100%;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-        }
-        h1 {
-            color: #667eea;
-            text-align: center;
-            margin-bottom: 10px;
-            font-size: 28px;
-        }
-        .subtitle {
-            text-align: center;
-            color: #666;
-            margin-bottom: 30px;
-            font-size: 14px;
-        }
-        .mode-card {
-            border: 2px solid #e0e0e0;
-            border-radius: 12px;
-            padding: 25px;
-            margin-bottom: 20px;
-            cursor: pointer;
-            transition: all 0.3s;
-            background: #f9f9f9;
-        }
-        .mode-card:hover {
-            border-color: #667eea;
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102,126,234,0.2);
-        }
-        .mode-card h3 {
-            color: #333;
-            margin-bottom: 10px;
-            font-size: 20px;
-        }
-        .mode-card p {
-            color: #666;
-            line-height: 1.6;
-            font-size: 14px;
-        }
-        .btn {
-            width: 100%;
-            padding: 15px;
-            border: none;
-            border-radius: 8px;
-            background: #667eea;
-            color: white;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background 0.3s;
-            margin-top: 10px;
-        }
-        .btn:hover {
-            background: #5568d3;
-        }
-        .info {
-            text-align: center;
-            color: #999;
-            font-size: 12px;
-            margin-top: 20px;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>🎯 LoRa Sensor Station</h1>
-        <p class="subtitle">Choose your device mode</p>
-        
-        <form action="/mode" method="POST">
-            <div class="mode-card" onclick="this.querySelector('input').checked=true">
-                <input type="radio" name="mode" value="sensor" style="display:none">
-                <h3>📡 Sensor Client</h3>
-                <p>Configure as a remote sensor node that transmits temperature and battery data to the base station.</p>
-                <button type="submit" class="btn" onclick="this.form.mode.value='sensor'">Configure as Sensor</button>
-            </div>
-            
-            <div class="mode-card" onclick="this.querySelector('input').checked=true">
-                <input type="radio" name="mode" value="base" style="display:none">
-                <h3>🏠 Base Station</h3>
-                <p>Configure as the central hub that receives data from all sensors and provides web interface.</p>
-                <button type="submit" class="btn" onclick="this.form.mode.value='base'">Configure as Base Station</button>
-            </div>
-        </form>
-        
-        <p class="info">Hold USER button for 10s to reset configuration</p>
-    </div>
-</body>
-</html>
-)rawliteral";
-    return html;
-}
-
-String WiFiPortal::generateSensorConfigPage() {
-    String html = R"rawliteral(
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sensor Configuration</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-        .container {
-            background: white;
-            border-radius: 20px;
-            padding: 40px;
-            max-width: 500px;
-            width: 100%;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-        }
-        h1 {
-            color: #667eea;
-            text-align: center;
-            margin-bottom: 30px;
-            font-size: 24px;
-        }
-        .form-group {
-            margin-bottom: 25px;
-        }
-        label {
-            display: block;
-            color: #333;
-            font-weight: 600;
-            margin-bottom: 8px;
-            font-size: 14px;
-        }
-        input, select {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 15px;
-            transition: border-color 0.3s;
-        }
-        input:focus, select:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-        .btn {
-            width: 100%;
-            padding: 15px;
-            border: none;
-            border-radius: 8px;
-            background: #667eea;
-            color: white;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background 0.3s;
-        }
-        .btn:hover {
-            background: #5568d3;
-        }
-        .help-text {
-            color: #999;
-            font-size: 12px;
-            margin-top: 5px;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Client Configuration</h1>
-        <form action="/sensor" method="POST">
-            <div class="form-group">
-                <label for="sensorId">Client ID (1-255)</label>
-                <input type="number" id="sensorId" name="sensorId" min="1" max="255" required>
-                <p class="help-text">Unique identifier for this client device</p>
-            </div>
-            
-            <div class="form-group">
-                <label for="location">Location / Name</label>
-                <input type="text" id="location" name="location" maxlength="31" placeholder="e.g., Living Room, Garage" required>
-                <p class="help-text">Descriptive name for the client location</p>
-            </div>
-            
-            <div class="form-group">
-                <label for="zone">Zone / Area (Optional)</label>
-                <input type="text" id="zone" name="zone" maxlength="15" placeholder="e.g., Outdoor, Garage, Bedroom">
-                <p class="help-text">Group sensors by physical area or zone for filtering on dashboard</p>
-            </div>
-            
-            <div class="form-group">
-                <label for="priority">Sensor Priority</label>
-                <select id="priority" name="priority" required>
-                    <option value="0">Low Priority</option>
-                    <option value="1" selected>Medium Priority</option>
-                    <option value="2">High Priority</option>
-                </select>
-                <p class="help-text">Affects alert urgency and polling frequency</p>
-            </div>
-            
-            <div class="form-group">
-                <label for="clientType">Client Type</label>
-                <select id="clientType" name="clientType" required>
-                    <option value="0" selected>Standard (AC Power + Battery)</option>
-                    <option value="1">Rugged (Solar + Battery Outdoor)</option>
-                    <option value="2">Deep Sleep (Ultra Low Power)</option>
-                </select>
-                <p class="help-text">
-                    <strong>Standard:</strong> AC power with battery backup, normal operation<br>
-                    <strong>Rugged:</strong> Solar-powered outdoor sensor with weather-resistant battery<br>
-                    <strong>Deep Sleep:</strong> Battery-only with deep sleep mode for extended battery life
-                </p>
-            </div>
-            
-            <div class="form-group">
-                <label for="networkId">Network ID (1-65535)</label>
-                <input type="number" id="networkId" name="networkId" min="1" max="65535" value="12345" required>
-                <p class="help-text">🔒 All devices in the same network must use the same Network ID</p>
-            </div>
-            
-            <div class="form-group">
-                <label for="interval">Transmission Interval</label>
-                <select id="interval" name="interval" required>
-                    <option value="15">Every 15 seconds</option>
-                    <option value="30" selected>Every 30 seconds</option>
-                    <option value="60">Every 60 seconds</option>
-                    <option value="300">Every 5 minutes</option>
-                </select>
-                <p class="help-text">How often to send data to base station</p>
-            </div>
-            
-            <div class="form-group">
-                <label for="encryptionKey">Encryption Key (Optional)</label>
-                <input type="text" id="encryptionKey" name="encryptionKey" maxlength="32" placeholder="32 hex characters (leave empty to disable)" style="font-family: monospace;">
-                <p class="help-text">32-character hex key from base station security settings. Leave empty for no encryption.</p>
-            </div>
-            
-            <button type="submit" class="btn">Save & Reboot</button>
-        </form>
-    </div>
-</body>
-</html>
-)rawliteral";
-    return html;
-}
-
-String WiFiPortal::generateBaseStationConfigPage() {
-    // Note: WiFi scanning removed to prevent async_tcp watchdog timeout
-    // Users will manually enter WiFi SSID (can add async scan via JavaScript later)
     
-    String html = R"rawliteral(<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Base Station Configuration</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-        .container {
-            background: white;
-            border-radius: 20px;
-            padding: 40px;
-            max-width: 500px;
-            width: 100%;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-        }
-        h1 {
-            color: #667eea;
-            text-align: center;
-            margin-bottom: 30px;
-            font-size: 24px;
-        }
-        .form-group {
-            margin-bottom: 25px;
-        }
-        label {
-            display: block;
-            color: #333;
-            font-weight: 600;
-            margin-bottom: 8px;
-            font-size: 14px;
-        }
-        input, select {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 15px;
-            transition: border-color 0.3s;
-        }
-        input:focus, select:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-        .btn {
-            width: 100%;
-            padding: 15px;
-            border: none;
-            border-radius: 8px;
-            background: #667eea;
-            color: white;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background 0.3s;
-        }
-        .btn:hover {
-            background: #5568d3;
-        }
-        .help-text {
-            color: #999;
-            font-size: 12px;
-            margin-top: 5px;
-        }
-        .status {
-            text-align: center;
-            padding: 15px;
-            border-radius: 8px;
-            margin-top: 20px;
-            display: none;
-        }
-        .status.testing {
-            background: #fff3cd;
-            color: #856404;
-            display: block;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>🏠 Base Station Configuration</h1>
-        <form action="/base" method="POST" id="wifiForm">
-            <div class="form-group">
-                <label for="ssid">WiFi Network Name (SSID)</label>
-                <input type="text" id="ssid" name="ssid" required placeholder="Enter WiFi network name">
-                <p class="help-text">Enter the exact name of your WiFi network</p>
-            </div>
-            
-            <div class="form-group">
-                <label for="password">WiFi Password</label>
-                <input type="password" id="password" name="password" placeholder="Enter WiFi password">
-                <p class="help-text">Leave empty for open networks</p>
-            </div>
-            
-            <div class="form-group">
-                <label for="networkId">Network ID (1-65535)</label>
-                <input type="number" id="networkId" name="networkId" min="1" max="65535" value="12345" required>
-                <p class="help-text">🔒 Must match all client devices in your network</p>
-            </div>
-            
-            <button type="submit" class="btn">🔌 Connect & Configure</button>
-        </form>
-        
-        <div class="status" id="status">
-            Testing connection...
-        </div>
-    </div>
-    
-    <script>
-        document.getElementById('wifiForm').addEventListener('submit', function() {
-            document.getElementById('status').className = 'status testing';
-        });
-    </script>
-</body>
-</html>
-)rawliteral";
-    return html;
-}
-
-String WiFiPortal::generateSuccessPage(const String& message) {
-    String html = R"rawliteral(
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Configuration Saved</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-        .container {
-            background: white;
-            border-radius: 20px;
-            padding: 40px;
-            max-width: 500px;
-            width: 100%;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            text-align: center;
-        }
-        .success-icon {
-            font-size: 64px;
-            margin-bottom: 20px;
-        }
-        h1 {
-            color: #667eea;
-            margin-bottom: 20px;
-            font-size: 24px;
-        }
-        p {
-            color: #666;
-            line-height: 1.6;
-            margin-bottom: 20px;
-        }
-        .countdown {
-            font-size: 48px;
-            color: #667eea;
-            font-weight: bold;
-            margin-top: 20px;
-        }
-        .status-message {
-            color: #999;
-            font-size: 14px;
-            margin-top: 10px;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="success-icon">�</div>
-        <h1>Setup Complete!</h1>
-        <p>)rawliteral" + message + R"rawliteral(</p>
-        <div class="countdown" id="countdown">3</div>
-        <p class="status-message" id="status">Device will reboot in <span id="seconds">3</span> seconds...</p>
-    </div>
-    
-    <script>
-        let seconds = 3;
-        const countdownEl = document.getElementById('countdown');
-        const statusEl = document.getElementById('status');
-        const secondsEl = document.getElementById('seconds');
-        
-        const interval = setInterval(() => {
-            seconds--;
-            countdownEl.textContent = seconds;
-            secondsEl.textContent = seconds;
-            
-            if (seconds <= 0) {
-                clearInterval(interval);
-                countdownEl.textContent = '🔄';
-                statusEl.textContent = 'Device is rebooting...';
-            }
-        }, 1000);
-    </script>
-</body>
-</html>
-)rawliteral";
-    return html;
+    // Catch-all for captive portal
+    webServer.onNotFound([](AsyncWebServerRequest *request) {
+        Serial.print("Request (404): ");
+        Serial.println(request->url());
+        request->send(LittleFS, "/setup.html", "text/html");
+    });
 }
 
 void WiFiPortal::handleModeSelection(AsyncWebServerRequest *request) {
@@ -721,8 +269,8 @@ void WiFiPortal::handleSensorConfig(AsyncWebServerRequest *request) {
         Serial.printf("  Network ID: %d\n", config.networkId);
         
         // Send success page
-        String message = "Sensor ID " + String(config.sensorId) + " configured.<br>Device will reboot and start transmitting data.";
-        request->send(200, "text/html", generateSuccessPage(message));
+        String message = "Sensor ID " + String(config.sensorId) + " configured. Device will reboot and start transmitting data.";
+        request->redirect("/success.html?message=" + message);
         
         // Schedule reboot
         delay(3000);
@@ -746,29 +294,42 @@ void WiFiPortal::handleBaseStationConfig(AsyncWebServerRequest *request) {
         Serial.printf("  SSID: %s\n", config.ssid);
         Serial.printf("  Network ID: %d\n", config.networkId);
         
-        // Test connection
+        // Test connection with proper verification
+        WiFi.persistent(false);
+        WiFi.setSleep(false);
         WiFi.mode(WIFI_STA);
         WiFi.begin(config.ssid, config.password);
         
-        int attempts = 0;
-        while (WiFi.status() != WL_CONNECTED && attempts < 20) {
-            delay(500);
-            Serial.print(".");
-            attempts++;
+        uint32_t startTime = millis();
+        uint32_t timeout = 10000;  // 10 second timeout
+        bool connected = false;
+        
+        Serial.print("⏳ Waiting for connection");
+        while (millis() - startTime < timeout) {
+            if (isNetworkUsable()) {
+                connected = true;
+                break;
+            }
+            if ((millis() - startTime) % 500 == 0) {
+                Serial.print(".");
+            }
+            delay(100);
         }
         Serial.println();
         
-        if (WiFi.status() == WL_CONNECTED) {
-            Serial.println("WiFi connection successful!");
-            Serial.print("IP Address: ");
+        if (connected) {
+            Serial.println("✅ WiFi connection successful and verified!");
+            Serial.print("   IP Address: ");
             Serial.println(WiFi.localIP());
+            Serial.print("   Gateway: ");
+            Serial.println(WiFi.gatewayIP());
             
             // Save configuration
             configStorage.setBaseStationConfig(config);
             configStorage.setDeviceMode(MODE_BASE_STATION);
             
-            String message = "Successfully connected to " + String(config.ssid) + ".<br>IP Address: " + WiFi.localIP().toString() + "<br>Device will reboot and start base station mode.";
-            request->send(200, "text/html", generateSuccessPage(message));
+            String message = "Successfully connected to " + String(config.ssid) + ". IP Address: " + WiFi.localIP().toString() + ". Device will reboot and start base station mode.";
+            request->redirect("/success.html?message=" + message);
             
             // Schedule reboot
             delay(3000);
@@ -778,38 +339,128 @@ void WiFiPortal::handleBaseStationConfig(AsyncWebServerRequest *request) {
             
             // Return to AP mode
             WiFi.mode(WIFI_AP);
-            String message = "Failed to connect to " + String(config.ssid) + ".<br>Please check password and try again.";
-            request->send(200, "text/html", generateSuccessPage(message));
+            String message = "Failed to connect to " + String(config.ssid) + ". Please check password and try again.";
+            request->redirect("/success.html?message=" + message);
         }
     } else {
         request->send(400, "text/html", "Missing required fields");
     }
 }
 
+// Check if network is truly usable (not just "connected")
+bool WiFiPortal::isNetworkUsable() {
+    // Must be connected with valid status
+    if (WiFi.status() != WL_CONNECTED) {
+        return false;
+    }
+    
+    // Must have valid IP and gateway
+    if (WiFi.localIP() == INADDR_NONE || WiFi.localIP()[0] == 0) {
+        Serial.println("⚠️  No valid IP address");
+        return false;
+    }
+    
+    if (WiFi.gatewayIP() == INADDR_NONE || WiFi.gatewayIP()[0] == 0) {
+        Serial.println("⚠️  No valid gateway");
+        return false;
+    }
+    
+    Serial.printf("✓ IP: %s, Gateway: %s\n", 
+                 WiFi.localIP().toString().c_str(), 
+                 WiFi.gatewayIP().toString().c_str());
+    
+    // Verify we can actually reach the gateway (local network check)
+    Serial.print("🔍 Testing gateway connectivity...");
+    WiFiClient testClient;
+    testClient.setTimeout(300);  // 300ms timeout
+    
+    // Try port 80 first (HTTP), then 443 (HTTPS)
+    bool gatewayReachable = testClient.connect(WiFi.gatewayIP(), 80);
+    if (!gatewayReachable) {
+        gatewayReachable = testClient.connect(WiFi.gatewayIP(), 443);
+    }
+    testClient.stop();
+    
+    if (gatewayReachable) {
+        Serial.println(" ✅ Gateway reachable!");
+        return true;
+    } else {
+        Serial.println(" ❌ Gateway unreachable!");
+        return false;
+    }
+}
+
+// Reset WiFi stack without full ESP restart
+void WiFiPortal::resetWiFiStack() {
+    Serial.println("🔄 Resetting WiFi stack...");
+    
+    // Disconnect and clear all WiFi state
+    WiFi.disconnect(true, true);  // disconnect, erase config
+    delay(100);
+    
+    // Turn off WiFi completely
+    WiFi.mode(WIFI_OFF);
+    delay(200);
+    
+    // Re-enable in station mode
+    WiFi.mode(WIFI_STA);
+    WiFi.setSleep(false);  // Disable sleep for stability
+    delay(50);
+    
+    Serial.println("✓ WiFi stack reset complete");
+}
+
 bool WiFiPortal::connectToWiFi(const char* ssid, const char* password) {
     Serial.printf("Connecting to WiFi: %s\n", ssid);
     
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(ssid, password);
-    
-    int attempts = 0;
-    while (WiFi.status() != WL_CONNECTED && attempts < 40) {
-        delay(500);
-        Serial.print(".");
-        attempts++;
+    // Try up to 3 times with WiFi stack resets between attempts
+    for (int retry = 0; retry < 3; retry++) {
+        if (retry > 0) {
+            Serial.printf("\n🔁 Retry attempt %d/3\n", retry + 1);
+            resetWiFiStack();
+        }
+        
+        // Configure WiFi (persistent=false to avoid flash wear)
+        WiFi.persistent(false);
+        WiFi.setSleep(false);
+        WiFi.mode(WIFI_STA);
+        
+        WiFi.begin(ssid, password);
+        
+        // Wait for connection with GOT_IP verification
+        uint32_t startTime = millis();
+        uint32_t timeout = 10000;  // 10 second timeout
+        
+        Serial.print("⏳ Waiting for connection");
+        while (millis() - startTime < timeout) {
+            // Check if network is truly usable (GOT_IP + gateway reachable)
+            if (isNetworkUsable()) {
+                Serial.println("\n✅ WiFi Connected and Verified!");
+                Serial.printf("   IP: %s\n", WiFi.localIP().toString().c_str());
+                Serial.printf("   Gateway: %s\n", WiFi.gatewayIP().toString().c_str());
+                Serial.printf("   DNS: %s\n", WiFi.dnsIP().toString().c_str());
+                Serial.printf("   RSSI: %d dBm\n", WiFi.RSSI());
+                
+                setLEDColor(0, 255, 0);  // Green for connected
+                return true;
+            }
+            
+            // Print progress dot every 500ms
+            if ((millis() - startTime) % 500 == 0) {
+                Serial.print(".");
+            }
+            
+            delay(100);
+        }
+        
+        Serial.println(" ⏱️  Timeout!");
     }
-    Serial.println();
     
-    if (WiFi.status() == WL_CONNECTED) {
-        Serial.println("WiFi Connected!");
-        Serial.print("IP Address: ");
-        Serial.println(WiFi.localIP());
-        setLEDColor(0, 255, 0);  // Green for connected
-        return true;
-    } else {
-        Serial.println("WiFi Connection Failed!");
-        return false;
-    }
+    // All retries failed
+    Serial.println("\n❌ WiFi Connection Failed after 3 attempts!");
+    Serial.println("💡 Tip: Check SSID/password, router settings, and signal strength");
+    
+    return false;
 }
 
 void WiFiPortal::handleClient() {
@@ -867,18 +518,23 @@ void onWebSocketEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsE
                       void *arg, uint8_t *data, size_t len) {
     switch(type) {
         case WS_EVT_CONNECT:
-            Serial.printf("WebSocket client #%u connected from %s\n", client->id(), client->remoteIP().toString().c_str());
-            // Send initial data to newly connected client
-            client->text(wifiPortal.generateSensorsJSON());
+            Serial.printf("✅ WebSocket client #%u connected from %s (total clients: %d)\n", 
+                         client->id(), client->remoteIP().toString().c_str(), server->count());
             break;
         case WS_EVT_DISCONNECT:
-            Serial.printf("WebSocket client #%u disconnected\n", client->id());
+            Serial.printf("❌ WebSocket client #%u disconnected (remaining: %d)\n", 
+                         client->id(), server->count());
             break;
-        case WS_EVT_DATA:
-            // Handle incoming WebSocket messages if needed
+        case WS_EVT_DATA: {
+            AwsFrameInfo *info = (AwsFrameInfo*)arg;
+            Serial.printf("📨 WebSocket DATA from client #%u: %d bytes\n", client->id(), len);
             break;
+        }
         case WS_EVT_PONG:
+            Serial.printf("🏓 WebSocket PONG from client #%u\n", client->id());
+            break;
         case WS_EVT_ERROR:
+            Serial.printf("⚠️  WebSocket ERROR for client #%u\n", client->id());
             break;
     }
 }
@@ -891,18 +547,20 @@ void WiFiPortal::setupDashboard() {
     }
     Serial.println("LittleFS mounted successfully");
     
-    // Setup WebSocket
+    // Configure WebSocket with proper settings
+    Serial.println("Configuring WebSocket...");
+    
+    // Setup WebSocket event handler
     ws.onEvent(onWebSocketEvent);
+    
+    // Add WebSocket handler to server
     webServer.addHandler(&ws);
-    Serial.println("WebSocket server started at /ws");
+    
+    Serial.printf("WebSocket server configured at /ws (clients: %d)\n", ws.count());
     
     // Handle /dashboard explicitly (redirect to root or serve dashboard.html)
     webServer.on("/dashboard", HTTP_GET, [](AsyncWebServerRequest *request) {
-        if (LittleFS.exists("/dashboard.html")) {
-            request->send(LittleFS, "/dashboard.html", "text/html");
-        } else {
-            request->send(404, "text/plain", "Dashboard not found");
-        }
+        request->send(LittleFS, "/dashboard.html", "text/html");
     });
     
     // API endpoints - MUST be registered BEFORE serveStatic!
@@ -976,40 +634,28 @@ void WiFiPortal::setupDashboard() {
         request->send(200, "application/json", generateSensorsJSON());
     });
     
-    // Alerts configuration page
+    // Configuration pages - explicit routes needed since serveStatic can't handle /alerts -> /alerts.html mapping
+    // Use beginResponse/endResponse for proper connection management
+    // webServer.on("/alerts", HTTP_GET, [](AsyncWebServerRequest *request) {
+    //     AsyncWebServerResponse *response = request->beginResponse(LittleFS, "/alerts.html", "text/html");
+    //     response->addHeader("Connection", "close");
+    //     request->send(response);
+    // });
+
     webServer.on("/alerts", HTTP_GET, [](AsyncWebServerRequest *request) {
-        if (LittleFS.exists("/alerts.html")) {
-            request->send(LittleFS, "/alerts.html", "text/html");
-        } else {
-            request->send(404, "text/plain", "Alerts page not found");
-        }
-    });
+        request->send(LittleFS, "/alerts.html", "text/html");
+    });    
     
-    // Security configuration page
     webServer.on("/security", HTTP_GET, [](AsyncWebServerRequest *request) {
-        if (LittleFS.exists("/security.html")) {
-            request->send(LittleFS, "/security.html", "text/html");
-        } else {
-            request->send(404, "text/plain", "Security page not found");
-        }
+        request->send(LittleFS, "/security.html", "text/html");
     });
     
-    // LoRa settings page
     webServer.on("/lora-settings", HTTP_GET, [](AsyncWebServerRequest *request) {
-        if (LittleFS.exists("/lora-settings.html")) {
-            request->send(LittleFS, "/lora-settings.html", "text/html");
-        } else {
-            request->send(404, "text/plain", "LoRa settings page not found");
-        }
+        request->send(LittleFS, "/lora-settings.html", "text/html");
     });
     
-    // Runtime configuration page
     webServer.on("/runtime-config", HTTP_GET, [](AsyncWebServerRequest *request) {
-        if (LittleFS.exists("/runtime-config.html")) {
-            request->send(LittleFS, "/runtime-config.html", "text/html");
-        } else {
-            request->send(404, "text/plain", "Runtime configuration page not found");
-        }
+        request->send(LittleFS, "/runtime-config.html", "text/html");
     });
     
     // LoRa configuration API endpoints
@@ -1237,10 +883,10 @@ void WiFiPortal::setupDashboard() {
         request->send(success ? 200 : 500, "application/json", response);
     });
     
-    // MQTT configuration page
     #ifdef BASE_STATION
-    webServer.on("/mqtt", HTTP_GET, [this](AsyncWebServerRequest *request) {
-        request->send(200, "text/html", generateMQTTPage());
+    // MQTT configuration page - explicit route needed
+    webServer.on("/mqtt", HTTP_GET, [](AsyncWebServerRequest *request) {
+        request->send(LittleFS, "/mqtt.html", "text/html");
     });
     
     // MQTT API endpoints
@@ -1271,6 +917,66 @@ void WiFiPortal::setupDashboard() {
         json += "}";
         request->send(200, "application/json", json);
     });
+    
+    // Time & NTP configuration page
+    webServer.on("/time", HTTP_GET, [](AsyncWebServerRequest *request) {
+        request->send(LittleFS, "/time.html", "text/html");
+    });
+    
+    // Time API endpoints
+    webServer.on("/api/time/config", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        NTPConfig cfg = configStorage.getNTPConfig();
+        
+        String json = "{";
+        json += "\"enabled\":" + String(cfg.enabled ? "true" : "false") + ",";
+        json += "\"server\":\"" + String(cfg.server) + "\",";
+        json += "\"intervalSec\":" + String(cfg.intervalSec) + ",";
+        json += "\"tzOffsetMinutes\":" + String(cfg.tzOffsetMinutes);
+        json += "}";
+        request->send(200, "application/json", json);
+    });
+    
+    webServer.on("/api/time/config", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL,
+        [this](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+            String body = String((char*)data).substring(0, len);
+            
+            StaticJsonDocument<256> doc;
+            DeserializationError error = deserializeJson(doc, body);
+            
+            if (error) {
+                request->send(400, "application/json", "{\"success\":false,\"error\":\"Invalid JSON\"}");
+                return;
+            }
+            
+            NTPConfig cfg;
+            cfg.enabled = doc["enabled"] | false;
+            String server = doc["server"] | "pool.ntp.org";
+            server.toCharArray(cfg.server, sizeof(cfg.server));
+            cfg.intervalSec = doc["intervalSec"] | 3600;
+            cfg.tzOffsetMinutes = doc["tzOffsetMinutes"] | 0;
+            
+            configStorage.setNTPConfig(cfg);
+            
+            // Reconfigure NTP if enabled
+            if (cfg.enabled) {
+                long gmtOffsetSec = (long)cfg.tzOffsetMinutes * 60;
+                configTime(gmtOffsetSec, 0, cfg.server);
+                Serial.printf("NTP reconfigured: %s, offset=%d min\n", cfg.server, cfg.tzOffsetMinutes);
+            }
+            
+            request->send(200, "application/json", "{\"success\":true}");
+        });
+    
+    webServer.on("/api/time/sync", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL,
+        [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+            // Parse request for sensor ID
+            String body = String((char*)data).substring(0, len);
+            StaticJsonDocument<128> doc;
+            deserializeJson(doc, body);
+            
+            // For now just acknowledge - would need LoRa time sync command implementation
+            request->send(200, "application/json", "{\"success\":true,\"commandsSent\":0}");
+        });
     
     // Remote configuration API
     webServer.on("/api/remote-config/interval", HTTP_POST, 
@@ -1599,770 +1305,66 @@ void WiFiPortal::broadcastSensorUpdate() {
     Serial.printf("WebSocket broadcast to %d clients\n", ws.count());
 }
 
-String WiFiPortal::generateDashboardPage() {
-    String html = R"rawliteral(
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LoRa Sensor Dashboard</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #f5f7fa;
-            padding: 20px;
-        }
-        .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 30px;
-            border-radius: 15px;
-            margin-bottom: 30px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-        .header h1 {
-            font-size: 32px;
-            margin-bottom: 10px;
-        }
-        .header-stats {
-            display: flex;
-            gap: 30px;
-            margin-top: 20px;
-            flex-wrap: wrap;
-        }
-        .header-stat {
-            flex: 1;
-            min-width: 150px;
-        }
-        .header-stat-label {
-            font-size: 12px;
-            opacity: 0.8;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        .header-stat-value {
-            font-size: 28px;
-            font-weight: bold;
-            margin-top: 5px;
-        }
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-        }
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-        .card {
-            background: white;
-            border-radius: 12px;
-            padding: 25px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            transition: transform 0.2s;
-        }
-        .card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
-        .card-title {
-            font-size: 18px;
-            font-weight: 600;
-            color: #333;
-            margin-bottom: 15px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .sensor-item {
-            padding: 15px;
-            border-left: 4px solid #667eea;
-            background: #f9f9f9;
-            margin-bottom: 12px;
-            border-radius: 6px;
-        }
-        .sensor-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 8px;
-        }
-        .sensor-id {
-            font-weight: 600;
-            color: #667eea;
-            font-size: 16px;
-        }
-        .sensor-time {
-            font-size: 12px;
-            color: #999;
-        }
-        .sensor-data {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-            margin-top: 10px;
-        }
-        .sensor-metric {
-            text-align: center;
-        }
-        .sensor-metric-label {
-            font-size: 11px;
-            color: #666;
-            text-transform: uppercase;
-        }
-        .sensor-metric-value {
-            font-size: 18px;
-            font-weight: 600;
-            color: #333;
-            margin-top: 2px;
-        }
-        .status-indicator {
-            display: inline-block;
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            margin-right: 8px;
-        }
-        .status-online { background: #10b981; }
-        .status-warning { background: #f59e0b; }
-        .status-offline { background: #ef4444; }
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 15px;
-        }
-        .stat-item {
-            background: #f9f9f9;
-            padding: 15px;
-            border-radius: 8px;
-        }
-        .stat-label {
-            font-size: 12px;
-            color: #666;
-            text-transform: uppercase;
-            margin-bottom: 5px;
-        }
-        .stat-value {
-            font-size: 24px;
-            font-weight: bold;
-            color: #333;
-        }
-        .export-buttons {
-            display: flex;
-            gap: 10px;
-            margin-top: 20px;
-        }
-        .btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 6px;
-            background: #667eea;
-            color: white;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background 0.3s;
-            text-decoration: none;
-            display: inline-block;
-        }
-        .btn:hover {
-            background: #5568d3;
-        }
-        .btn-secondary {
-            background: #6b7280;
-        }
-        .btn-secondary:hover {
-            background: #4b5563;
-        }
-        .time-btn {
-            padding: 8px 16px;
-            border: 2px solid #667eea;
-            background: white;
-            color: #667eea;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
-            transition: all 0.3s;
-        }
-        .time-btn:hover {
-            background: #f3f4f6;
-        }
-        .time-btn.active {
-            background: #667eea;
-            color: white;
-        }
-        .empty-state {
-            text-align: center;
-            padding: 40px;
-            color: #999;
-        }
-        .empty-state-icon {
-            font-size: 48px;
-            margin-bottom: 15px;
-        }
-        @media (max-width: 768px) {
-            .header-stats {
-                flex-direction: column;
-            }
-            .sensor-data {
-                grid-template-columns: 1fr;
-            }
-        }
-    </style>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>🎯 LoRa Sensor Dashboard</h1>
-            <p>Real-time monitoring and data visualization</p>
-            <div class="header-stats">
-                <div class="header-stat">
-                    <div class="header-stat-label">Connection</div>
-                    <div class="header-stat-value" id="wsStatus" style="font-size: 14px;">🔵 Connecting...</div>
-                </div>
-                <div class="header-stat">
-                    <div class="header-stat-label">Active Clients</div>
-                    <div class="header-stat-value" id="activeSensorCount">0</div>
-                </div>
-                <div class="header-stat">
-                    <div class="header-stat-label">Total Packets</div>
-                    <div class="header-stat-value" id="totalPackets">0</div>
-                </div>
-                <div class="header-stat">
-                    <div class="header-stat-label">RX Invalid</div>
-                    <div class="header-stat-value" id="rxInvalid">0</div>
-                </div>
-                <div class="header-stat">
-                    <div class="header-stat-label">Success Rate</div>
-                    <div class="header-stat-value" id="successRate">0%</div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="grid">
-            <div class="card" style="grid-column: 1 / -1;">
-                <div class="card-title">
-                    📡 Active Clients
-                    <div style="margin-left: auto; font-size: 12px; color: #999;">
-                        Auto-refresh: <span id="countdown">5</span>s
-                    </div>
-                </div>
-                <div id="sensorList">
-                    <div class="empty-state">
-                        <div class="empty-state-icon">📭</div>
-                        <p>No clients detected yet</p>
-                        <p style="font-size: 12px; margin-top: 10px;">Waiting for client data...</p>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="card">
-                <div class="card-title">💾 Data Export</div>
-                <p style="color: #666; margin-bottom: 15px; font-size: 14px;">
-                    Download sensor data for analysis
-                </p>
-                <div class="export-buttons">
-                    <a href="/export/csv" class="btn" download>📄 Export CSV</a>
-                    <a href="/export/json" class="btn btn-secondary" download>📋 Export JSON</a>
-                </div>
-            </div>
-            
-            <div class="card">
-                <div class="card-title">🔔 Alerts & Notifications</div>
-                <p style="color: #666; margin-bottom: 15px; font-size: 14px;">
-                    Configure Teams notifications and thresholds
-                </p>
-                <div class="export-buttons">
-                    <a href="/alerts" class="btn">&larr;��️ Configure Alerts</a>
-                </div>
-            </div>
-            
-            <div class="card">
-                <div class="card-title">🏷️ Sensor Configuration</div>
-                <p style="color: #666; margin-bottom: 15px; font-size: 14px;">
-                    Set friendly names and locations for your sensors
-                </p>
-                <div class="export-buttons">
-                    <a href="/sensors" class="btn">&larr;��️ Configure Sensors</a>
-                </div>
-            </div>
-            
-            <div class="card">
-                <div class="card-title">📡 MQTT Publishing</div>
-                <p style="color: #666; margin-bottom: 15px; font-size: 14px;">
-                    Configure MQTT broker and Home Assistant integration
-                </p>
-                <div class="export-buttons">
-                    <a href="/mqtt" class="btn">&larr;��️ Configure MQTT</a>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Historical Data Graphs -->
-        <div class="card" style="margin-bottom: 20px;">
-            <div class="card-title">
-                📈 Historical Data - Select Client
-            </div>
-            <div style="margin-bottom: 20px;">
-                <label for="sensorSelect" style="display: block; margin-bottom: 8px; font-weight: 600;">Client:</label>
-                <select id="sensorSelect" style="padding: 8px; border-radius: 6px; border: 2px solid #e0e0e0; font-size: 14px;">
-                    <option value="">-- Select a client --</option>
-                </select>
-                
-                <label for="timeRange" style="display: block; margin: 15px 0 8px; font-weight: 600;">Time Range:</label>
-                <div style="display: flex; gap: 10px;">
-                    <button class="time-btn active" data-range="all">All</button>
-                    <button class="time-btn" data-range="1h">1 Hour</button>
-                    <button class="time-btn" data-range="6h">6 Hours</button>
-                    <button class="time-btn" data-range="24h">24 Hours</button>
-                </div>
-            </div>
-        </div>
-        
-        <div class="grid">
-            <div class="card" style="grid-column: 1 / -1;">
-                <div class="card-title">🌡️ Temperature History</div>
-                <canvas id="tempChart" style="max-height: 300px;"></canvas>
-            </div>
-            
-            <div class="card" style="grid-column: 1 / -1;">
-                <div class="card-title">🔋 Battery History</div>
-                <canvas id="battChart" style="max-height: 300px;"></canvas>
-            </div>
-            
-            <div class="card" style="grid-column: 1 / -1;">
-                <div class="card-title">📶 Signal Strength (RSSI)</div>
-                <canvas id="rssiChart" style="max-height: 300px;"></canvas>
-            </div>
-        </div>
-    </div>
+/**
+ * @brief Cleanup disconnected WebSocket clients
+ * 
+ * Must be called periodically (every 1-2 seconds) to free resources
+ */
+void WiFiPortal::cleanupWebSocket() {
+    if (dashboardActive) {
+        ws.cleanupClients();
+    }
+}
+
+/**
+ * @brief Sanitize a string to ensure it's valid UTF-8 and JSON-safe
+ * Replaces invalid characters with underscores and ensures proper null termination
+ */
+String sanitizeString(const char* str) {
+    if (str == nullptr) {
+        return String("");
+    }
     
-    <script>
-        let countdown = 5;
+    // Check if string appears to be garbage/uninitialized
+    // If first byte is 0, it's empty
+    if (str[0] == '\0') {
+        return String("");
+    }
+    
+    String result = "";
+    result.reserve(64);  // Pre-allocate
+    
+    for (size_t i = 0; i < 32 && str[i] != '\0'; i++) {  // Max 32 chars (size of location field)
+        unsigned char c = (unsigned char)str[i];
         
-        // Chart.js configuration - declare variables at the top
-        let tempChart, battChart, rssiChart;
-        let currentSensorId = null;
-        let currentTimeRange = 'all';
-        let inactivityTimeoutMinutes = 15;  // Default, will be loaded from config
-        
-        // Forget/remove client
-        function forgetClient(clientId, clientName) {
-            if (confirm(`Are you sure you want to forget client "${clientName}" (ID: ${clientId})?\n\nThis will remove all history and data for this client.`)) {
-                fetch(`/api/clients/${clientId}`, { method: 'DELETE' })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            alert(`Client "${clientName}" has been forgotten.`);
-                            updateDashboard();
-                        } else {
-                            alert('Failed to forget client: ' + (data.error || 'Unknown error'));
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error forgetting client:', error);
-                        alert('Failed to forget client.');
-                    });
+        // Only allow printable ASCII (32-126)
+        if (c >= 32 && c <= 126) {
+            // Escape JSON special characters
+            if (c == '"') {
+                result += "\\\"";
+            } else if (c == '\\') {
+                result += "\\\\";
+            } else if (c == '\n') {
+                result += "\\n";
+            } else if (c == '\r') {
+                result += "\\r";
+            } else if (c == '\t') {
+                result += "\\t";
+            } else {
+                result += (char)c;
             }
+        } else {
+            // Skip control characters and high-bit bytes (potential corruption)
+            // Don't add anything for these
         }
-        
-        // WebSocket connection
-        let ws = null;
-        let wsReconnectTimer = null;
-        let wsConnected = false;
-        
-        // Initialize WebSocket connection
-        function initWebSocket() {
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${protocol}//${window.location.host}/ws`;
-            
-            try {
-                ws = new WebSocket(wsUrl);
-                
-                ws.onopen = () => {
-                    console.log('WebSocket connected');
-                    wsConnected = true;
-                    updateConnectionStatus(true);
-                    
-                    // Clear any reconnect timers
-                    if (wsReconnectTimer) {
-                        clearTimeout(wsReconnectTimer);
-                        wsReconnectTimer = null;
-                    }
-                };
-                
-                ws.onmessage = (event) => {
-                    try {
-                        const data = JSON.parse(event.data);
-                        // Real-time sensor update received
-                        updateSensorList(data);
-                        console.log('WebSocket update received:', data.length, 'sensors');
-                    } catch (error) {
-                        console.error('Error parsing WebSocket message:', error);
-                    }
-                };
-                
-                ws.onerror = (error) => {
-                    console.error('WebSocket error:', error);
-                    updateConnectionStatus(false);
-                };
-                
-                ws.onclose = () => {
-                    console.log('WebSocket disconnected');
-                    wsConnected = false;
-                    updateConnectionStatus(false);
-                    
-                    // Attempt to reconnect after 3 seconds
-                    wsReconnectTimer = setTimeout(() => {
-                        console.log('Attempting to reconnect WebSocket...');
-                        initWebSocket();
-                    }, 3000);
-                };
-            } catch (error) {
-                console.error('Failed to create WebSocket:', error);
-                // Fallback to polling if WebSocket fails
-                startPolling();
-            }
-        }
-        
-        // Update connection status indicator
-        function updateConnectionStatus(connected) {
-            const statusEl = document.getElementById('wsStatus');
-            if (statusEl) {
-                statusEl.textContent = connected ? '🟢 Live' : '🔴 Reconnecting...';
-                statusEl.style.color = connected ? '#10b981' : '#ef4444';
-            }
-        }
-        
-        // Fallback polling if WebSocket fails
-        function startPolling() {
-            setInterval(updateDashboard, 5000);
-        }
-        
-        // Load alert configuration for inactivity timeout
-        async function loadAlertConfig() {
-            try {
-                const response = await fetch('/api/alerts/config');
-                const config = await response.json();
-                inactivityTimeoutMinutes = config.timeout || 15;
-            } catch (error) {
-                console.error('Error loading alert config:', error);
-            }
-        }
-        
-        function updateDashboard() {
-            // Only use HTTP fallback if WebSocket is not connected
-            if (!wsConnected) {
-                // Fetch sensor data
-                fetch('/api/sensors')
-                    .then(response => response.json())
-                    .then(data => {
-                        updateSensorList(data);
-                    })
-                    .catch(error => console.error('Error fetching sensors:', error));
-            }
-            
-            // Always fetch stats (not pushed via WebSocket)
-            fetch('/api/stats')
-                .then(response => response.json())
-                .then(data => {
-                    updateStats(data);
-                })
-                .catch(error => console.error('Error fetching stats:', error));
-            
-            // Auto-refresh charts if a sensor is selected
-            if (currentSensorId) {
-                loadChartData();
-            }
-            
-            countdown = 5;
-        }
-        
-        function updateSensorList(sensors) {
-            const container = document.getElementById('sensorList');
-            
-            if (sensors.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <div class="empty-state-icon">📭</div>
-                        <p>No clients detected yet</p>
-                        <p style="font-size: 12px; margin-top: 10px;">Waiting for client data...</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            let html = '';
-            sensors.forEach(sensor => {
-                const inactivityTimeoutSeconds = inactivityTimeoutMinutes * 60;
-                const isInactive = sensor.ageSeconds >= inactivityTimeoutSeconds;
-                
-                const statusClass = sensor.ageSeconds < 300 ? 'status-online' : 
-                                  sensor.ageSeconds < 900 ? 'status-warning' : 'status-offline';
-                
-                const batteryColor = sensor.battery > 80 ? '#10b981' : 
-                                   sensor.battery > 50 ? '#f59e0b' : 
-                                   sensor.battery > 20 ? '#fb923c' : '#ef4444';
-                
-                const signalColor = sensor.rssi > -60 ? '#10b981' : 
-                                   sensor.rssi > -80 ? '#f59e0b' : 
-                                   sensor.rssi > -100 ? '#fb923c' : '#ef4444';
-                
-                // Add warning banner for inactive clients
-                const warningBanner = isInactive ? `
-                    <div style="background: #fff3cd; border: 2px solid #ffc107; border-radius: 6px; padding: 10px; margin-bottom: 10px;">
-                        <span style="color: #856404; font-weight: 600;">&larr;��️ Client Inactive</span>
-                        <span style="color: #856404; font-size: 12px; margin-left: 8px;">No data received for ${Math.floor(sensor.ageSeconds / 60)} minutes</span>
-                    </div>
-                ` : '';
-                
-                // Client header with battery and radio status
-                html += `
-                    <div class="sensor-item" style="${isInactive ? 'border: 2px solid #ffc107; background: #fff9e6;' : ''}">
-                        ${warningBanner}
-                        <div class="sensor-header" style="border-bottom: 2px solid #e5e7eb; padding-bottom: 12px; margin-bottom: 12px;">
-                            <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
-                                <span class="status-indicator ${statusClass}"></span>
-                                <span class="sensor-id" style="font-size: 16px; font-weight: 600;">${sensor.location || 'Client #' + sensor.id}</span>
-                                <span style="background: ${batteryColor}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">
-                                    🔋 ${sensor.battery}%
-                                </span>
-                                <span style="background: ${signalColor}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">
-                                    📡 ${sensor.rssi} dBm
-                                </span>
-                            </div>
-                            <div style="display: flex; align-items: center; gap: 10px;">
-                                <span class="sensor-time">${sensor.age}</span>
-                                <button onclick="forgetClient(${sensor.id}, '${sensor.location || 'Client #' + sensor.id}')" 
-                                        style="background: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; transition: background 0.3s;"
-                                        onmouseover="this.style.background='#dc2626'" onmouseout="this.style.background='#ef4444'">
-                                    🗑️ Forget
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <div style="padding-left: 28px;">
-                            ${sensor.sensorCount > 0 ? `
-                                <div style="font-size: 12px; color: #6b7280; margin-bottom: 8px; font-weight: 500;">
-                                    Connected Sensors (${sensor.sensorCount}):
-                                </div>
-                                <div style="display: flex; flex-direction: column; gap: 6px;">
-                                    ${sensor.temperature > -127 ? `
-                                        <div style="background: #f3f4f6; padding: 8px 12px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
-                                            <span style="font-size: 13px; color: #374151;">🌡️ Temperature Sensor</span>
-                                            <span style="font-size: 14px; font-weight: 600; color: #1f2937;">${sensor.temperature}&larr;�C</span>
-                                        </div>
-                                    ` : ''}
-                                </div>
-                            ` : `
-                                <div style="font-size: 13px; color: #9ca3af; font-style: italic; padding: 8px 0;">
-                                    No sensors configured on this client
-                                </div>
-                            `}
-                        </div>
-                    </div>
-                `;
-            });
-            
-            container.innerHTML = html;
-            
-            // Update sensor dropdown for charts
-            updateSensorSelect(sensors);
-        }
-        
-        function updateStats(stats) {
-            document.getElementById('activeSensorCount').textContent = stats.activeSensors;
-            document.getElementById('totalPackets').textContent = stats.totalRx;
-            document.getElementById('rxInvalid').textContent = stats.totalInvalid;
-            document.getElementById('successRate').textContent = stats.successRate + '%';
-        }
-        
-        // Update countdown timer
-        setInterval(() => {
-            countdown--;
-            document.getElementById('countdown').textContent = countdown;
-            
-            if (countdown <= 0) {
-                updateDashboard();
-                countdown = 5;
-            }
-        }, 1000);
-        
-        // Initial load
-        loadAlertConfig();  // Load inactivity timeout setting
-        initWebSocket();    // Initialize WebSocket for real-time updates
-        updateDashboard();  // Initial data fetch (and fallback if WS fails)
-        
-        // Initialize charts
-        const chartConfig = (label, color, unit = '') => ({
-            type: 'line',
-            data: {
-                labels: [],
-                datasets: [{
-                    label: label,
-                    data: [],
-                    borderColor: color,
-                    backgroundColor: color + '20',
-                    borderWidth: 2,
-                    fill: true,
-                    tension: 0.4,
-                    pointRadius: 3,
-                    pointHoverRadius: 5
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: {
-                    intersect: false,
-                    mode: 'index'
-                },
-                plugins: {
-                    legend: {
-                        display: true,
-                        position: 'top'
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                return context.dataset.label + ': ' + context.parsed.y + unit;
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        display: true,
-                        title: {
-                            display: true,
-                            text: 'Time'
-                        }
-                    },
-                    y: {
-                        display: true,
-                        title: {
-                            display: true,
-                            text: label
-                        }
-                    }
-                }
-            }
-        });
-        
-        tempChart = new Chart(document.getElementById('tempChart'), chartConfig('Temperature', '#ef4444', '&larr;�C'));
-        battChart = new Chart(document.getElementById('battChart'), chartConfig('Battery', '#10b981', '%'));
-        rssiChart = new Chart(document.getElementById('rssiChart'), chartConfig('RSSI', '#3b82f6', ' dBm'));
-        
-        // Update sensor select dropdown
-        function updateSensorSelect(sensors) {
-            const select = document.getElementById('sensorSelect');
-            const currentValue = select.value;
-            
-            // Clear and repopulate
-            select.innerHTML = '<option value="">-- Select a client --</option>';
-            
-            sensors.forEach(sensor => {
-                const option = document.createElement('option');
-                option.value = sensor.id;
-                const label = sensor.location || ('Client ' + sensor.id);
-                option.textContent = label + ' (' + sensor.temperature + '&larr;�C)';
-                select.appendChild(option);
-            });
-            
-            // Restore selection or select first sensor
-            if (currentValue && sensors.find(s => s.id == currentValue)) {
-                select.value = currentValue;
-            } else if (sensors.length > 0 && !currentSensorId) {
-                select.value = sensors[0].id;
-                currentSensorId = sensors[0].id;
-                loadChartData();
-            }
-        }
-        
-        // Load chart data from API
-        function loadChartData() {
-            if (!currentSensorId) return;
-            
-            const url = '/api/history?sensorId=' + currentSensorId + 
-                       (currentTimeRange !== 'all' ? '&range=' + currentTimeRange : '');
-            
-            fetch(url)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.error) {
-                        console.error('No data:', data.error);
-                        return;
-                    }
-                    
-                    updateCharts(data.data);
-                })
-                .catch(error => console.error('Error loading chart data:', error));
-        }
-        
-        // Update all charts with new data
-        function updateCharts(dataPoints) {
-            const labels = [];
-            const tempData = [];
-            const battData = [];
-            const rssiData = [];
-            
-            dataPoints.forEach(point => {
-                // Convert timestamp to readable time
-                const date = new Date(point.t * 1000);
-                const timeStr = date.getHours().toString().padStart(2, '0') + ':' + 
-                               date.getMinutes().toString().padStart(2, '0');
-                labels.push(timeStr);
-                
-                tempData.push(point.temp);
-                battData.push(point.batt);
-                rssiData.push(point.rssi);
-            });
-            
-            // Update temperature chart
-            tempChart.data.labels = labels;
-            tempChart.data.datasets[0].data = tempData;
-            tempChart.update();
-            
-            // Update battery chart
-            battChart.data.labels = labels;
-            battChart.data.datasets[0].data = battData;
-            battChart.update();
-            
-            // Update RSSI chart
-            rssiChart.data.labels = labels;
-            rssiChart.data.datasets[0].data = rssiData;
-            rssiChart.update();
-        }
-        
-        // Sensor selection change
-        document.getElementById('sensorSelect').addEventListener('change', function() {
-            currentSensorId = this.value;
-            if (currentSensorId) {
-                loadChartData();
-            }
-        });
-        
-        // Time range button handlers
-        document.querySelectorAll('.time-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('active'));
-                this.classList.add('active');
-                currentTimeRange = this.dataset.range;
-                if (currentSensorId) {
-                    loadChartData();
-                }
-            });
-        });
-    </script>
-</body>
-</html>
-)rawliteral";
-    return html;
+    }
+    
+    // If result is empty or too short, it was probably garbage
+    if (result.length() == 0) {
+        return String("");
+    }
+    
+    return result;
 }
 
 String WiFiPortal::generateSensorsJSON() {
@@ -2408,9 +1410,9 @@ String WiFiPortal::generateSensorsJSON() {
             
             json += "{";
             json += "\"id\":" + String(sensor->sensorId) + ",";
-            json += "\"location\":\"" + String(sensor->location) + "\",";
+            json += "\"location\":\"" + sanitizeString(sensor->location) + "\",";
 #ifdef BASE_STATION
-            json += "\"zone\":\"" + String(meta.zone) + "\",";
+            json += "\"zone\":\"" + sanitizeString(sensor->zone) + "\",";
             json += "\"priority\":\"" + String(priorityStr) + "\",";
             json += "\"priorityLevel\":" + String((int)meta.priority) + ",";
 #endif
@@ -2663,483 +1665,6 @@ void WiFiPortal::handleAlertsConfigUpdate(AsyncWebServerRequest *request, uint8_
     request->send(200, "application/json", "{\"success\":true,\"message\":\"Configuration saved\"}");
 }
 
-String WiFiPortal::generateAlertsPage() {
-    String html = R"rawliteral(
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Alert Configuration - LoRa Sensor Station</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-        .container {
-            max-width: 900px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-            padding: 30px;
-        }
-        h1 {
-            color: #333;
-            margin-bottom: 10px;
-            font-size: 28px;
-        }
-        .subtitle {
-            color: #666;
-            margin-bottom: 30px;
-            font-size: 14px;
-        }
-        .nav-links {
-            margin-bottom: 30px;
-            padding-bottom: 20px;
-            border-bottom: 2px solid #e0e0e0;
-        }
-        .nav-links a {
-            display: inline-block;
-            padding: 8px 16px;
-            margin-right: 10px;
-            background: #667eea;
-            color: white;
-            text-decoration: none;
-            border-radius: 6px;
-            font-size: 14px;
-            transition: background 0.3s;
-        }
-        .nav-links a:hover {
-            background: #764ba2;
-        }
-        .section {
-            margin-bottom: 30px;
-            padding: 20px;
-            background: #f9f9f9;
-            border-radius: 8px;
-        }
-        .section h2 {
-            color: #333;
-            margin-bottom: 15px;
-            font-size: 20px;
-            display: flex;
-            align-items: center;
-        }
-        .section h2::before {
-            content: '';
-            display: inline-block;
-            width: 4px;
-            height: 20px;
-            background: #667eea;
-            margin-right: 10px;
-        }
-        .form-group {
-            margin-bottom: 20px;
-        }
-        label {
-            display: block;
-            margin-bottom: 8px;
-            color: #333;
-            font-weight: 500;
-            font-size: 14px;
-        }
-        input[type="text"],
-        input[type="number"] {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #ddd;
-            border-radius: 6px;
-            font-size: 14px;
-            transition: border-color 0.3s;
-        }
-        input[type="text"]:focus,
-        input[type="number"]:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-        .checkbox-group {
-            display: flex;
-            align-items: center;
-            padding: 10px;
-            background: white;
-            border-radius: 6px;
-            margin-bottom: 10px;
-        }
-        input[type="checkbox"] {
-            width: 20px;
-            height: 20px;
-            margin-right: 12px;
-            cursor: pointer;
-        }
-        .checkbox-group label {
-            margin: 0;
-            cursor: pointer;
-            flex: 1;
-        }
-        .threshold-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-        }
-        .btn {
-            padding: 14px 28px;
-            border: none;
-            border-radius: 6px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-            margin-right: 10px;
-        }
-        .btn-primary {
-            background: #667eea;
-            color: white;
-        }
-        .btn-primary:hover {
-            background: #764ba2;
-        }
-        .btn-secondary {
-            background: #6c757d;
-            color: white;
-        }
-        .btn-secondary:hover {
-            background: #5a6268;
-        }
-        .btn-test {
-            background: #28a745;
-            color: white;
-        }
-        .btn-test:hover {
-            background: #218838;
-        }
-        .alert {
-            padding: 15px;
-            border-radius: 6px;
-            margin-bottom: 20px;
-            font-size: 14px;
-        }
-        .alert-success {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-        .alert-error {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-        .alert-info {
-            background: #d1ecf1;
-            color: #0c5460;
-            border: 1px solid #bee5eb;
-        }
-        .hidden {
-            display: none;
-        }
-        .help-text {
-            font-size: 12px;
-            color: #666;
-            margin-top: 5px;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Alert Configuration</h1>
-        <p class="subtitle">Configure Microsoft Teams notifications and alert thresholds</p>
-        
-        <div class="nav-links">
-            <a href="/">&larr;�� Back to Dashboard</a>
-        </div>
-        
-        <div id="messageBox" class="alert hidden"></div>
-        
-        <form id="alertsForm">
-            <!-- Teams Webhook -->
-            <div class="section">
-                <h2>Microsoft Teams Integration</h2>
-                <div class="form-group">
-                    <div class="checkbox-group">
-                        <input type="checkbox" id="teamsEnabled" name="teamsEnabled">
-                        <label for="teamsEnabled">Enable Teams Notifications</label>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label for="teamsWebhook">Teams Webhook URL</label>
-                    <input type="text" id="teamsWebhook" name="teamsWebhook" placeholder="https://outlook.office.com/webhook/...">
-                    <div class="help-text">Create an Incoming Webhook connector in your Teams channel</div>
-                </div>
-                <button type="button" class="btn btn-test" onclick="testWebhook()">Send Test Alert</button>
-            </div>
-            
-            <!-- Email Configuration -->
-            <div class="section">
-                <h2>Email Notifications</h2>
-                <div class="form-group">
-                    <div class="checkbox-group">
-                        <input type="checkbox" id="emailEnabled" name="emailEnabled">
-                        <label for="emailEnabled">Enable Email Notifications</label>
-                    </div>
-                </div>
-                <div class="threshold-row">
-                    <div class="form-group">
-                        <label for="smtpServer">SMTP Server</label>
-                        <input type="text" id="smtpServer" name="smtpServer" placeholder="smtp.gmail.com">
-                    </div>
-                    <div class="form-group">
-                        <label for="smtpPort">SMTP Port</label>
-                        <input type="number" id="smtpPort" name="smtpPort" value="587">
-                        <div class="help-text">Common: 587 (TLS), 465 (SSL), 25 (unsecured)</div>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label for="emailUser">Email Username</label>
-                    <input type="text" id="emailUser" name="emailUser" placeholder="your-email@gmail.com">
-                </div>
-                <div class="form-group">
-                    <label for="emailPassword">Email Password</label>
-                    <input type="password" id="emailPassword" name="emailPassword" placeholder="App Password">
-                    <div class="help-text">For Gmail: Use an App Password (not your regular password)</div>
-                </div>
-                <div class="form-group">
-                    <label for="emailFrom">From Email</label>
-                    <input type="text" id="emailFrom" name="emailFrom" placeholder="alerts@yourdomain.com">
-                </div>
-                <div class="form-group">
-                    <label for="emailTo">To Email</label>
-                    <input type="text" id="emailTo" name="emailTo" placeholder="recipient@example.com">
-                    <div class="help-text">Comma-separated for multiple recipients</div>
-                </div>
-                <div class="form-group">
-                    <div class="checkbox-group">
-                        <input type="checkbox" id="emailTLS" name="emailTLS" checked>
-                        <label for="emailTLS">Use TLS/STARTTLS</label>
-                    </div>
-                </div>
-                <button type="button" class="btn btn-test" onclick="testEmail()">📧 Send Test Email</button>
-            </div>
-            
-            <!-- Temperature Thresholds -->
-            <div class="section">
-                <h2>Temperature Thresholds</h2>
-                <div class="threshold-row">
-                    <div class="form-group">
-                        <label for="tempLow">Low Temperature (�C)</label>
-                        <input type="number" id="tempLow" name="tempLow" step="0.1" value="10.0">
-                    </div>
-                    <div class="form-group">
-                        <label for="tempHigh">High Temperature (�C)</label>
-                        <input type="number" id="tempHigh" name="tempHigh" step="0.1" value="30.0">
-                    </div>
-                </div>
-                <div class="checkbox-group">
-                    <input type="checkbox" id="alertTempHigh" name="alertTempHigh" checked>
-                    <label for="alertTempHigh">Alert on high temperature</label>
-                </div>
-                <div class="checkbox-group">
-                    <input type="checkbox" id="alertTempLow" name="alertTempLow" checked>
-                    <label for="alertTempLow">Alert on low temperature</label>
-                </div>
-            </div>
-            
-            <!-- Battery Thresholds -->
-            <div class="section">
-                <h2>Battery Thresholds</h2>
-                <div class="threshold-row">
-                    <div class="form-group">
-                        <label for="batteryLow">Low Battery (%)</label>
-                        <input type="number" id="batteryLow" name="batteryLow" min="0" max="100" value="20">
-                    </div>
-                    <div class="form-group">
-                        <label for="batteryCritical">Critical Battery (%)</label>
-                        <input type="number" id="batteryCritical" name="batteryCritical" min="0" max="100" value="10">
-                    </div>
-                </div>
-                <div class="checkbox-group">
-                    <input type="checkbox" id="alertBatteryLow" name="alertBatteryLow" checked>
-                    <label for="alertBatteryLow">Alert on low battery</label>
-                </div>
-                <div class="checkbox-group">
-                    <input type="checkbox" id="alertBatteryCritical" name="alertBatteryCritical" checked>
-                    <label for="alertBatteryCritical">Alert on critical battery</label>
-                </div>
-            </div>
-            
-            <!-- Sensor Status -->
-            <div class="section">
-                <h2>Client Status Alerts</h2>
-                <div class="form-group">
-                    <label for="sensorTimeout">Client Inactivity Timeout (minutes)</label>
-                    <input type="number" id="sensorTimeout" name="sensorTimeout" min="1" max="1440" value="15">
-                    <div class="help-text">Alert when a client hasn't been seen for this many minutes (default: 15 minutes)</div>
-                </div>
-                <div class="checkbox-group">
-                    <input type="checkbox" id="alertSensorOffline" name="alertSensorOffline" checked>
-                    <label for="alertSensorOffline">Alert when client goes offline (exceeds inactivity timeout)</label>
-                </div>
-                <div class="checkbox-group">
-                    <input type="checkbox" id="alertSensorOnline" name="alertSensorOnline">
-                    <label for="alertSensorOnline">Alert when client comes back online</label>
-                </div>
-            </div>
-            
-            <button type="submit" class="btn btn-primary">💾 Save Configuration</button>
-            <button type="button" class="btn btn-secondary" onclick="location.href='/'">Cancel</button>
-        </form>
-    </div>
-    
-    <script>
-        // Load current configuration
-        async function loadConfig() {
-            try {
-                const response = await fetch('/api/alerts/config');
-                const config = await response.json();
-                
-                document.getElementById('teamsEnabled').checked = config.teamsEnabled;
-                document.getElementById('teamsWebhook').value = config.teamsWebhook;
-                document.getElementById('emailEnabled').checked = config.emailEnabled;
-                document.getElementById('smtpServer').value = config.smtpServer;
-                document.getElementById('smtpPort').value = config.smtpPort;
-                document.getElementById('emailUser').value = config.emailUser;
-                document.getElementById('emailPassword').value = config.emailPassword;
-                document.getElementById('emailFrom').value = config.emailFrom;
-                document.getElementById('emailTo').value = config.emailTo;
-                document.getElementById('emailTLS').checked = config.emailTLS;
-                document.getElementById('tempHigh').value = config.tempHigh;
-                document.getElementById('tempLow').value = config.tempLow;
-                document.getElementById('batteryLow').value = config.batteryLow;
-                document.getElementById('batteryCritical').value = config.batteryCritical;
-                document.getElementById('sensorTimeout').value = config.timeout;
-                document.getElementById('alertTempHigh').checked = config.alertTempHigh;
-                document.getElementById('alertTempLow').checked = config.alertTempLow;
-                document.getElementById('alertBatteryLow').checked = config.alertBatteryLow;
-                document.getElementById('alertBatteryCritical').checked = config.alertBatteryCritical;
-                document.getElementById('alertSensorOffline').checked = config.alertSensorOffline;
-                document.getElementById('alertSensorOnline').checked = config.alertSensorOnline;
-            } catch (error) {
-                showMessage('Failed to load configuration', 'error');
-            }
-        }
-        
-        // Save configuration
-        document.getElementById('alertsForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const config = {
-                enabled: document.getElementById('teamsEnabled').checked,
-                webhook: document.getElementById('teamsWebhook').value,
-                emailEnabled: document.getElementById('emailEnabled').checked,
-                smtpServer: document.getElementById('smtpServer').value,
-                smtpPort: parseInt(document.getElementById('smtpPort').value),
-                emailUser: document.getElementById('emailUser').value,
-                emailPassword: document.getElementById('emailPassword').value,
-                emailFrom: document.getElementById('emailFrom').value,
-                emailTo: document.getElementById('emailTo').value,
-                emailTLS: document.getElementById('emailTLS').checked,
-                tempHigh: parseFloat(document.getElementById('tempHigh').value),
-                tempLow: parseFloat(document.getElementById('tempLow').value),
-                batteryLow: parseInt(document.getElementById('batteryLow').value),
-                batteryCritical: parseInt(document.getElementById('batteryCritical').value),
-                timeout: parseInt(document.getElementById('sensorTimeout').value),
-                alertTempHigh: document.getElementById('alertTempHigh').checked,
-                alertTempLow: document.getElementById('alertTempLow').checked,
-                alertBatteryLow: document.getElementById('alertBatteryLow').checked,
-                alertBatteryCritical: document.getElementById('alertBatteryCritical').checked,
-                alertSensorOffline: document.getElementById('alertSensorOffline').checked,
-                alertSensorOnline: document.getElementById('alertSensorOnline').checked
-            };
-            
-            try {
-                const response = await fetch('/api/alerts/config', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(config)
-                });
-                
-                const result = await response.json();
-                if (result.success) {
-                    showMessage('Configuration saved successfully!', 'success');
-                } else {
-                    showMessage('Failed to save configuration', 'error');
-                }
-            } catch (error) {
-                showMessage('Error saving configuration: ' + error.message, 'error');
-            }
-        });
-        
-        // Test webhook
-        async function testWebhook() {
-            const webhook = document.getElementById('teamsWebhook').value;
-            if (!webhook) {
-                showMessage('Please enter a webhook URL first', 'error');
-                return;
-            }
-            
-            showMessage('Test alert...', 'info');
-            
-            try {
-                const response = await fetch('/api/alerts/test', { method: 'POST' });
-                const result = await response.json();
-                
-                if (result.success) {
-                    showMessage('Test alert sent! Check your Teams channel.', 'success');
-                } else {
-                    showMessage('Test alert: ' + result.message, 'error');
-                }
-            } catch (error) {
-                showMessage('Test alert: ' + error.message, 'error');
-            }
-        }
-        
-        // Test email
-        async function testEmail() {
-            const emailTo = document.getElementById('emailTo').value;
-            if (!emailTo) {
-                showMessage('Please enter a recipient email address first', 'error');
-                return;
-            }
-            
-            showMessage('Sending test email...', 'info');
-            
-            try {
-                const response = await fetch('/api/alerts/test-email', { method: 'POST' });
-                const result = await response.json();
-                
-                if (result.success) {
-                    showMessage('Test email sent! Check your inbox.', 'success');
-                } else {
-                    showMessage('Failed to send test email: ' + result.message, 'error');
-                }
-            } catch (error) {
-                showMessage('Sending test email: ' + error.message, 'error');
-            }
-        }
-        
-        // Show message
-        function showMessage(message, type) {
-            const box = document.getElementById('messageBox');
-            box.textContent = message;
-            box.className = 'alert alert-' + type;
-            box.classList.remove('hidden');
-            
-            if (type === 'success' || type === 'info') {
-                setTimeout(() => box.classList.add('hidden'), 5000);
-            }
-        }
-        
-        // Load config on page load
-        loadConfig();
-    </script>
-</body>
-</html>
-)rawliteral";
-    return html;
-}
-
 bool WiFiPortal::testTeamsWebhook() {
     return alertManager.testTeamsWebhook();
 }
@@ -3240,257 +1765,7 @@ void WiFiPortal::handleMQTTConfigUpdate(AsyncWebServerRequest *request, uint8_t 
 }
 #endif // BASE_STATION
 
-/**
- * @brief Generate MQTT configuration page
- */
 #ifdef BASE_STATION
-String WiFiPortal::generateMQTTPage() {
-    String html = R"rawliteral(
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MQTT Configuration - LoRa Sensor Station</title>
-    <link rel="stylesheet" href="/pico-custom.css">
-    <style>
-        .checkbox-group {
-            display: flex;
-            align-items: center;
-            padding: 10px;
-            background: #f9f9f9;
-            border-radius: 6px;
-            margin-bottom: 10px;
-        }
-        .checkbox-group label {
-            margin: 0;
-            cursor: pointer;
-            flex: 1;
-        }
-        .help-text {
-            font-size: 12px;
-            color: #666;
-            margin-top: 5px;
-        }
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 15px;
-            margin-top: 20px;
-        }
-        .stat-box {
-            background: #f9f9f9;
-            padding: 15px;
-            border-radius: 8px;
-            text-align: center;
-        }
-        .stat-label {
-            font-size: 12px;
-            color: #666;
-            text-transform: uppercase;
-            margin-bottom: 5px;
-        }
-        .stat-value {
-            font-size: 24px;
-            font-weight: bold;
-            color: #333;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <header>
-            <h1>📡 MQTT Configuration</h1>
-            <p>Connect to MQTT broker for data publishing</p>
-            <a href="/" class="btn secondary">← Back to Dashboard</a>
-        </header>
-        
-        <div id="messageBox" class="message hidden"></div>
-        
-        <article>
-            <header><h2>📢 MQTT Connection</h2></header>
-            <form id="mqttForm">
-                <div>
-                    <div class="checkbox-group">
-                        <input type="checkbox" id="enabled">
-                        <label for="enabled">Enable MQTT Publishing</label>
-                    </div>
-                </div>
-                
-                <div>
-                    <label for="broker">MQTT Broker</label>
-                    <input type="text" id="broker" placeholder="192.168.1.100 or mqtt.example.com">
-                </div>
-                
-                <div>
-                    <label for="port">Port</label>
-                    <input type="number" id="port" value="1883">
-                </div>
-                
-                <div>
-                    <label for="username">Username (optional)</label>
-                    <input type="text" id="username" placeholder="mqtt_user">
-                </div>
-                
-                <div>
-                    <label for="password">Password (optional)</label>
-                    <input type="password" id="password" placeholder="mqtt_password">
-                </div>
-                
-                <div>
-                    <label for="topicPrefix">Topic Prefix</label>
-                    <input type="text" id="topicPrefix" value="lora" placeholder="lora">
-                    <div class="help-text">Topics: {prefix}/sensor/{id}/temperature</div>
-                </div>
-                
-                <div>
-                    <div class="checkbox-group">
-                        <input type="checkbox" id="haDiscovery" checked>
-                        <label for="haDiscovery">Enable Home Assistant Auto-Discovery</label>
-                    </div>
-                </div>
-                
-                <div>
-                    <label for="qos">QoS Level</label>
-                    <input type="number" id="qos" value="0" min="0" max="2">
-                    <div class="help-text">0 = At most once, 1 = At least once, 2 = Exactly once</div>
-                </div>
-                
-                <div style="margin-top: 20px;">
-                    <button type="submit">💾 Save Configuration</button>
-                    <button type="button" class="secondary" onclick="testConnection()">🔌 Test Connection</button>
-                </div>
-            </form>
-        </article>
-        
-        <article>
-            <header><h2>📊 MQTT Statistics</h2></header>
-            <div class="stats">
-                <div class="stat-box">
-                    <div class="stat-label">Status</div>
-                    <div class="stat-value" id="mqttStatus">-</div>
-                </div>
-                <div class="stat-box">
-                    <div class="stat-label">Published</div>
-                    <div class="stat-value" id="mqttPublishes">0</div>
-                </div>
-                <div class="stat-box">
-                    <div class="stat-label">Failed</div>
-                    <div class="stat-value" id="mqttFailures">0</div>
-                </div>
-                <div class="stat-box">
-                    <div class="stat-label">Reconnects</div>
-                    <div class="stat-value" id="mqttReconnects">0</div>
-                </div>
-            </div>
-        </article>
-    </div>
-    
-    <script>
-        async function loadConfig() {
-            try {
-                const response = await fetch('/api/mqtt/config');
-                const config = await response.json();
-                
-                document.getElementById('enabled').checked = config.enabled;
-                document.getElementById('broker').value = config.broker;
-                document.getElementById('port').value = config.port;
-                document.getElementById('username').value = config.username;
-                document.getElementById('password').value = config.password;
-                document.getElementById('topicPrefix').value = config.topicPrefix;
-                document.getElementById('haDiscovery').checked = config.haDiscovery;
-                document.getElementById('qos').value = config.qos;
-            } catch (error) {
-                showMessage('Failed to load configuration', 'error');
-            }
-        }
-        
-        async function loadStats() {
-            try {
-                const response = await fetch('/api/mqtt/stats');
-                const stats = await response.json();
-                
-                document.getElementById('mqttStatus').textContent = stats.connected ? ' Connected' : ' Disconnected';
-                document.getElementById('mqttPublishes').textContent = stats.publishes;
-                document.getElementById('mqttFailures').textContent = stats.failures;
-                document.getElementById('mqttReconnects').textContent = stats.reconnects;
-            } catch (error) {
-                console.error('Failed to load stats:', error);
-            }
-        }
-        
-        document.getElementById('mqttForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const config = {
-                enabled: document.getElementById('enabled').checked,
-                broker: document.getElementById('broker').value,
-                port: parseInt(document.getElementById('port').value),
-                username: document.getElementById('username').value,
-                password: document.getElementById('password').value,
-                topicPrefix: document.getElementById('topicPrefix').value,
-                haDiscovery: document.getElementById('haDiscovery').checked,
-                qos: parseInt(document.getElementById('qos').value)
-            };
-            
-            try {
-                const response = await fetch('/api/mqtt/config', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(config)
-                });
-                
-                const result = await response.json();
-                if (result.success) {
-                    showMessage('Configuration saved successfully!', 'success');
-                    setTimeout(loadStats, 1000);
-                } else {
-                    showMessage('Failed to save configuration', 'error');
-                }
-            } catch (error) {
-                showMessage('Error saving configuration: ' + error.message, 'error');
-            }
-        });
-        
-        async function testConnection() {
-            showMessage(' Testing MQTT connection...', 'info');
-            
-            try {
-                const response = await fetch('/api/mqtt/test', { method: 'POST' });
-                const result = await response.json();
-                
-                if (result.success) {
-                    showMessage(' MQTT connection successful!', 'success');
-                    setTimeout(loadStats, 500);
-                } else {
-                    showMessage(' Connection failed: ' + result.message, 'error');
-                }
-            } catch (error) {
-                showMessage('Error testing connection: ' + error.message, 'error');
-            }
-        }
-        
-        function showMessage(message, type) {
-            const box = document.getElementById('messageBox');
-            box.textContent = message;
-            box.className = 'alert alert-' + type;
-            box.classList.remove('hidden');
-            
-            if (type === 'success' || type === 'info') {
-                setTimeout(() => box.classList.add('hidden'), 5000);
-            }
-        }
-        
-        loadConfig();
-        loadStats();
-        setInterval(loadStats, 5000);
-    </script>
-</body>
-</html>
-)rawliteral";
-    return html;
-}
-
 void WiFiPortal::handleRemoteSetInterval(AsyncWebServerRequest *request, uint8_t *data, size_t len) {
     extern RemoteConfigManager remoteConfigManager;
     
@@ -3730,10 +2005,21 @@ void checkLoRaRebootTimeout() {
         loraRebootTracker.trackingActive = false;
     }
 }
-
 #endif // BASE_STATION
 
+// ============================================================================
+// DIAGNOSTICS FUNCTIONS (for link test feature)
+// ============================================================================
 
+void WiFiPortal::diagnosticsRecordSent(uint8_t sensorId, uint8_t sequenceNumber) {
+    // Track that we sent a ping/command to this sensor
+    // This is called from lora_comm.cpp when sending diagnostic packets
+    Serial.printf("📤 Diagnostic sent to sensor %d, seq %d\n", sensorId, sequenceNumber);
+}
 
-
-
+void WiFiPortal::diagnosticsRecordAck(uint8_t sensorId, uint8_t sequenceNumber, int16_t rssi, int8_t snr) {
+    // Track that we received an ACK from this sensor
+    // This is called from lora_comm.cpp when receiving diagnostic ACK packets
+    Serial.printf("📥 Diagnostic ACK from sensor %d, seq %d, RSSI=%d, SNR=%d\n", 
+                 sensorId, sequenceNumber, rssi, snr);
+}

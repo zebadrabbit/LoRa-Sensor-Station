@@ -1,21 +1,22 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LoRa Sensor Dashboard</title>
     <link rel="stylesheet" href="/pico-custom.css">
+    <link rel="stylesheet" href="/style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
     <div class="container">
-        <header>
+        <div class="header">
             <h1>🎯 LoRa Sensor Dashboard</h1>
             <p>Real-time monitoring and data visualization</p>
             <div class="header-stats">
                 <div class="header-stat">
                     <div class="header-stat-label">Connection</div>
-                    <div class="header-stat-value" id="wsStatus">🔵 Connecting...</div>
+                    <div class="header-stat-value" id="wsStatus" style="font-size: 14px;">🔵 Connecting...</div>
                 </div>
                 <div class="header-stat">
                     <div class="header-stat-label">Active Clients</div>
@@ -26,117 +27,95 @@
                     <div class="header-stat-value" id="totalPackets">0</div>
                 </div>
                 <div class="header-stat">
+                    <div class="header-stat-label">RX Invalid</div>
+                    <div class="header-stat-value" id="rxInvalid">0</div>
+                </div>
+                <div class="header-stat">
                     <div class="header-stat-label">Success Rate</div>
                     <div class="header-stat-value" id="successRate">0%</div>
                 </div>
+                <div class="header-stat">
+                    <div class="header-stat-label">Current Time</div>
+                    <div class="header-stat-value" id="currentTime" style="font-size: 14px;">--:--:--</div>
+                </div>
             </div>
-        </header>
+        </div>
         
-        <article style="grid-column: 1 / -1;">
-            <header>
-                <h2>📡 Active Clients</h2>
-                <div style="display: flex; align-items: center; gap: 15px;">
-                    <div style="font-size: 12px; color: #999;">
-                        Zone Filter:
-                        <select id="zoneFilter" style="padding: 4px 8px; border-radius: 4px; border: 1px solid #ddd; font-size: 12px;">
-                            <option value="">All Zones</option>
-                        </select>
-                    </div>
-                    <div style="font-size: 12px; color: #999;">
+        <!-- Navigation Menu -->
+        <div class="nav-menu">
+            <a href="/" class="nav-btn active">📊 Dashboard</a>
+            <a href="/alerts" class="nav-btn">🔔 Alerts</a>
+            <a href="/mqtt" class="nav-btn">📡 MQTT</a>
+            <a href="/time" class="nav-btn">⏱️ Time</a>
+            <a href="/security" class="nav-btn">🔒 Security</a>
+            <a href="/lora-settings" class="nav-btn">📻 LoRa Settings</a>
+        </div>
+        
+        <div class="grid">
+            <div class="card" style="grid-column: 1 / -1;">
+                <div class="card-title">
+                    📡 Active Clients
+                    <div style="margin-left: auto; font-size: 12px; color: #999;">
                         Auto-refresh: <span id="countdown">5</span>s
                     </div>
                 </div>
-            </header>
-            <div id="sensorList">
-                <div class="empty-state">
-                    <div class="empty-state-icon">📭</div>
-                    <p>No clients detected yet</p>
+                <div id="sensorList">
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📭</div>
+                        <p>No clients detected yet</p>
+                        <p style="font-size: 12px; margin-top: 10px;">Waiting for client data...</p>
+                    </div>
+                </div>
+            </div>            
+        </div>
+        
+        <!-- Historical Data Graphs -->
+        <div class="card" style="margin-bottom: 20px;">
+            <div class="card-title">
+                📈 Historical Data - Select Client
+            </div>
+            <div style="margin-bottom: 20px;">
+                <label for="sensorSelect" style="display: block; margin-bottom: 8px; font-weight: 600;">Client:</label>
+                <select id="sensorSelect" style="padding: 8px; border-radius: 6px; border: 2px solid #e0e0e0; font-size: 14px;">
+                    <option value="">-- Select a client --</option>
+                </select>
+                
+                <label for="timeRange" style="display: block; margin: 15px 0 8px; font-weight: 600;">Time Range:</label>
+                <div style="display: flex; gap: 10px;">
+                    <button class="time-btn active" data-range="all">All</button>
+                    <button class="time-btn" data-range="1h">1 Hour</button>
+                    <button class="time-btn" data-range="6h">6 Hours</button>
+                    <button class="time-btn" data-range="24h">24 Hours</button>
                 </div>
             </div>
-        </article>
-        
-        <article>
-            <header><h2>⚙️ Quick Actions</h2></header>
-            <div class="quick-actions">
-                <a href="/export/csv" class="btn secondary">📄 CSV</a>
-                <a href="/export/json" class="btn secondary">📋 JSON</a>
-                <a href="/alerts" class="btn secondary">🔔 Alerts</a>
-                <a href="/runtime-config" class="btn secondary">⚙️ Config</a>
-                <a href="/mqtt" class="btn secondary">📡 MQTT</a>
-                <a href="/security" class="btn secondary">🔐 Security</a>
-                <a href="/lora-settings" class="btn secondary">📻 LoRa</a>
-            </div>
-        </article>
-        
-        <article>
-            <header><h2>📈 Historical Data</h2></header>
-            <label for="sensorSelect">Client:</label>
-            <select id="sensorSelect">
-                <option value="">-- Select --</option>
-            </select>
-            
-            <label for="timeRange">Time Range:</label>
-            <div class="time-buttons">
-                <button class="time-btn active" data-range="all">All</button>
-                <button class="time-btn" data-range="1h">1h</button>
-                <button class="time-btn" data-range="6h">6h</button>
-                <button class="time-btn" data-range="24h">24h</button>
-            </div>
-        </article>
+        </div>
         
         <div class="grid">
-            <article style="grid-column: 1 / -1;">
-                <header><h2>🌡️ Temperature</h2></header>
+            <div class="card" style="grid-column: 1 / -1;">
+                <div class="card-title">🌡️ Temperature History</div>
                 <canvas id="tempChart" style="max-height: 300px;"></canvas>
-            </article>
+            </div>
             
-            <article style="grid-column: 1 / -1;">
-                <header><h2>💧 Humidity</h2></header>
-                <canvas id="humidityChart" style="max-height: 300px;"></canvas>
-            </article>
-            
-            <article style="grid-column: 1 / -1;">
-                <header><h2>🌪️ Pressure</h2></header>
-                <canvas id="pressureChart" style="max-height: 300px;"></canvas>
-            </article>
-            
-            <article style="grid-column: 1 / -1;">
-                <header><h2>💨 Gas Resistance</h2></header>
-                <canvas id="gasChart" style="max-height: 300px;"></canvas>
-            </article>
-            
-            <article style="grid-column: 1 / -1;">
-                <header><h2>💡 Light Intensity</h2></header>
-                <canvas id="lightChart" style="max-height: 300px;"></canvas>
-            </article>
-            
-            <article style="grid-column: 1 / -1;">
-                <header><h2>⚡ Voltage</h2></header>
-                <canvas id="voltageChart" style="max-height: 300px;"></canvas>
-            </article>
-            
-            <article style="grid-column: 1 / -1;">
-                <header><h2>🔌 Current</h2></header>
-                <canvas id="currentChart" style="max-height: 300px;"></canvas>
-            </article>
-            
-            <article style="grid-column: 1 / -1;">
-                <header><h2>⚙️ Power</h2></header>
-                <canvas id="powerChart" style="max-height: 300px;"></canvas>
-            </article>
-            
-            <article style="grid-column: 1 / -1;">
-                <header><h2>🔋 Battery</h2></header>
+            <div class="card" style="grid-column: 1 / -1;">
+                <div class="card-title">🔋 Battery History</div>
                 <canvas id="battChart" style="max-height: 300px;"></canvas>
-            </article>
+            </div>
             
-            <article style="grid-column: 1 / -1;">
-                <header><h2>📶 Signal (RSSI)</h2></header>
+            <div class="card" style="grid-column: 1 / -1;">
+                <div class="card-title">📶 Signal Strength (RSSI)</div>
                 <canvas id="rssiChart" style="max-height: 300px;"></canvas>
-            </article>
+            </div>
         </div>
     </div>
     
-    <script src="/dashboard.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const script = document.createElement('script');
+            script.src = '/dashboard.js';
+            script.defer = true;
+            document.body.appendChild(script);
+        });
+    </script>
+
 </body>
 </html>

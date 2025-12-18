@@ -5,33 +5,37 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Runtime Configuration</title>
     <link rel="stylesheet" href="/pico-custom.css">
+    <link rel="stylesheet" href="/style.css">
 </head>
 <body>
     <div class="container">
-        <header>
+        <div class="header">
             <h1>⚙️ Runtime Configuration</h1>
             <p>Configure sensor settings remotely via LoRa</p>
-            <a href="/" class="btn secondary">← Back to Dashboard</a>
-        </header>
+        </div>
         
-        <div id="messageBox" class="message hidden"></div>
+        <!-- Navigation Menu -->
+        <div class="nav-menu">
+            <a href="/" class="nav-btn">📊 Dashboard</a>
+            <a href="/alerts" class="nav-btn">🔔 Alerts</a>
+            <a href="/mqtt" class="nav-btn">📡 MQTT</a>
+            <a href="/time" class="nav-btn active">⏱️ Time</a>
+            <a href="/security" class="nav-btn">🔒 Security</a>
+            <a href="/lora-settings" class="nav-btn">📻 LoRa Settings</a>
+        </div>
         
         <article>
-            <header><h2>📡 Select Sensor</h2></header>
-            <select id="sensorSelect" style="width: 100%; padding: 8px; margin-bottom: 10px;">
-                <option value="">-- Select a sensor --</option>
-            </select>
-            <div id="sensorInfo" style="display: none; padding: 10px; background: #f5f5f5; border-radius: 5px; margin-top: 10px;">
-                <strong>Current Configuration:</strong><br>
-                <div style="margin-top: 8px;">
-                    <strong>Location:</strong> <span id="currentLocation">-</span><br>
-                    <strong>Interval:</strong> <span id="currentInterval">-</span> seconds<br>
-                    <strong>Last Seen:</strong> <span id="lastSeen">-</span><br>
-                    <strong>Battery:</strong> <span id="battery">-</span>%
+            <div id="sensorInfo">
+                <strong style="font-size: 16px;">📡 Configuring Sensor:</strong><br>
+                <div style="margin-top: 10px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+                    <div><strong>Location:</strong> <span id="currentLocation">-</span></div>
+                    <div><strong>ID:</strong> <span id="currentSensorId">-</span></div>
+                    <div><strong>Last Seen:</strong> <span id="lastSeen">-</span></div>
+                    <div><strong>Battery:</strong> <span id="battery">-</span>%</div>
                 </div>
             </div>
         </article>
-        
+
         <article>
             <header><h2>📍 Sensor Location</h2></header>
             <form id="locationForm">
@@ -83,286 +87,12 @@
     </div>
     
     <script>
-        let sensors = [];
-        let selectedSensor = null;
-        let commandPending = false;
-        
-        function disableAllButtons() {
-            commandPending = true;
-            document.getElementById('updateLocationBtn').disabled = true;
-            document.getElementById('updateIntervalBtn').disabled = true;
-            document.querySelectorAll('.preset-btn').forEach(btn => btn.disabled = true);
-            document.querySelectorAll('.action-btn').forEach(btn => btn.disabled = true);
-        }
-        
-        function enableAllButtons() {
-            commandPending = false;
-            document.getElementById('updateLocationBtn').disabled = false;
-            document.getElementById('updateIntervalBtn').disabled = false;
-            document.querySelectorAll('.preset-btn').forEach(btn => btn.disabled = false);
-            document.querySelectorAll('.action-btn').forEach(btn => btn.disabled = false);
-        }
-        
-        function setButtonLoading(buttonId, loading, originalText) {
-            const btn = document.getElementById(buttonId);
-            if (loading) {
-                btn.dataset.originalText = originalText;
-                btn.innerHTML = '⏳ Waiting for ACK...';
-                btn.disabled = true;
-            } else {
-                btn.innerHTML = btn.dataset.originalText || originalText;
-                btn.disabled = false;
-            }
-        }
-        
-        async function loadSensors() {
-            try {
-                const response = await fetch('/api/sensors');
-                sensors = await response.json();
-                
-                const select = document.getElementById('sensorSelect');
-                select.innerHTML = '<option value="">-- Select a sensor --</option>';
-                
-                sensors.forEach(sensor => {
-                    const option = document.createElement('option');
-                    option.value = sensor.id;
-                    option.textContent = `${sensor.location || 'Sensor ' + sensor.id} (ID: ${sensor.id})`;
-                    select.appendChild(option);
-                });
-            } catch (error) {
-                console.error('Error loading sensors:', error);
-                showMessage('Failed to load sensors', 'error');
-            }
-        }
-        
-        function onSensorSelected() {
-            const sensorId = document.getElementById('sensorSelect').value;
-            if (!sensorId) {
-                document.getElementById('sensorInfo').style.display = 'none';
-                selectedSensor = null;
-                return;
-            }
-            
-            selectedSensor = sensors.find(s => s.id == sensorId);
-            if (selectedSensor) {
-                document.getElementById('currentLocation').textContent = selectedSensor.location || 'Not set';
-                document.getElementById('currentInterval').textContent = 'Unknown'; // API doesn't return this yet
-                document.getElementById('lastSeen').textContent = selectedSensor.age || 'Unknown';
-                document.getElementById('battery').textContent = selectedSensor.battery || '0';
-                document.getElementById('sensorInfo').style.display = 'block';
-                
-                // Pre-fill location field
-                document.getElementById('locationInput').value = selectedSensor.location || '';
-            }
-        }
-        
-        function setInterval(seconds) {
-            document.getElementById('intervalInput').value = seconds;
-        }
-        
-        document.getElementById('locationForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            if (!selectedSensor) {
-                showMessage('Please select a sensor first', 'error');
-                return;
-            }
-            
-            if (commandPending) {
-                showMessage('Please wait for the previous command to complete', 'error');
-                return;
-            }
-            
-            const location = document.getElementById('locationInput').value.trim();
-            if (!location) {
-                showMessage('Location cannot be empty', 'error');
-                return;
-            }
-            
-            disableAllButtons();
-            setButtonLoading('updateLocationBtn', true, '💾 Update Location');
-            
-            try {
-                const response = await fetch('/api/remote-config/location', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        id: selectedSensor.id,
-                        location: location
-                    })
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    showMessage(`Location updated to "${location}". Waiting for sensor acknowledgment...`, 'success');
-                    
-                    // Wait 2 seconds, then refresh sensor data
-                    setTimeout(async () => {
-                        await loadSensors();
-                        // Re-select the same sensor to refresh display
-                        const sensorSelect = document.getElementById('sensorSelect');
-                        sensorSelect.value = selectedSensor.id;
-                        onSensorSelected();
-                        
-                        enableAllButtons();
-                        setButtonLoading('updateLocationBtn', false, '💾 Update Location');
-                        showMessage(`Location updated successfully!`, 'success');
-                    }, 2000);
-                } else {
-                    enableAllButtons();
-                    setButtonLoading('updateLocationBtn', false, '💾 Update Location');
-                    showMessage(`Failed: ${result.message || 'Unknown error'}`, 'error');
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                enableAllButtons();
-                setButtonLoading('updateLocationBtn', false, '💾 Update Location');
-                showMessage('Failed to send command', 'error');
-            }
+        document.addEventListener('DOMContentLoaded', () => {
+            const script = document.createElement('script');
+            script.src = '/runtime-config.js';
+            script.defer = true;
+            document.body.appendChild(script);
         });
-        
-        document.getElementById('intervalForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            if (!selectedSensor) {
-                showMessage('Please select a sensor first', 'error');
-                return;
-            }
-            
-            if (commandPending) {
-                showMessage('Please wait for the previous command to complete', 'error');
-                return;
-            }
-            
-            const interval = parseInt(document.getElementById('intervalInput').value);
-            if (interval < 10 || interval > 3600) {
-                showMessage('Interval must be between 10 and 3600 seconds', 'error');
-                return;
-            }
-            
-            disableAllButtons();
-            setButtonLoading('updateIntervalBtn', true, '💾 Update Interval');
-            
-            try {
-                const response = await fetch('/api/remote-config/interval', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        id: selectedSensor.id,
-                        interval: interval
-                    })
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    showMessage(`Interval updated to ${interval}s. Waiting for sensor acknowledgment...`, 'success');
-                    
-                    // Wait 2 seconds, then refresh sensor data
-                    setTimeout(async () => {
-                        await loadSensors();
-                        const sensorSelect = document.getElementById('sensorSelect');
-                        sensorSelect.value = selectedSensor.id;
-                        onSensorSelected();
-                        
-                        enableAllButtons();
-                        setButtonLoading('updateIntervalBtn', false, '💾 Update Interval');
-                        showMessage(`Interval updated successfully!`, 'success');
-                    }, 2000);
-                } else {
-                    enableAllButtons();
-                    setButtonLoading('updateIntervalBtn', false, '💾 Update Interval');
-                    showMessage(`Failed: ${result.message || 'Unknown error'}`, 'error');
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                enableAllButtons();
-                setButtonLoading('updateIntervalBtn', false, '💾 Update Interval');
-                showMessage('Failed to send command', 'error');
-            }
-        });
-        
-        async function restartSensor() {
-            if (!selectedSensor) {
-                showMessage('Please select a sensor first', 'error');
-                return;
-            }
-            
-            if (commandPending) {
-                showMessage('Please wait for the previous command to complete', 'error');
-                return;
-            }
-            
-            if (!confirm(`Are you sure you want to restart sensor ${selectedSensor.id}?`)) {
-                return;
-            }
-            
-            disableAllButtons();
-            setButtonLoading('restartBtn', true, '🔄 Restart Sensor');
-            
-            try {
-                const response = await fetch('/api/remote-config/restart', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        id: selectedSensor.id
-                    })
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    showMessage(`Restart command sent. Sensor will reboot in ~1 second...`, 'success');
-                    
-                    // Wait 3 seconds for sensor to reboot, then refresh
-                    setTimeout(async () => {
-                        await loadSensors();
-                        enableAllButtons();
-                        setButtonLoading('restartBtn', false, '🔄 Restart Sensor');
-                        showMessage(`Sensor restarted successfully!`, 'success');
-                    }, 3000);
-                } else {
-                    enableAllButtons();
-                    setButtonLoading('restartBtn', false, '🔄 Restart Sensor');
-                    showMessage(`Failed: ${result.message || 'Unknown error'}`, 'error');
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                enableAllButtons();
-                setButtonLoading('restartBtn', false, '🔄 Restart Sensor');
-                showMessage('Failed to send command', 'error');
-            }
-        }
-        
-        async function pingSensor() {
-            if (!selectedSensor) {
-                showMessage('Please select a sensor first', 'error');
-                return;
-            }
-            
-            showMessage('Note: Ping functionality requires sensor to implement CMD_PING. Currently, sensors send data on their regular interval. Use "Update Interval" to adjust timing.', 'info');
-        }
-        
-        function showMessage(text, type) {
-            const message = document.getElementById('statusMessage');
-            message.textContent = text;
-            message.className = 'message ' + type;
-            message.style.display = 'block';
-            
-            if (type === 'success') {
-                setTimeout(() => {
-                    message.style.display = 'none';
-                }, 10000);
-            }
-        }
-        
-        // Initialize
-        document.getElementById('sensorSelect').addEventListener('change', onSensorSelected);
-        loadSensors();
-        
-        // Auto-refresh sensor list every 30 seconds
-        setInterval(loadSensors, 30000);
     </script>
 </body>
 </html>

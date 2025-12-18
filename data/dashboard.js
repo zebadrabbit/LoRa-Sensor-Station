@@ -1,6 +1,39 @@
 let charts = {};
 let currentTimeWindow = 'all';  // Match the default active button
 let ws;
+let pollTimer = null;
+let reconnectTimer = null;
+let dataRefreshTimer = null;
+
+function updateClock() {
+    const now = new Date();
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    const timeString = `${hours}:${minutes}:${seconds}`;
+    const timeElement = document.getElementById('currentTime');
+    if (timeElement) {
+        timeElement.textContent = timeString;
+    }
+}
+
+function startPolling() {
+    if (pollTimer) return;
+    pollTimer = setInterval(() => {
+        loadData();
+        loadHistoricalData();
+    }, 5000);
+    console.log('📡 Fallback polling started (5s)');
+    document.getElementById('wsStatus').textContent = '🟠 Polling';
+}
+
+function stopPolling() {
+    if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+        console.log('🛑 Fallback polling stopped');
+    }
+}
 
 async function loadData() {
     try {
@@ -29,20 +62,23 @@ function updateSensorList(sensors) {
         return;
     }
     
-    // Update zone filter dropdown
+    // Update zone filter dropdown if it exists
     const zoneFilter = document.getElementById('zoneFilter');
-    const currentZone = zoneFilter.value;
-    const zones = new Set();
-    sensors.forEach(s => { if (s.zone) zones.add(s.zone); });
-    
-    zoneFilter.innerHTML = '<option value="">All Zones</option>';
-    Array.from(zones).sort().forEach(zone => {
-        const opt = document.createElement('option');
-        opt.value = zone;
-        opt.textContent = zone;
-        zoneFilter.appendChild(opt);
-    });
-    if (currentZone) zoneFilter.value = currentZone;
+    let currentZone = '';
+    if (zoneFilter) {
+        currentZone = zoneFilter.value;
+        const zones = new Set();
+        sensors.forEach(s => { if (s.zone) zones.add(s.zone); });
+        
+        zoneFilter.innerHTML = '<option value="">All Zones</option>';
+        Array.from(zones).sort().forEach(zone => {
+            const opt = document.createElement('option');
+            opt.value = zone;
+            opt.textContent = zone;
+            zoneFilter.appendChild(opt);
+        });
+        if (currentZone) zoneFilter.value = currentZone;
+    }
     
     // Filter sensors by zone
     const filteredSensors = currentZone ? 
@@ -80,6 +116,7 @@ function updateSensorList(sensors) {
                     ${sensor.zone ? `<span style="background: #ecf0f1; padding: 2px 8px; border-radius: 12px; font-size: 11px; color: #7f8c8d;">📍 ${sensor.zone}</span>` : ''}
                     <span style="background: ${priorityColor}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">${sensor.priority || 'Medium'}</span>
                     <span style="background: ${healthColor}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;" title="Communication: ${(health * 100).toFixed(0)}%">❤️ ${healthLabel}</span>
+                    <a href="/runtime-config?sensor=${sensor.id}" style="margin-left: auto; padding: 4px 10px; background: #667eea; color: white; text-decoration: none; border-radius: 6px; font-size: 13px; font-weight: 600;" title="Configure sensor">⚙️ Config</a>
                 </div>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; font-size: 14px; color: #666;">
                     <div>🔋 <strong>Battery:</strong> ${batteryDisplay}</div>
@@ -225,10 +262,10 @@ async function loadHistoricalData() {
         
         chartFields.forEach(chart => {
             const canvas = document.getElementById(chart.id);
-            const article = canvas?.closest('article');
-            if (article) {
+            const container = canvas?.closest('.card');
+            if (container) {
                 if (chart.hasData) {
-                    article.style.display = 'block';
+                    container.style.display = 'block';
                     if (charts[chart.id]) {
                         charts[chart.id].data.labels = labels;
                         charts[chart.id].data.datasets[0].data = data.map(d => d[chart.field]);
@@ -236,7 +273,7 @@ async function loadHistoricalData() {
                         console.log(`Updated ${chart.id} with ${data.length} points`);
                     }
                 } else {
-                    article.style.display = 'none';
+                    container.style.display = 'none';
                     console.log(`Hiding ${chart.id} - no data`);
                 }
             }
@@ -275,13 +312,28 @@ function changeSensor(selectId, targetId) {
 }
 
 function connectWebSocket() {
-    const wsUrl = `ws://${window.location.hostname}/ws`;
+    // Clean up any existing WebSocket first
+    if (ws) {
+        console.log('🔄 Closing existing WebSocket before creating new one');
+        ws.onclose = null; // Prevent reconnection
+        ws.onerror = null;
+        ws.onmessage = null;
+        ws.onopen = null;
+        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+            ws.close();
+        }
+        ws = null;
+    }
+    
+    const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const wsUrl = `${scheme}://${window.location.host}/ws`;
     console.log('Connecting to WebSocket:', wsUrl);
     ws = new WebSocket(wsUrl);
     
     ws.onopen = () => {
         console.log('✅ WebSocket connected');
         document.getElementById('wsStatus').textContent = '🟢 Connected';
+        stopPolling();
     };
     
     ws.onmessage = (event) => {
@@ -301,37 +353,69 @@ function connectWebSocket() {
     };
     
     ws.onerror = (error) => {
-        console.error('❌ WebSocket error:', error);
+        console.error('❌ WebSocket error:', error, 'readyState:', ws.readyState, 'url:', wsUrl);
         document.getElementById('wsStatus').textContent = '🔴 Error';
+        startPolling();
     };
     
     ws.onclose = () => {
         console.log('⚠️ WebSocket disconnected, will reconnect in 5s...');
         document.getElementById('wsStatus').textContent = '🟡 Reconnecting...';
+        startPolling();
         // Reconnect after 5 seconds
-        setTimeout(connectWebSocket, 5000);
+        if (reconnectTimer) clearTimeout(reconnectTimer);
+        reconnectTimer = setTimeout(connectWebSocket, 5000);
     };
 }
 
+// Cleanup function to close connections when leaving the page
+function cleanup() {
+    console.log('🧹 Cleaning up dashboard resources...');
+    
+    // Stop all timers
+    stopPolling();
+    if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+    }
+    if (dataRefreshTimer) {
+        clearInterval(dataRefreshTimer);
+        dataRefreshTimer = null;
+    }
+    
+    // Close WebSocket
+    if (ws) {
+        ws.onclose = null; // Prevent reconnection
+        ws.onerror = null;
+        ws.onmessage = null;
+        ws.onopen = null;
+        try {
+            if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+                ws.close();
+            }
+        } catch (e) {
+            console.warn('Error closing WebSocket:', e);
+        }
+        ws = null;
+        console.log('🔌 WebSocket closed');
+    }
+}
+
 // Initialize
-document.addEventListener('DOMContentLoaded', () => {
+function initDashboard() {
+    console.log('📱 Dashboard initializing...');
+    
+    // Clean up any existing resources first (in case page was soft-reloaded)
+    cleanup();
+    
+    // Only initialize charts that exist in the HTML
     initChart('tempChart', 'Temperature', '°C');
-    initChart('humidityChart', 'Humidity', '%');
-    initChart('pressureChart', 'Pressure', 'hPa');
-    initChart('gasChart', 'Gas Resistance', 'kΩ');
-    initChart('lightChart', 'Light', 'lux');
-    initChart('voltageChart', 'Voltage', 'V');
-    initChart('currentChart', 'Current', 'mA');
-    initChart('powerChart', 'Power', 'mW');
     initChart('battChart', 'Battery', '%');
     initChart('rssiChart', 'RSSI', 'dBm');
     
-    // Hide all charts initially until data is loaded
-    ['tempChart', 'humidityChart', 'pressureChart', 'gasChart', 'lightChart', 'voltageChart', 'currentChart', 'powerChart', 'battChart', 'rssiChart'].forEach(chartId => {
-        const canvas = document.getElementById(chartId);
-        const article = canvas?.closest('article');
-        if (article) article.style.display = 'none';
-    });
+    // Start clock update
+    updateClock();
+    setInterval(updateClock, 1000);
     
     // Connect WebSocket
     connectWebSocket();
@@ -340,7 +424,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadData();
     
     // Periodic refresh (fallback if WebSocket fails)
-    setInterval(loadData, 30000); // Update every 30 seconds
+    dataRefreshTimer = setInterval(loadData, 30000); // Update every 30 seconds
     
     // Time range buttons
     document.querySelectorAll('.time-btn').forEach(btn => {
@@ -353,8 +437,60 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     // Sensor selection
-    document.getElementById('sensorSelect').addEventListener('change', loadHistoricalData);
+    const sensorSelect = document.getElementById('sensorSelect');
+    if (sensorSelect) {
+        sensorSelect.addEventListener('change', loadHistoricalData);
+    }
     
     // Zone filter
-    document.getElementById('zoneFilter').addEventListener('change', loadData);
+    const zoneFilter = document.getElementById('zoneFilter');
+    if (zoneFilter) {
+        zoneFilter.addEventListener('change', loadData);
+    }
+}
+
+// Execute initialization when DOM is ready (handle both cases: already loaded or still loading)
+function waitForChartAndInit() {
+    if (typeof Chart === 'undefined') {
+        console.log('Waiting for Chart.js to load...');
+        setTimeout(waitForChartAndInit, 100);
+        return;
+    }
+    console.log('Chart.js loaded, initializing dashboard');
+    initDashboard();
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', waitForChartAndInit);
+} else {
+    // DOM already loaded, but check for Chart.js
+    waitForChartAndInit();
+}
+
+// Clean up when user navigates away from the dashboard
+window.addEventListener('beforeunload', cleanup);
+window.addEventListener('pagehide', cleanup);
+
+// Handle page visibility changes (tab switching or navigating away)
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+        console.log('📴 Dashboard hidden, pausing updates');
+        stopPolling();
+        if (dataRefreshTimer) {
+            clearInterval(dataRefreshTimer);
+            dataRefreshTimer = null;
+        }
+    } else {
+        console.log('📱 Dashboard visible, resuming updates');
+        // Reconnect WebSocket if needed
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+            connectWebSocket();
+        }
+        // Restart data refresh
+        if (!dataRefreshTimer) {
+            dataRefreshTimer = setInterval(loadData, 30000);
+        }
+        // Immediate refresh
+        loadData();
+    }
 });
