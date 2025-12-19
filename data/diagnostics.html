@@ -19,8 +19,11 @@
       <a href="/" class="btn secondary">← Back to Dashboard</a>
     </div>
 
-    <div class="card">
-      <div class="card-title">📡 Link Test</div>
+    <div class="row">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header">📡 Link Test</div>
+          <div class="card-body">
       <div class="row">
         <div>
           <label>Sensor ID</label>
@@ -43,12 +46,18 @@
         <thead>
           <tr><th>Seq</th><th>Latency (ms)</th><th>RSSI</th><th>SNR</th><th>Status</th></tr>
         </thead>
-        <tbody id="lt-table"></tbody>
-      </table>
+            <tbody id="lt-table"></tbody>
+          </table>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <div class="card">
-      <div class="card-title">⏱️ Time Sync</div>
+    <div class="row">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header">⏱️ Time Sync</div>
+          <div class="card-body">
       <div class="row">
         <div>
           <label>Sensor ID (blank = all)</label>
@@ -64,8 +73,11 @@
           <button id="ts-sync" class="btn">Sync Time</button>
         </div>
       </div>
-      <div class="muted" id="ts-browser-note" style="margin-top:6px"></div>
-      <div id="ts-status" style="margin-top:12px"></div>
+            <div class="muted" id="ts-browser-note" style="margin-top:6px"></div>
+            <div id="ts-status" style="margin-top:12px"></div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 

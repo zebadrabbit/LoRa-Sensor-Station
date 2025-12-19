@@ -27,9 +27,12 @@
         
         <div id="messageBox" class="message hidden"></div>
         
-        <div class="card">
-            <div class="card-title">📡 Current Configuration</div>
-            <div class="info-grid">
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">📡 Current Configuration</div>
+                    <div class="card-body">
+                        <div class="info-grid">
                 <div class="info-item">
                     <strong>Network ID:</strong>
                     <span id="currentNetworkId">Loading...</span>
@@ -53,13 +56,18 @@
                 <div class="info-item">
                     <strong>TX Power:</strong>
                     <span id="currentTxPower">Loading...</span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
         
-        <div class="card">
-            <div class="card-title">⚙️ LoRa Configuration</div>
-            <form id="loraForm">
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">⚙️ LoRa Configuration</div>
+                    <div class="card-body">
+                        <form id="loraForm">
                 <div class="form-group">
                     <label for="region">Region</label>
                     <select id="region" name="region" required>

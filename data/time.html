@@ -25,9 +25,12 @@
       <a href="/lora-settings" class="nav-btn">📻 LoRa Settings</a>
     </div>
 
-    <div class="card">
-      <div class="card-title">⚙️ NTP Settings</div>
-      <div class="form-group">
+    <div class="row">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header">⚙️ NTP Settings</div>
+          <div class="card-body">
+            <div class="form-group">
         <div class="checkbox-group">
           <input id="ntp-enabled" type="checkbox">
           <label for="ntp-enabled">Enable NTP Sync</label>
@@ -50,12 +53,18 @@
       <div style="display:flex;gap:8px;align-items:center;margin-top:15px;">
         <button id="btn-browser" class="btn secondary">Use Browser Time Zone</button>
         <button id="btn-save" class="btn">💾 Save</button>
-        <span id="save-status" class="muted"></span>
+              <span id="save-status" class="muted"></span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div class="card">
-      <div class="card-title">📡 Sync Now</div>
+    <div class="row">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header">📡 Sync Now</div>
+          <div class="card-body">
       <div class="form-group">
         <label for="ts-sensor">Sensor ID (leave blank for all sensors)</label>
         <input id="ts-sensor" type="number" min="1" max="255" placeholder="Optional - specific sensor ID">
@@ -63,7 +72,10 @@
       </div>
       <div style="display:flex;gap:8px;align-items:center;margin-top:15px;">
         <button id="btn-sync" class="btn">🔄 Sync Time Now</button>
-        <span id="sync-status" class="muted"></span>
+              <span id="sync-status" class="muted"></span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>

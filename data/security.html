@@ -41,10 +41,13 @@
             </div>
         </div>
         
-        <!-- Encryption Configuration -->
-        <div class="card">
-            <div class="card-title">Encryption Settings</div>
-            <p>Enable AES-128 encryption for all LoRa packets. When enabled, only devices with the shared encryption key can communicate.</p>
+        <div class="row">
+            <div class="col-12">
+                <!-- Encryption Configuration -->
+                <div class="card">
+                    <div class="card-header">Encryption Settings</div>
+                    <div class="card-body">
+                        <p>Enable AES-128 encryption for all LoRa packets. When enabled, only devices with the shared encryption key can communicate.</p>
             
             <label style="display: flex; align-items: center; margin-top: 15px;">
                 <strong>Enable Encryption:</strong>
@@ -71,13 +74,19 @@
                 
                 <h3 style="margin-top: 20px;">⚠️ Generate New Random Key</h3>
                 <p><strong>Warning:</strong> This will generate a completely new random key. All sensors must be reconfigured with the new key!</p>
-                <button onclick="generateNewKey()" class="btn btn-warning">Generate New Key</button>
+                        <button onclick="generateNewKey()" class="btn btn-warning">Generate New Key</button>
+                    </div>
+                    </div>
+                </div>
             </div>
         </div>
         
-        <!-- Whitelist Configuration -->
-        <div class="card">
-            <div class="card-title">Device Whitelist</div>
+        <div class="row">
+            <div class="col-12">
+                <!-- Whitelist Configuration -->
+                <div class="card">
+                    <div class="card-header">Device Whitelist</div>
+                    <div class="card-body">
             <p>Control which sensor devices are allowed to communicate with this base station. When enabled, only whitelisted device IDs will be accepted.</p>
             
             <label style="display: flex; align-items: center; margin-top: 15px;">

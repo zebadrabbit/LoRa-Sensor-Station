@@ -25,32 +25,46 @@
             <a href="/lora-settings" class="nav-btn">📻 LoRa Settings</a>
         </div>
         
-        <div class="card">
-            <div id="sensorInfo">
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <div id="sensorInfo">
                 <strong style="font-size: 16px;">📡 Configuring Sensor:</strong><br>
                 <div style="margin-top: 10px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
                     <div><strong>Location:</strong> <span id="currentLocation">-</span></div>
                     <div><strong>ID:</strong> <span id="currentSensorId">-</span></div>
                     <div><strong>Last Seen:</strong> <span id="lastSeen">-</span></div>
                     <div><strong>Battery:</strong> <span id="battery">-</span>%</div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <div class="card">
-            <div class="card-title">📍 Sensor Location</div>
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">📍 Sensor Location</div>
+                    <div class="card-body">
             <form id="locationForm">
                 <div class="form-group">
                     <label for="locationInput">Sensor Name/Location</label>
                     <input type="text" id="locationInput" placeholder="e.g., Living Room, Garage, Freezer" maxlength="31" required>
                     <small>Maximum 31 characters</small>
                 </div>
-                <button type="submit" class="btn" id="updateLocationBtn">💾 Update Location</button>
-            </form>
+                        <button type="submit" class="btn" id="updateLocationBtn">💾 Update Location</button>
+                    </form>
+                    </div>
+                </div>
+            </div>
         </div>
         
-        <div class="card">
-            <div class="card-title">⏱️ Transmission Interval</div>
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">⏱️ Transmission Interval</div>
+                    <div class="card-body">
             <form id="intervalForm">
                 <div class="form-group">
                     <label for="intervalInput">Interval (seconds)</label>
@@ -66,24 +80,39 @@
                     <button type="button" class="btn btn-secondary preset-btn" onclick="setInterval(900)">15 min</button>
                     <button type="button" class="btn btn-secondary preset-btn" onclick="setInterval(1800)">30 min</button>
                 </div>
-                <button type="submit" class="btn" id="updateIntervalBtn" style="margin-top: 15px;">💾 Update Interval</button>
-            </form>
-        </div>
-        
-        <div class="card">
-            <div class="card-title">🔄 Sensor Actions</div>
-            <p>Send commands to the selected sensor</p>
-            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                <button class="btn btn-secondary action-btn" id="restartBtn" onclick="restartSensor()">🔄 Restart Sensor</button>
-                <button class="btn btn-secondary action-btn" id="pingBtn" onclick="pingSensor()">📡 Request Immediate Ping</button>
+                        <button type="submit" class="btn" id="updateIntervalBtn" style="margin-top: 15px;">💾 Update Interval</button>
+                    </form>
+                    </div>
+                </div>
             </div>
         </div>
         
-        <div class="card">
-            <div class="card-title">ℹ️ Information</div>
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">🔄 Sensor Actions</div>
+                    <div class="card-body">
+            <p>Send commands to the selected sensor</p>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <button class="btn btn-secondary action-btn" id="restartBtn" onclick="restartSensor()">🔄 Restart Sensor</button>
+                        <button class="btn btn-secondary action-btn" id="pingBtn" onclick="pingSensor()">📡 Request Immediate Ping</button>
+                    </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">ℹ️ Information</div>
+                    <div class="card-body">
             <p><strong>How it works:</strong> Commands are sent via LoRa to the sensor. The sensor will acknowledge the command in its next transmission.</p>
             <p><strong>Response time:</strong> Sensors with long intervals will temporarily switch to 10-second intervals for 60 seconds after receiving a command, allowing quick responses.</p>
-            <p><strong>No WiFi required:</strong> Sensors don't need WiFi connectivity. All configuration happens over LoRa radio.</p>
+                        <p><strong>No WiFi required:</strong> Sensors don't need WiFi connectivity. All configuration happens over LoRa radio.</p>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
     

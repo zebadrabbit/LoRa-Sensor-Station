@@ -28,10 +28,13 @@
         <div id="messageBox" class="alert hidden"></div>
         
         <form id="alertsForm">
-            <!-- Teams Webhook -->
-            <div class="card">
-                <div class="card-title">Microsoft Teams Integration</div>
-                <div class="form-group">
+            <div class="row">
+                <div class="col-12">
+                    <!-- Teams Webhook -->
+                    <div class="card">
+                        <div class="card-header">Microsoft Teams Integration</div>
+                        <div class="card-body">
+                            <div class="form-group">
                     <div class="checkbox-group">
                         <input type="checkbox" id="teamsEnabled" name="teamsEnabled">
                         <label for="teamsEnabled">Enable Teams Notifications</label>
@@ -42,13 +45,19 @@
                     <input type="text" id="teamsWebhook" name="teamsWebhook" placeholder="https://outlook.office.com/webhook/...">
                     <div class="help-text">Create an Incoming Webhook connector in your Teams channel</div>
                 </div>
-                <button type="button" class="btn btn-test" onclick="testWebhook()">Send Test Alert</button>
+                            <button type="button" class="btn btn-test" onclick="testWebhook()">Send Test Alert</button>
+                        </div>
+                    </div>
+                </div>
             </div>
             
-            <!-- Email Configuration -->
-            <div class="card">
-                <div class="card-title">Email Notifications</div>
-                <div class="form-group">
+            <div class="row">
+                <div class="col-12">
+                    <!-- Email Configuration -->
+                    <div class="card">
+                        <div class="card-header">Email Notifications</div>
+                        <div class="card-body">
+                            <div class="form-group">
                     <div class="checkbox-group">
                         <input type="checkbox" id="emailEnabled" name="emailEnabled">
                         <label for="emailEnabled">Enable Email Notifications</label>
@@ -89,12 +98,18 @@
                         <label for="emailTLS">Use TLS/STARTTLS</label>
                     </div>
                 </div>
-                <button type="button" class="btn btn-test" onclick="testEmail()">📧 Send Test Email</button>
+                            <button type="button" class="btn btn-test" onclick="testEmail()">📧 Send Test Email</button>
+                        </div>
+                    </div>
+                </div>
             </div>
             
-            <!-- Temperature Thresholds -->
-            <div class="card">
-                <div class="card-title">Temperature Thresholds</div>
+            <div class="row">
+                <div class="col-12">
+                    <!-- Temperature Thresholds -->
+                    <div class="card">
+                        <div class="card-header">Temperature Thresholds</div>
+                        <div class="card-body">
                 <div class="threshold-row">
                     <div class="form-group">
                         <label for="tempLow">Low Temperature (°C)</label>
@@ -111,13 +126,19 @@
                 </div>
                 <div class="checkbox-group">
                     <input type="checkbox" id="alertTempLow" name="alertTempLow" checked>
-                    <label for="alertTempLow">Alert on low temperature</label>
+                            <label for="alertTempLow">Alert on low temperature</label>
+                        </div>
+                        </div>
+                    </div>
                 </div>
             </div>
             
-            <!-- Battery Thresholds -->
-            <div class="card">
-                <div class="card-title">Battery Thresholds</div>
+            <div class="row">
+                <div class="col-12">
+                    <!-- Battery Thresholds -->
+                    <div class="card">
+                        <div class="card-header">Battery Thresholds</div>
+                        <div class="card-body">
                 <div class="threshold-row">
                     <div class="form-group">
                         <label for="batteryLow">Low Battery (%)</label>
@@ -134,13 +155,19 @@
                 </div>
                 <div class="checkbox-group">
                     <input type="checkbox" id="alertBatteryCritical" name="alertBatteryCritical" checked>
-                    <label for="alertBatteryCritical">Alert on critical battery</label>
+                            <label for="alertBatteryCritical">Alert on critical battery</label>
+                        </div>
+                        </div>
+                    </div>
                 </div>
             </div>
             
-            <!-- Sensor Status -->
-            <div class="card">
-                <div class="card-title">Client Status Alerts</div>
+            <div class="row">
+                <div class="col-12">
+                    <!-- Sensor Status -->
+                    <div class="card">
+                        <div class="card-header">Client Status Alerts</div>
+                        <div class="card-body">
                 <div class="form-group">
                     <label for="sensorTimeout">Client Inactivity Timeout (minutes)</label>
                     <input type="number" id="sensorTimeout" name="sensorTimeout" min="1" max="1440" value="15">
@@ -152,12 +179,19 @@
                 </div>
                 <div class="checkbox-group">
                     <input type="checkbox" id="alertSensorOnline" name="alertSensorOnline">
-                    <label for="alertSensorOnline">Alert when client comes back online</label>
+                            <label for="alertSensorOnline">Alert when client comes back online</label>
+                        </div>
+                        </div>
+                    </div>
                 </div>
             </div>
             
-            <button type="submit" class="btn btn-primary">💾 Save Configuration</button>
-            <button type="button" class="btn btn-secondary" onclick="location.href='/'">Cancel</button>
+            <div class="row">
+                <div class="col-12">
+                            <button type="submit" class="btn btn-primary">💾 Save Configuration</button>
+                    <button type="button" class="btn btn-secondary" onclick="location.href='/'">Cancel</button>
+                </div>
+            </div>
         </form>
     </div>
     
