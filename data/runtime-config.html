@@ -24,7 +24,7 @@
             <a href="/lora-settings" class="nav-btn">📻 LoRa Settings</a>
         </div>
         
-        <article>
+        <div class="card">
             <div id="sensorInfo">
                 <strong style="font-size: 16px;">📡 Configuring Sensor:</strong><br>
                 <div style="margin-top: 10px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
@@ -34,10 +34,10 @@
                     <div><strong>Battery:</strong> <span id="battery">-</span>%</div>
                 </div>
             </div>
-        </article>
+        </div>
 
-        <article>
-            <header><h2>📍 Sensor Location</h2></header>
+        <div class="card">
+            <div class="card-title">📍 Sensor Location</div>
             <form id="locationForm">
                 <div class="form-group">
                     <label for="locationInput">Sensor Name/Location</label>
@@ -46,10 +46,10 @@
                 </div>
                 <button type="submit" class="btn" id="updateLocationBtn">💾 Update Location</button>
             </form>
-        </article>
+        </div>
         
-        <article>
-            <header><h2>⏱️ Transmission Interval</h2></header>
+        <div class="card">
+            <div class="card-title">⏱️ Transmission Interval</div>
             <form id="intervalForm">
                 <div class="form-group">
                     <label for="intervalInput">Interval (seconds)</label>
@@ -67,23 +67,23 @@
                 </div>
                 <button type="submit" class="btn" id="updateIntervalBtn" style="margin-top: 15px;">💾 Update Interval</button>
             </form>
-        </article>
+        </div>
         
-        <article>
-            <header><h2>🔄 Sensor Actions</h2></header>
+        <div class="card">
+            <div class="card-title">🔄 Sensor Actions</div>
             <p>Send commands to the selected sensor</p>
             <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                 <button class="btn btn-secondary action-btn" id="restartBtn" onclick="restartSensor()">🔄 Restart Sensor</button>
                 <button class="btn btn-secondary action-btn" id="pingBtn" onclick="pingSensor()">📡 Request Immediate Ping</button>
             </div>
-        </article>
+        </div>
         
-        <article>
-            <header><h2>ℹ️ Information</h2></header>
+        <div class="card">
+            <div class="card-title">ℹ️ Information</div>
             <p><strong>How it works:</strong> Commands are sent via LoRa to the sensor. The sensor will acknowledge the command in its next transmission.</p>
             <p><strong>Response time:</strong> Sensors with long intervals will temporarily switch to 10-second intervals for 60 seconds after receiving a command, allowing quick responses.</p>
             <p><strong>No WiFi required:</strong> Sensors don't need WiFi connectivity. All configuration happens over LoRa radio.</p>
-        </article>
+        </div>
     </div>
     
     <script>

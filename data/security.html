@@ -41,8 +41,8 @@
         </div>
         
         <!-- Encryption Configuration -->
-        <article>
-            <header><h2>Encryption Settings</h2></header>
+        <div class="card">
+            <div class="card-title">Encryption Settings</div>
             <p>Enable AES-128 encryption for all LoRa packets. When enabled, only devices with the shared encryption key can communicate.</p>
             
             <label style="display: flex; align-items: center; margin-top: 15px;">
@@ -72,11 +72,11 @@
                 <p><strong>Warning:</strong> This will generate a completely new random key. All sensors must be reconfigured with the new key!</p>
                 <button onclick="generateNewKey()" class="btn btn-warning">Generate New Key</button>
             </div>
-        </article>
+        </div>
         
         <!-- Whitelist Configuration -->
-        <article>
-            <header><h2>Device Whitelist</h2></header>
+        <div class="card">
+            <div class="card-title">Device Whitelist</div>
             <p>Control which sensor devices are allowed to communicate with this base station. When enabled, only whitelisted device IDs will be accepted.</p>
             
             <label style="display: flex; align-items: center; margin-top: 15px;">

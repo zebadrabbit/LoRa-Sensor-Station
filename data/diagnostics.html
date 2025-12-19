@@ -9,14 +9,17 @@
 </head>
 <body>
   <div class="container">
-    <header>
+    <div class="header">
       <h1>🔎 LoRa Diagnostics</h1>
       <p>Run link tests and sync time across nodes</p>
+    </div>
+    
+    <div style="margin-bottom: 20px;">
       <a href="/" class="btn secondary">← Back to Dashboard</a>
-    </header>
+    </div>
 
-    <article>
-      <header><h2>📡 Link Test</h2></header>
+    <div class="card">
+      <div class="card-title">📡 Link Test</div>
       <div class="row">
         <div>
           <label>Sensor ID</label>
@@ -41,10 +44,10 @@
         </thead>
         <tbody id="lt-table"></tbody>
       </table>
-    </article>
+    </div>
 
-    <article>
-      <header><h2>⏱️ Time Sync</h2></header>
+    <div class="card">
+      <div class="card-title">⏱️ Time Sync</div>
       <div class="row">
         <div>
           <label>Sensor ID (blank = all)</label>
@@ -62,7 +65,7 @@
       </div>
       <div class="muted" id="ts-browser-note" style="margin-top:6px"></div>
       <div id="ts-status" style="margin-top:12px"></div>
-    </article>
+    </div>
   </div>
 
 <script>
