@@ -108,20 +108,26 @@ function updateSensorList(sensors) {
         else if (sensor.priorityLevel === 0) priorityColor = '#95a5a6'; // Low = gray
         
         html += `
-            <div class="sensor-item sensor-item-tab" style="background: white; border: 1px solid #e0e6ed; border-left: 5px solid #667eea; border-radius: 8px; padding: 12px; padding-left: 16px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                    <span class="status-indicator ${statusClass}" style="width: 10px; height: 10px; border-radius: 50%; ${isOnline ? 'background: #27ae60;' : 'background: #e74c3c;'}"></span>
-                    <strong style="font-size: 16px;">${location}</strong>
-                    <span style="background: #ecf0f1; padding: 2px 8px; border-radius: 12px; font-size: 11px; color: #7f8c8d;">ID: ${sensor.id}</span>
-                    ${sensor.zone ? `<span style="background: #ecf0f1; padding: 2px 8px; border-radius: 12px; font-size: 11px; color: #7f8c8d;">📍 ${sensor.zone}</span>` : ''}
-                    <span style="background: ${priorityColor}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">${sensor.priority || 'Medium'}</span>
-                    <span style="background: ${healthColor}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;" title="Communication: ${(health * 100).toFixed(0)}%">❤️ ${healthLabel}</span>
-                    <a href="/runtime-config?sensor=${sensor.id}" style="margin-left: auto; padding: 4px 10px; background: #667eea; color: white; text-decoration: none; border-radius: 6px; font-size: 13px; font-weight: 600;" title="Configure sensor">⚙️ Config</a>
-                </div>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; font-size: 14px; color: #666;">
-                    <div>🔋 <strong>Battery:</strong> ${batteryDisplay}</div>
-                    <div>📶 <strong>RSSI:</strong> ${sensor.rssi} dBm</div>
-                    <div>🕐 <strong>Last seen:</strong> ${sensor.age}</div>
+            <div class="col-md-4 mb-3 client-card">
+                <div class="card" style="background: #353d52; border-left: 4px solid #8b9bff; height: 100%;">
+                    <div class="card-body">
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                            <span class="status-indicator ${statusClass}" style="width: 10px; height: 10px; border-radius: 50%; ${isOnline ? 'background: #27ae60;' : 'background: #e74c3c;'}"></span>
+                            <strong style="font-size: 16px; color: #ffffff;">${location}</strong>
+                            <span style="background: #353d52; padding: 2px 8px; border-radius: 12px; font-size: 11px; color: #9ca3af;">ID: ${sensor.id}</span>
+                            ${sensor.zone ? `<span style="background: #353d52; padding: 2px 8px; border-radius: 12px; font-size: 11px; color: #9ca3af;">📍 ${sensor.zone}</span>` : ''}
+                        </div>
+                        <div style="display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap;">
+                            <span style="background: ${priorityColor}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">${sensor.priority || 'Medium'}</span>
+                            <span style="background: ${healthColor}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;" title="Communication: ${(health * 100).toFixed(0)}%">❤️ ${healthLabel}</span>
+                            <a href="/runtime-config?sensor=${sensor.id}" style="margin-left: auto; padding: 4px 10px; background: #8b9bff; color: white; text-decoration: none; border-radius: 6px; font-size: 13px; font-weight: 600;" title="Configure sensor">⚙️ Config</a>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr; gap: 8px; font-size: 14px; color: #d1d5db;">
+                            <div>🔋 <strong>Battery:</strong> ${batteryDisplay}</div>
+                            <div>📶 <strong>RSSI:</strong> ${sensor.rssi} dBm</div>
+                            <div>🕐 <strong>Last seen:</strong> ${sensor.age}</div>
+                        </div>
+                    </div>
                 </div>
             </div>
         `;
@@ -178,8 +184,14 @@ function initChart(canvasId, title, unit) {
             datasets: [{
                 label: title,
                 data: [],
-                borderColor: '#667eea',
-                backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                borderColor: '#8b9bff',
+                backgroundColor: 'rgba(139, 155, 255, 0.15)',
+                borderWidth: 2.5,
+                pointBackgroundColor: '#8b9bff',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2,
+                pointRadius: 3,
+                pointHoverRadius: 5,
                 tension: 0.4
             }]
         },
@@ -187,12 +199,41 @@ function initChart(canvasId, title, unit) {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: { display: false }
+                legend: { 
+                    display: false 
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(45, 52, 70, 0.95)',
+                    titleColor: '#ffffff',
+                    bodyColor: '#e5e7eb',
+                    borderColor: '#8b9bff',
+                    borderWidth: 1
+                }
             },
             scales: {
+                x: {
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.08)',
+                        lineWidth: 1
+                    },
+                    ticks: {
+                        color: '#9ca3af'
+                    }
+                },
                 y: {
                     beginAtZero: false,
-                    title: { display: true, text: unit }
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.08)',
+                        lineWidth: 1
+                    },
+                    ticks: {
+                        color: '#9ca3af'
+                    },
+                    title: { 
+                        display: true, 
+                        text: unit,
+                        color: '#e5e7eb'
+                    }
                 }
             }
         }

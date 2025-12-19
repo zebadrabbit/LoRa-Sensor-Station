@@ -1502,7 +1502,15 @@ String WiFiPortal::generateHistoryJSON(uint8_t sensorId, uint32_t timeRange) {
     Serial.printf("📈 History found: count=%d, index=%d\n", history->count, history->index);
     
     uint32_t currentTime = millis() / 1000;
-    uint32_t cutoffTime = (timeRange > 0) ? (currentTime - timeRange) : 0;
+    uint32_t cutoffTime = 0;
+    
+    // Only apply time filter if we have enough uptime to cover the range
+    if (timeRange > 0) {
+        if (currentTime > timeRange) {
+            cutoffTime = currentTime - timeRange;
+        }
+        // else cutoffTime stays 0, showing all data when uptime < requested range
+    }
     
     Serial.printf("📈 Time filtering: current=%u, range=%u, cutoff=%u\n", 
                  currentTime, timeRange, cutoffTime);

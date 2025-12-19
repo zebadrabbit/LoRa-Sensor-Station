@@ -9,7 +9,7 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </head>
 <body>
-    <div class="container-fluid" style="max-width: 1200px;">
+    <div class="container-fluid">
         <div class="header">
             <h1>🔒 Security Configuration</h1>
             <p>Configure device whitelist and security settings</p>
@@ -49,27 +49,37 @@
                     <div class="card-body">
                         <p>Enable AES-128 encryption for all LoRa packets. When enabled, only devices with the shared encryption key can communicate.</p>
             
-            <label style="display: flex; align-items: center; margin-top: 15px;">
-                <strong>Enable Encryption:</strong>
-                <label class="toggle-switch">
-                    <input type="checkbox" id="encryptionToggle" onchange="updateEncryption()">
-                    <span class="slider"></span>
+            <div class="mb-3" style="margin-top: 15px;">
+                <label for="encryptionToggle" class="form-label d-flex align-items-center gap-2">
+                    <strong>Enable Encryption:</strong>
+                    <div class="toggle-switch">
+                        <input type="checkbox" id="encryptionToggle" onchange="updateEncryption()" aria-describedby="encryptionHelp">
+                        <span class="slider"></span>
+                    </div>
                 </label>
-            </label>
+                <div id="encryptionHelp" class="form-text">Toggle AES-128 encryption for all LoRa communications</div>
+            </div>
             
-            <div class="danger-zone" style="margin-top: 20px;">
+            <div class="danger-zone" style="margin-top: 20px;" role="region" aria-label="Encryption Key Management">
                 <h3>🔑 Encryption Key</h3>
                 <p>Current encryption key (32 hex characters). Copy this key to configure all sensors in your network.</p>
-                <div style="display: flex; gap: 10px; align-items: center; margin: 10px 0;">
-                    <input type="text" id="keyDisplay" readonly class="form-control" style="flex: 1; font-family: monospace;">
-                    <button onclick="copyKey()" class="btn btn-secondary" style="white-space: nowrap;">📋 Copy</button>
+                <div class="mb-3">
+                    <label for="keyDisplay" class="form-label visually-hidden">Current encryption key</label>
+                    <div class="d-flex gap-2">
+                        <input type="text" id="keyDisplay" readonly class="form-control" style="flex: 1; font-family: monospace;" aria-label="Current encryption key (read-only)">
+                        <button onclick="copyKey()" class="btn btn-secondary" style="white-space: nowrap;" aria-label="Copy encryption key to clipboard">📋 Copy</button>
+                    </div>
                 </div>
                 
                 <h3 style="margin-top: 20px;">Set Custom Key</h3>
                 <p>Enter a 32-character hex key (or generate a new random one below).</p>
-                <div style="display: flex; gap: 10px; margin: 10px 0;">
-                    <input type="text" id="keyInput" placeholder="Enter 32 hex characters (0-9, A-F)" maxlength="32" class="form-control" style="flex: 1; font-family: monospace;">
-                    <button onclick="setCustomKey()" class="btn btn-primary" style="white-space: nowrap;">Set Key</button>
+                <div class="mb-3">
+                    <label for="keyInput" class="form-label visually-hidden">Custom encryption key</label>
+                    <div class="d-flex gap-2">
+                        <input type="text" id="keyInput" placeholder="Enter 32 hex characters (0-9, A-F)" maxlength="32" class="form-control" style="flex: 1; font-family: monospace;" aria-describedby="keyInputHelp" pattern="[0-9A-Fa-f]{32}">
+                        <button onclick="setCustomKey()" class="btn btn-primary" style="white-space: nowrap;" aria-label="Apply custom encryption key">Set Key</button>
+                    </div>
+                    <div id="keyInputHelp" class="form-text">Must be exactly 32 hexadecimal characters (0-9, A-F)</div>
                 </div>
                 
                 <h3 style="margin-top: 20px;">⚠️ Generate New Random Key</h3>

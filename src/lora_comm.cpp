@@ -894,17 +894,20 @@ void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr) {
                 memcpy(&tzOffsetMin, &cmd->data[4], sizeof(int16_t));
                 Serial.printf("Time sync received: epoch=%lu, tzOffset=%d min\n", (unsigned long)epochSec, (int)tzOffsetMin);
                 
+                // Apply timezone offset to convert UTC to local time
+                time_t localTime = epochSec + (tzOffsetMin * 60);
+                
                 // Apply system time
                 struct timeval tv;
-                tv.tv_sec = epochSec;
+                tv.tv_sec = localTime;
                 tv.tv_usec = 0;
                 settimeofday(&tv, NULL);
                 #ifdef SENSOR_NODE
-                setSensorLastTimeSyncEpoch(epochSec);
+                setSensorLastTimeSyncEpoch(localTime);
                 #endif
                 
                 success = true;
-                Serial.println("System time updated via LoRa time sync");
+                Serial.printf("System time updated via LoRa time sync (local=%lu)\n", (unsigned long)localTime);
               }
               break;
             }

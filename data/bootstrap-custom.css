@@ -12,10 +12,21 @@
     --gradient-end: #764ba2;
 }
 
+/* === TEXT COLORS === */
+.text-muted {
+    color: #9ca3af !important;
+}
+
 /* === BASE STYLES === */
 body {
     background-color: var(--bs-body-bg);
     padding: 20px;
+}
+
+/* === CONTAINER OVERRIDES === */
+.container-fluid {
+    max-width: 1100px;
+    margin: 0 auto;
 }
 
 /* === GRADIENT BACKGROUND (for setup pages) === */
@@ -243,9 +254,15 @@ body.gradient-bg {
 }
 
 /* === FORMS === */
-.form-label {
+.form-label,
+.col-form-label {
     font-weight: 600;
     color: #e5e7eb;
+    text-align: right;
+}
+
+.input-group {
+    max-width: 600px;
 }
 
 .form-control,
@@ -266,9 +283,10 @@ body.gradient-bg {
     color: #9ca3af;
 }
 
+.form-text,
 .help-text {
     font-size: 13px;
-    color: #6c757d;
+    color: #d1d5db !important;
     margin-top: 5px;
 }
 
@@ -276,6 +294,29 @@ body.gradient-bg {
 .alert {
     border-left: 4px solid;
     border-radius: 8px;
+    background-color: #353d52 !important;
+    color: #ffffff !important;
+    border-color: var(--gradient-start) !important;
+}
+
+.alert.alert-success {
+    border-color: #10b981 !important;
+    background-color: #064e3b !important;
+}
+
+.alert.alert-danger {
+    border-color: #ef4444 !important;
+    background-color: #7f1d1d !important;
+}
+
+.alert.alert-warning {
+    border-color: #f59e0b !important;
+    background-color: #78350f !important;
+}
+
+.alert.alert-info {
+    border-color: #3b82f6 !important;
+    background-color: #1e3a8a !important;
 }
 
 /* === EMPTY STATES === */

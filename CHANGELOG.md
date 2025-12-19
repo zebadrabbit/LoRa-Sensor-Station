@@ -5,6 +5,43 @@ All notable changes to the LoRa Sensor Station project will be documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.17.0] - 2025-12-19
+
+### Added
+
+#### Dashboard Enhancements
+
+- **Enhanced Chart Visibility**: Increased chart height from 300px to 400px for better data visualization
+- **Dark Theme Chart Colors**: Updated Chart.js configuration with brighter colors optimized for dark backgrounds:
+  - Line color: `#8b9bff` (brighter blue) with 2.5px width
+  - Grid lines: Subtle white at 8% opacity
+  - Tick labels and text: Medium to light gray for readability
+  - Enhanced tooltip styling with dark background
+- **Client Card Grid Layout**: Converted client list to 3-column grid layout (col-md-4) for better space utilization
+- **Dark Theme Client Cards**: Client cards now follow consistent dark theme:
+  - Lighter background (`#353d52`) to stand out from page background
+  - White text for titles, light gray for details
+  - Dark gray badges with lighter text
+  - Brighter blue accent border and buttons
+  - Proper height matching across grid rows
+
+### Fixed
+
+- **Time Filter Unsigned Integer Underflow**: Fixed critical bug where selecting "1 hour", "6 hours", or "24 hours" filters would show "no readings recorded yet"
+  - Root cause: When device uptime < requested time range, subtraction wrapped around (e.g., 300 - 3600 = huge number)
+  - Solution: Added check to ensure `currentTime > timeRange` before subtraction
+  - Now shows all available data when uptime is less than requested range
+- **Sensor Timezone Application**: Fixed sensors not applying timezone offset to received UTC time
+  - Sensors now correctly calculate: `localTime = epochSec + (tzOffsetMin * 60)`
+  - Base station sends UTC + offset (no calculation on base)
+  - Proper separation of concerns maintained
+
+### Changed
+
+- **Chart Canvas Restoration**: Re-added temperature, battery, and RSSI chart canvases that were accidentally removed
+- **Time Filtering Logic**: Improved historical data API to handle short uptimes gracefully
+- **Client Card Layout**: Migrated from inline white-background styling to proper dark theme card components
+
 ## [2.16.0] - 2025-12-18
 
 ### Added

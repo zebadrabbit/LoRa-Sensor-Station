@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,34 +10,30 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
-    <div class="container-fluid" style="max-width: 1200px;">
+    <div class="container-fluid">
         <div class="header">
             <h1>🎯 LoRa Sensor Dashboard</h1>
             <p>Real-time monitoring and data visualization</p>
             <div class="header-stats">
                 <div class="header-stat">
-                    <div class="header-stat-label">Connection</div>
-                    <div class="header-stat-value" id="wsStatus" style="font-size: 14px;">🔵 Connecting...</div>
+                    <div class="header-stat-label">WebSockets</div>
+                    <div class="header-stat-value fs-5" id="wsStatus">🔵 Connecting...</div>
                 </div>
                 <div class="header-stat">
                     <div class="header-stat-label">Active Clients</div>
-                    <div class="header-stat-value" id="activeSensorCount">0</div>
+                    <div class="header-stat-value fs-5" id="activeSensorCount">0</div>
                 </div>
                 <div class="header-stat">
                     <div class="header-stat-label">Total Packets</div>
-                    <div class="header-stat-value" id="totalPackets">0</div>
-                </div>
-                <div class="header-stat">
-                    <div class="header-stat-label">RX Invalid</div>
-                    <div class="header-stat-value" id="rxInvalid">0</div>
+                    <div class="header-stat-value fs-5" id="totalPackets">0</div>
                 </div>
                 <div class="header-stat">
                     <div class="header-stat-label">Success Rate</div>
-                    <div class="header-stat-value" id="successRate">0%</div>
+                    <div class="header-stat-value fs-5" id="successRate">0%</div>
                 </div>
                 <div class="header-stat">
                     <div class="header-stat-label">Current Time</div>
-                    <div class="header-stat-value" id="currentTime" style="font-size: 14px;">--:--:--</div>
+                    <div class="header-stat-value fs-5" id="currentTime">--:--:--</div>
                 </div>
             </div>
         </div>
@@ -52,16 +48,16 @@
             <a href="/lora-settings" class="nav-btn">📻 LoRa Settings</a>
         </div>
         
-        <div class="row">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        📡 Active Clients
-                        <span class="float-end" style="font-size: 12px; color: #999;">
-                            Auto-refresh: <span id="countdown">5</span>s
-                        </span>
-                    </div>
-                    <div class="card-body" id="sensorList">
+        <div class="card mb-3">
+            <div class="card-header">
+                📡 Active Clients
+                <span class="float-end" style="font-size: 12px; color: #999;">
+                    Auto-refresh: <span id="countdown">5</span>s
+                </span>
+            </div>
+            <div class="card-body">
+                <div class="row" id="sensorList">
+                    <div class="col-12">
                         <div class="empty-state">
                             <div class="empty-state-icon">📭</div>
                             <p>No clients detected yet</p>
@@ -69,7 +65,7 @@
                         </div>
                     </div>
                 </div>
-            </div>            
+            </div>
         </div>
         
         <!-- Historical Data Graphs -->
@@ -102,7 +98,7 @@
                 <div class="card">
                     <div class="card-header">🌡️ Temperature History</div>
                     <div class="card-body">
-                        <canvas id="tempChart" style="max-height: 300px;"></canvas>
+                        <canvas id="tempChart" style="max-height: 400px;"></canvas>
                     </div>
                 </div>
             </div>
@@ -111,7 +107,7 @@
                 <div class="card">
                     <div class="card-header">🔋 Battery History</div>
                     <div class="card-body">
-                        <canvas id="battChart" style="max-height: 300px;"></canvas>
+                        <canvas id="battChart" style="max-height: 400px;"></canvas>
                     </div>
                 </div>
             </div>
@@ -120,11 +116,12 @@
                 <div class="card">
                     <div class="card-header">📶 Signal Strength (RSSI)</div>
                     <div class="card-body">
-                        <canvas id="rssiChart" style="max-height: 300px;"></canvas>
+                        <canvas id="rssiChart" style="max-height: 400px;"></canvas>
                     </div>
                 </div>
             </div>
         </div>
+                
     </div>
     
     <script>

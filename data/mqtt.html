@@ -9,10 +9,28 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </head>
 <body>
-    <div class="container-fluid" style="max-width: 1200px;">
+    <div class="container-fluid">
         <div class="header">
             <h1>📡 MQTT Configuration</h1>
             <p>Connect to MQTT broker for data publishing</p>
+            <div class="header-stats">
+                <div class="header-stat">
+                    <div class="stat-label">Status</div>
+                    <div class="stat-value" id="mqttStatus">-</div>
+                </div>
+                <div class="header-stat">   
+                    <div class="stat-label">Published</div>
+                    <div class="stat-value" id="mqttPublishes">0</div>
+                </div>
+                <div class="header-stat">
+                        <div class="stat-label">Failed</div>
+                        <div class="stat-value" id="mqttFailures">0</div>
+                </div>
+                <div class="header-stat">
+                        <div class="stat-label">Reconnects</div>
+                        <div class="stat-value" id="mqttReconnects">0</div>
+                </div>
+            </div>
         </div>
         
         <!-- Navigation Menu -->
@@ -32,89 +50,110 @@
                 <div class="card">
                     <div class="card-header">📢 MQTT Connection</div>
                     <div class="card-body">
-                        <form id="mqttForm">
-                <div>
-                    <div class="checkbox-group">
-                        <input type="checkbox" id="enabled">
-                        <label for="enabled">Enable MQTT Publishing</label>
-                    </div>
-                </div>
-                
-                <div>
-                    <label for="broker">MQTT Broker</label>
-                    <input type="text" id="broker" placeholder="192.168.1.100 or mqtt.example.com">
-                </div>
-                
-                <div>
-                    <label for="port">Port</label>
-                    <input type="number" id="port" value="1883">
-                </div>
-                
-                <div>
-                    <label for="username">Username (optional)</label>
-                    <input type="text" id="username" placeholder="mqtt_user">
-                </div>
-                
-                <div>
-                    <label for="password">Password (optional)</label>
-                    <input type="password" id="password" placeholder="mqtt_password">
-                </div>
-                
-                <div>
-                    <label for="topicPrefix">Topic Prefix</label>
-                    <input type="text" id="topicPrefix" value="lora" placeholder="lora">
-                    <div class="help-text">Topics: {prefix}/sensor/{id}/temperature</div>
-                </div>
-                
-                <div>
-                    <div class="checkbox-group">
-                        <input type="checkbox" id="haDiscovery" checked>
-                        <label for="haDiscovery">Enable Home Assistant Auto-Discovery</label>
-                    </div>
-                </div>
-                
-                <div>
-                    <label for="qos">QoS Level</label>
-                    <input type="number" id="qos" value="0" min="0" max="2">
-                    <div class="help-text">0 = At most once, 1 = At least once, 2 = Exactly once</div>
-                </div>
-                
-                <div style="margin-top: 20px;">
-                    <button type="submit">💾 Save Configuration</button>
-                            <button type="button" class="secondary" onclick="testConnection()">🔌 Test Connection</button>
-                        </div>
+                        <form id="mqttForm" role="form" aria-label="MQTT Configuration Form">
+                            <fieldset>
+                                <div class="row mb-3">
+                                    <label class="col-md-4 col-form-label">Enable MQTT</label>
+                                    <div class="col-md-8">
+                                        <div class="form-check">
+                                            <input type="checkbox" class="form-check-input" id="enabled" aria-describedby="enabledHelp">
+                                            <label class="form-check-label" for="enabled">Enable MQTT Publishing</label>
+                                        </div>
+                                        <div id="enabledHelp" class="form-text">Toggle MQTT data publishing</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row mb-3">
+                                    <label for="broker" class="col-md-4 col-form-label">MQTT Broker</label>
+                                    <div class="col-md-8">
+                                        <div class="input-group">
+                                            <span class="input-group-text">📡</span>
+                                            <input type="text" class="form-control" id="broker" placeholder="192.168.1.100 or mqtt.example.com" aria-describedby="brokerHelp" required>
+                                        </div>
+                                        <div id="brokerHelp" class="form-text">Enter the IP address or hostname of your MQTT broker</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row mb-3">
+                                    <label for="port" class="col-md-4 col-form-label">Port</label>
+                                    <div class="col-md-8">
+                                        <div class="input-group">
+                                            <span class="input-group-text">🔌</span>
+                                            <input type="number" class="form-control" id="port" value="1883" min="1" max="65535" aria-describedby="portHelp">
+                                        </div>
+                                        <div id="portHelp" class="form-text">Default MQTT port is 1883 (1883 for non-SSL, 8883 for SSL)</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row mb-3">
+                                    <label for="username" class="col-md-4 col-form-label">Username<br><span class="text-muted">(optional)</span></label>
+                                    <div class="col-md-8">
+                                        <div class="input-group">
+                                            <span class="input-group-text">👤</span>
+                                            <input type="text" class="form-control" id="username" placeholder="mqtt_user" aria-describedby="usernameHelp">
+                                        </div>
+                                        <div id="usernameHelp" class="form-text">Leave blank if authentication is not required</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row mb-3">
+                                    <label for="password" class="col-md-4 col-form-label">Password<br><span class="text-muted">(optional)</span></label>
+                                    <div class="col-md-8">
+                                        <div class="input-group">
+                                            <span class="input-group-text">🔑</span>
+                                            <input type="password" class="form-control" id="password" placeholder="mqtt_password" aria-describedby="passwordHelp">
+                                        </div>
+                                        <div id="passwordHelp" class="form-text">Leave blank if authentication is not required</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row mb-3">
+                                    <label for="topicPrefix" class="col-md-4 col-form-label">Topic Prefix</label>
+                                    <div class="col-md-8">
+                                        <div class="input-group">
+                                            <span class="input-group-text">📝</span>
+                                            <input type="text" class="form-control" id="topicPrefix" value="lora" placeholder="lora" aria-describedby="topicHelp" required>
+                                        </div>
+                                        <div id="topicHelp" class="form-text">Topics will be formatted as: {prefix}/sensor/{id}/temperature</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row mb-3">
+                                    <label class="col-md-4 col-form-label">Home Assistant</label>
+                                    <div class="col-md-8">
+                                        <div class="form-check">
+                                            <input type="checkbox" class="form-check-input" id="haDiscovery" checked aria-describedby="haHelp">
+                                            <label class="form-check-label" for="haDiscovery">Enable Auto-Discovery</label>
+                                        </div>
+                                        <div id="haHelp" class="form-text">Automatically registers sensors with Home Assistant</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="row mb-3">
+                                    <label for="qos" class="col-md-4 col-form-label">QoS Level</label>
+                                    <div class="col-md-8">
+                                        <div class="input-group">
+                                            <span class="input-group-text">🎯</span>
+                                            <input type="number" class="form-control" id="qos" value="0" min="0" max="2" aria-describedby="qosHelp">
+                                        </div>
+                                        <div id="qosHelp" class="form-text">0 = At most once, 1 = At least once, 2 = Exactly once</div>
+                                    </div>
+                                </div>
+                            </fieldset>
+                            
+                            <div class="row">
+                                <div class="col-md-8 offset-md-4">
+                                    <button type="submit" class="btn btn-primary">💾 Save Configuration</button>
+                                    <button type="button" class="btn btn-secondary ms-2" onclick="testConnection()">🔌 Test Connection</button>
+                                </div>
+                            </div>
                         </form>
                     </div>
                 </div>
             </div>
         </div>
-        
-        <div class="row">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">📊 MQTT Statistics</div>
-                    <div class="card-body">
-            <div class="stats">
-                <div class="stat-box">
-                    <div class="stat-label">Status</div>
-                    <div class="stat-value" id="mqttStatus">-</div>
-                </div>
-                <div class="stat-box">
-                    <div class="stat-label">Published</div>
-                    <div class="stat-value" id="mqttPublishes">0</div>
-                </div>
-                <div class="stat-box">
-                    <div class="stat-label">Failed</div>
-                    <div class="stat-value" id="mqttFailures">0</div>
-                </div>
-                <div class="stat-box">
-                    <div class="stat-label">Reconnects</div>
-                    <div class="stat-value" id="mqttReconnects">0</div>
-                </div>
-            </div>
-        </article>
     </div>
-    
+
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const script = document.createElement('script');
