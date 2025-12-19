@@ -76,18 +76,21 @@ body.gradient-bg {
 /* === CARD OVERRIDES === */
 .card {
     border: none;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    background-color: #2d3446;
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     margin-bottom: 20px;
     transition: box-shadow 0.2s;
 }
 
 .card:hover {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .card-header {
-    background-color: #f8f9fa;
-    border-bottom: 2px solid #e9ecef;
+    background-color: #353d52;
+    border-bottom: 2px solid #404b63;
+    color: #ffffff;
     font-weight: 600;
     font-size: 18px;
     padding: 15px 20px;
@@ -95,6 +98,7 @@ body.gradient-bg {
 
 .card-body {
     padding: 25px;
+    color: #ffffff;
 }
 
 /* Mode cards for setup pages */
@@ -102,7 +106,8 @@ body.gradient-bg {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     text-align: center;
     margin-bottom: 20px;
-    background: white;
+    background: #2d3446;
+    color: #ffffff;
     padding: 30px;
     border-radius: 12px;
 }
@@ -186,7 +191,7 @@ body.gradient-bg {
 .sensor-item {
     padding: 15px;
     border-left: 4px solid var(--gradient-start);
-    background: #f9f9f9;
+    background: #353d52;
     margin-bottom: 12px;
     border-radius: 6px;
 }
@@ -206,14 +211,14 @@ body.gradient-bg {
 
 .sensor-metric label {
     font-size: 11px;
-    color: #666;
+    color: #9ca3af;
     text-transform: uppercase;
 }
 
 .sensor-metric .value {
     font-size: 16px;
     font-weight: 600;
-    color: #333;
+    color: #ffffff;
 }
 
 /* === STATUS INDICATORS === */
@@ -240,7 +245,25 @@ body.gradient-bg {
 /* === FORMS === */
 .form-label {
     font-weight: 600;
-    color: #495057;
+    color: #e5e7eb;
+}
+
+.form-control,
+.form-select {
+    background-color: #353d52;
+    border: 1px solid #4b5563;
+    color: #ffffff;
+}
+
+.form-control:focus,
+.form-select:focus {
+    background-color: #404b63;
+    border-color: var(--gradient-start);
+    color: #ffffff;
+}
+
+.form-control::placeholder {
+    color: #9ca3af;
 }
 
 .help-text {
@@ -275,7 +298,7 @@ body.gradient-bg {
 }
 
 .stat-box {
-    background: #f8f9fa;
+    background: #353d52;
     padding: 15px;
     border-radius: 8px;
     text-align: center;
@@ -283,7 +306,7 @@ body.gradient-bg {
 
 .stat-label {
     font-size: 12px;
-    color: #6c757d;
+    color: #9ca3af;
     text-transform: uppercase;
     margin-bottom: 5px;
 }
@@ -291,7 +314,7 @@ body.gradient-bg {
 .stat-value {
     font-size: 24px;
     font-weight: bold;
-    color: #212529;
+    color: #ffffff;
 }
 
 /* === SECURITY PAGE === */
@@ -303,10 +326,11 @@ body.gradient-bg {
 }
 
 .status-card {
-    background: white;
+    background: #2d3446;
+    color: #ffffff;
     padding: 20px;
     border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
     text-align: center;
 }
 
@@ -367,11 +391,11 @@ input:checked + .slider:before {
     border: 2px solid #dc3545;
     border-radius: 8px;
     padding: 20px;
-    background-color: #fff5f5;
+    background-color: #3d2c2e;
 }
 
 .danger-zone h3 {
-    color: #dc3545;
+    color: #ff6b7a;
     margin-top: 0;
 }
 
@@ -421,13 +445,13 @@ input:checked + .slider:before {
 
 .info-item {
     padding: 10px;
-    background: #f8f9fa;
+    background: #353d52;
     border-radius: 6px;
 }
 
 .info-item strong {
     display: block;
-    color: #6c757d;
+    color: #9ca3af;
     font-size: 12px;
     text-transform: uppercase;
     margin-bottom: 5px;
