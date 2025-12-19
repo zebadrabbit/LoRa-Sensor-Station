@@ -4,12 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LoRa Sensor Dashboard</title>
-    <link rel="stylesheet" href="/pico-custom.css">
-    <link rel="stylesheet" href="/style.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/bootstrap-custom.css">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
-    <div class="container">
+    <div class="container-fluid" style="max-width: 1200px;">
         <div class="header">
             <h1>🎯 LoRa Sensor Dashboard</h1>
             <p>Real-time monitoring and data visualization</p>
@@ -51,37 +52,43 @@
             <a href="/lora-settings" class="nav-btn">📻 LoRa Settings</a>
         </div>
         
-        <div class="grid">
-            <div class="card" style="grid-column: 1 / -1;">
-                <div class="card-title">
-                    📡 Active Clients
-                    <div style="margin-left: auto; font-size: 12px; color: #999;">
-                        Auto-refresh: <span id="countdown">5</span>s
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        📡 Active Clients
+                        <span class="float-end" style="font-size: 12px; color: #999;">
+                            Auto-refresh: <span id="countdown">5</span>s
+                        </span>
                     </div>
-                </div>
-                <div id="sensorList">
-                    <div class="empty-state">
-                        <div class="empty-state-icon">📭</div>
-                        <p>No clients detected yet</p>
-                        <p style="font-size: 12px; margin-top: 10px;">Waiting for client data...</p>
+                    <div class="card-body" id="sensorList">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">📭</div>
+                            <p>No clients detected yet</p>
+                            <p style="font-size: 12px; margin-top: 10px;">Waiting for client data...</p>
+                        </div>
                     </div>
                 </div>
             </div>            
         </div>
         
         <!-- Historical Data Graphs -->
-        <div class="card" style="margin-bottom: 20px;">
-            <div class="card-title">
+        <div class="card">
+            <div class="card-header">
                 📈 Historical Data - Select Client
             </div>
-            <div style="margin-bottom: 20px;">
-                <label for="sensorSelect" style="display: block; margin-bottom: 8px; font-weight: 600;">Client:</label>
-                <select id="sensorSelect" style="padding: 8px; border-radius: 6px; border: 2px solid #e0e0e0; font-size: 14px;">
-                    <option value="">-- Select a client --</option>
-                </select>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="sensorSelect" class="form-label fw-bold">Client:</label>
+                        <select id="sensorSelect" class="form-select">
+                            <option value="">-- Select a client --</option>
+                        </select>
+                    </div>
+                </div>
                 
-                <label for="timeRange" style="display: block; margin: 15px 0 8px; font-weight: 600;">Time Range:</label>
-                <div style="display: flex; gap: 10px;">
+                <label class="form-label fw-bold">Time Range:</label>
+                <div class="d-flex gap-2 flex-wrap">
                     <button class="time-btn active" data-range="all">All</button>
                     <button class="time-btn" data-range="1h">1 Hour</button>
                     <button class="time-btn" data-range="6h">6 Hours</button>
@@ -90,20 +97,32 @@
             </div>
         </div>
         
-        <div class="grid">
-            <div class="card" style="grid-column: 1 / -1;">
-                <div class="card-title">🌡️ Temperature History</div>
-                <canvas id="tempChart" style="max-height: 300px;"></canvas>
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">🌡️ Temperature History</div>
+                    <div class="card-body">
+                        <canvas id="tempChart" style="max-height: 300px;"></canvas>
+                    </div>
+                </div>
             </div>
             
-            <div class="card" style="grid-column: 1 / -1;">
-                <div class="card-title">🔋 Battery History</div>
-                <canvas id="battChart" style="max-height: 300px;"></canvas>
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">🔋 Battery History</div>
+                    <div class="card-body">
+                        <canvas id="battChart" style="max-height: 300px;"></canvas>
+                    </div>
+                </div>
             </div>
             
-            <div class="card" style="grid-column: 1 / -1;">
-                <div class="card-title">📶 Signal Strength (RSSI)</div>
-                <canvas id="rssiChart" style="max-height: 300px;"></canvas>
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">📶 Signal Strength (RSSI)</div>
+                    <div class="card-body">
+                        <canvas id="rssiChart" style="max-height: 300px;"></canvas>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
