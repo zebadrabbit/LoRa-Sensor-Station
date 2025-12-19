@@ -344,7 +344,7 @@ void displayBaseStationPage() {
       
       display.setTextAlignment(TEXT_ALIGN_LEFT);
       display.setFont(ArialMT_Plain_10);
-      display.drawString(110, 54, "1/7");
+      display.drawString(110, 54, "1/8");
       break;
     }
     
@@ -379,7 +379,7 @@ void displayBaseStationPage() {
         display.drawString(0, 48, "Last RX: Never");
       }
       
-      display.drawString(110, 54, "2/7");
+      display.drawString(110, 54, "2/8");
       break;
     }
     
@@ -388,28 +388,29 @@ void displayBaseStationPage() {
       display.setColor(WHITE);
       display.fillRect(0, 0, 128, 11);
       display.setColor(BLACK);
-      display.drawString(0, 0, "ACTIVE SENSORS");
+      display.drawString(0, 0, "SENSOR SUMMARY");
       display.setColor(WHITE);
       
-      uint8_t sensorCount = getActiveSensorCount();
-      if (sensorCount == 0) {
-        display.drawString(0, 20, "No sensors");
-      } else {
-        uint8_t sensorsToShow = (sensorCount > 4) ? 4 : sensorCount;
-        for (uint8_t i = 0; i < sensorsToShow; i++) {
+      uint8_t activeCount = getActiveClientCount();
+      uint8_t totalCount = getActiveSensorCount();
+      
+      display.drawString(0, 14, "Active: " + String(activeCount));
+      display.drawString(0, 26, "Total seen: " + String(totalCount));
+      
+      // Show oldest sensor last seen time
+      if (totalCount > 0) {
+        uint32_t oldestTime = 0;
+        for (uint8_t i = 0; i < totalCount; i++) {
           SensorInfo* sensor = getSensorByIndex(i);
           if (sensor) {
             uint32_t secAgo = (millis() - sensor->lastSeen) / 1000;
-            String line = "#" + String(sensor->sensorId) + " " + 
-                         String(sensor->lastTemperature, 0) + "C " +
-                         String(sensor->lastBatteryPercent) + "% " +
-                         String(secAgo) + "s";
-            display.drawString(0, 12 + i * 12, line);
+            if (secAgo > oldestTime) oldestTime = secAgo;
           }
         }
+        display.drawString(0, 38, "Oldest: " + String(oldestTime) + "s ago");
       }
       
-      display.drawString(110, 54, "3/7");
+      display.drawString(110, 54, "3/8");
       break;
     }
     
@@ -428,7 +429,7 @@ void displayBaseStationPage() {
         (stats->totalRxPackets * 100) / (stats->totalRxPackets + stats->totalRxInvalid) : 0;
       display.drawString(0, 36, "Success: " + String(rxSuccess) + "%");
       
-      display.drawString(110, 54, "4/7");
+      display.drawString(110, 54, "4/8");
       break;
     }
     
@@ -464,7 +465,7 @@ void displayBaseStationPage() {
       // Display TX power
       display.drawString(0, 48, "Power: " + String(txPower) + " dBm");
       
-      display.drawString(110, 54, "5/7");
+      display.drawString(110, 54, "5/8");
       break;
     }
     
@@ -487,7 +488,7 @@ void displayBaseStationPage() {
         display.drawString(0, 48, String(powerState ? "Charging" : "Discharging"));
       #endif
       
-      display.drawString(110, 54, "6/7");
+      display.drawString(110, 54, "6/8");
       break;
     }
     
@@ -513,9 +514,23 @@ void displayBaseStationPage() {
         }
         display.drawString(0, 26, "SSID: " + ssid);
         
-        // Display signal strength
+        // Display WiFi uptime in dynamic format
+        uint32_t uptimeSec = millis() / 1000;
+        String uptimeStr;
+        if (uptimeSec < 60) {
+          uptimeStr = String(uptimeSec) + "s";
+        } else if (uptimeSec < 3600) {
+          uptimeStr = String(uptimeSec / 60) + "m";
+        } else if (uptimeSec < 86400) {
+          uptimeStr = String(uptimeSec / 3600) + "h";
+        } else {
+          uptimeStr = String(uptimeSec / 86400) + "d";
+        }
+        display.drawString(0, 38, "Uptime: " + uptimeStr);
+        
+        // Display signal strength (RSSI)
         int32_t rssi = WiFi.RSSI();
-        display.drawString(0, 38, "Signal: " + String(rssi) + " dBm");
+        display.drawString(0, 50, "RSSI: " + String(rssi) + " dBm");
         
         // Display WiFi status icon
         drawWifiStatus(true, 110, 38);
@@ -622,7 +637,7 @@ void displaySensorPage() {
       
       display.setTextAlignment(TEXT_ALIGN_LEFT);
       display.setFont(ArialMT_Plain_10);
-      display.drawString(110, 54, "1/5");
+      display.drawString(110, 54, "1/6");
       break;
     }
     
@@ -655,7 +670,7 @@ void displaySensorPage() {
         display.drawString(0, 48, "Last TX: " + String(secAgo) + "s");
       }
       
-      display.drawString(110, 54, "2/5");
+      display.drawString(110, 54, "2/6");
       break;
     }
     
@@ -675,7 +690,7 @@ void displaySensorPage() {
         (stats->totalTxSuccess * 100) / stats->totalTxAttempts : 0;
       display.drawString(0, 48, "Rate: " + String(txSuccess) + "%");
       
-      display.drawString(110, 54, "3/5");
+      display.drawString(110, 54, "3/6");
       break;
     }
     
@@ -692,7 +707,7 @@ void displaySensorPage() {
       drawBatteryIcon(0, 90, 32);
       display.drawString(0, 48, "Connect battery");
       
-      display.drawString(110, 54, "4/5");
+      display.drawString(110, 54, "4/6");
       break;
     }
     
@@ -742,7 +757,7 @@ void displaySensorPage() {
       display.setColor(WHITE);
 
       time_t now = time(nullptr);
-      if (now > 1000) {
+      if (now > 1000000000) {  // Valid Unix timestamp (after year 2001)
         struct tm tmnow;
         localtime_r(&now, &tmnow);
         char buf1[20];
@@ -753,6 +768,7 @@ void displaySensorPage() {
         display.drawString(0, 26, String("Date: ") + buf2);
       } else {
         display.drawString(0, 14, "Now: --:--:--");
+        display.drawString(0, 26, "Date: Not synced");
       }
 
       uint32_t lastEpoch = getSensorLastTimeSyncEpoch();

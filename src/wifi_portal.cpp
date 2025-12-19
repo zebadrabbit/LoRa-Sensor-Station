@@ -968,14 +968,38 @@ void WiFiPortal::setupDashboard() {
         });
     
     webServer.on("/api/time/sync", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL,
-        [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
-            // Parse request for sensor ID
-            String body = String((char*)data).substring(0, len);
-            StaticJsonDocument<128> doc;
-            deserializeJson(doc, body);
+        [this](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+            time_t now = time(nullptr);
+            if (now < 1000000000) {
+                request->send(500, "application/json", "{\"success\":false,\"error\":\"NTP not synced\"}");
+                return;
+            }
             
-            // For now just acknowledge - would need LoRa time sync command implementation
-            request->send(200, "application/json", "{\"success\":true,\"commandsSent\":0}");
+            NTPConfig cfg = configStorage.getNTPConfig();
+            uint8_t payload[6];
+            memcpy(&payload[0], &now, sizeof(uint32_t));
+            int16_t tz = cfg.tzOffsetMinutes;
+            memcpy(&payload[4], &tz, sizeof(int16_t));
+            
+            extern RemoteConfigManager remoteConfigManager;
+            extern uint8_t getActiveClientCount();
+            extern ClientInfo* getClientByIndex(uint8_t index);
+            
+            int sent = 0;
+            uint8_t activeCount = getActiveClientCount();
+            for (uint8_t i = 0; i < activeCount; i++) {
+                ClientInfo* client = getClientByIndex(i);
+                if (client && client->active) {
+                    if (remoteConfigManager.queueCommand(client->clientId, CMD_TIME_SYNC, payload, 6)) {
+                        sent++;
+                    }
+                }
+            }
+            
+            String response = "{\"success\":true,\"commandsSent\":" + String(sent) + 
+                            ",\"epoch\":" + String((unsigned long)now) + 
+                            ",\"tzOffset\":" + String((int)tz) + "}";
+            request->send(200, "application/json", response);
         });
     
     // Remote configuration API

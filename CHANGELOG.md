@@ -5,6 +5,50 @@ All notable changes to the LoRa Sensor Station project will be documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.16.0] - 2025-12-18
+
+### Added
+
+#### Sensor Startup Announcement Protocol
+
+- **Startup Announcement**: Sensors announce themselves to base station on boot with `CMD_SENSOR_ANNOUNCE`
+- **Automatic Time Sync**: Base station responds with `CMD_TIME_SYNC` via reliable command queue
+- **Sensor ID in Payload**: Announcement includes sensor ID in packet payload for proper identification
+- **3-Hour Periodic Sync**: Sensors automatically request time sync every 3 hours to maintain accuracy
+- **Minimal Traffic**: Single announcement packet per 3 hours keeps overhead minimal
+
+#### Display Improvements
+
+- **Fixed Page Indicators**: All base station pages show correct 1/8 through 8/8 (was 1/7-6/7)
+- **Fixed Time Display Threshold**: Changed from `> 1000` to `> 1000000000` for valid Unix timestamps (after year 2001)
+- **Sensor Summary Page**: Replaced cramped sensor list on page 3/8 with useful summary showing:
+  - Active sensor count
+  - Total sensors seen
+  - Oldest sensor last-seen time
+- **WiFi Monitoring**: Page 7/8 now includes both uptime and RSSI signal strength
+- **Dynamic Uptime Format**: Shows as 23s, 45m, 3h, or 5d based on duration
+- **RSSI Display**: Shows WiFi signal strength in dBm for connection quality monitoring
+
+### Changed
+
+#### Sensor ID Filtering
+
+- **Target Validation**: Sensors now check `targetSensorId` field before processing commands
+- **Ignore Non-Matching**: Commands not intended for specific sensor are ignored
+- **Debug Logging**: Added logging to show when commands are filtered
+
+#### Time Synchronization Architecture
+
+- **Leveraged Existing Infrastructure**: Uses proven `CMD_TIME_SYNC` via `queueCommand()` instead of custom welcome packet
+- **Reliable Delivery**: Benefits from existing retry logic, checksums, and radio state management
+- **Simplified Code**: Removed custom `CMD_BASE_WELCOME` packet handling in favor of unified approach
+
+### Fixed
+
+- **Base Station Time Broadcast**: Now only sends time sync to active sensors (not all 256 possible IDs)
+- **Startup Time Sync**: Base station waits for NTP sync then broadcasts to active sensors only
+- **Radio State Management**: Proper use of command queue prevents radio state conflicts from direct packet sends
+
 ## [2.15.0] - 2025-12-14
 
 ### Added - Phase 2: I2C Sensor Support

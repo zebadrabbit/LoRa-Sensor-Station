@@ -135,7 +135,27 @@ void setup() {
     sensorManager.printStatus();
     #endif // SENSOR_NODE
     
+    // Announce sensor to base station on startup
+    LOGI("SENSOR", "Announcing to base station...");
+    displayMessage("Startup", "Announcing", "to base...", 1000);
+    CommandPacket announceCmd;
+    announceCmd.syncWord = COMMAND_SYNC_WORD;
+    announceCmd.commandType = CMD_SENSOR_ANNOUNCE;
+    announceCmd.targetSensorId = 1;  // Target base station (ID 1)
+    announceCmd.sequenceNumber = 1;
+    announceCmd.dataLength = 1;  // 1 byte payload with our sensor ID
+    announceCmd.data[0] = sensorConfig.sensorId;  // Include our sensor ID
+    announceCmd.checksum = 0;  // Calculate if needed
+    
+    // Send announcement packet
+    Radio.Send((uint8_t*)&announceCmd, sizeof(CommandPacket));
+    LOGI("SENSOR", "Announcement sent from sensor %d, waiting for base station response...", sensorConfig.sensorId);
+    
     setLED(getColorPurple());
+    
+    // Wait for TX to complete and welcome packet to arrive
+    // OnTxDone will put us back in RX mode automatically
+    delay(5000);
     
   } else if (mode == MODE_BASE_STATION) {
     LOGI("BASE", "Heltec LoRa V3 Base Station");
@@ -201,6 +221,7 @@ void setup() {
     LOGI("MESH", "Mesh Enabled: %s", baseConfig.meshEnabled ? "YES" : "NO");
     meshRouter.begin(1, true);  // Base station ID = 1
     
+    #ifdef BASE_STATION
     // Wait for NTP sync and broadcast time to all sensors on startup
     NTPConfig ntpConfig = configStorage.getNTPConfig();
     if (ntpConfig.enabled) {
@@ -215,20 +236,27 @@ void setup() {
           setLastNtpSyncEpoch(now);
           LOGI("TIME", "NTP synced at startup: %lu", (unsigned long)now);
           
-          // Broadcast time to all sensors
+          // Broadcast time to all active sensors only
           extern RemoteConfigManager remoteConfigManager;
+          extern uint8_t getActiveClientCount();
+          extern ClientInfo* getClientByIndex(uint8_t index);
+          
           uint8_t payload[6];
           memcpy(&payload[0], &now, sizeof(uint32_t));
           int16_t tz = ntpConfig.tzOffsetMinutes;
           memcpy(&payload[4], &tz, sizeof(int16_t));
           
           int sent = 0;
-          for (int i = 1; i < 256; i++) {  // Start from 1 (skip base station)
-            if (remoteConfigManager.queueCommand(i, CMD_TIME_SYNC, payload, 6)) {
-              sent++;
+          uint8_t activeCount = getActiveClientCount();
+          for (uint8_t i = 0; i < activeCount; i++) {
+            ClientInfo* client = getClientByIndex(i);
+            if (client && client->active) {
+              if (remoteConfigManager.queueCommand(client->clientId, CMD_TIME_SYNC, payload, 6)) {
+                sent++;
+              }
             }
           }
-          LOGI("TIME", "Startup time broadcast queued for %d sensors (epoch=%lu, tz=%d)", sent, (unsigned long)now, (int)tz);
+          LOGI("TIME", "Startup time broadcast queued for %d active sensors (epoch=%lu, tz=%d)", sent, (unsigned long)now, (int)tz);
           char msg[32];
           snprintf(msg, sizeof(msg), "%d sensors", sent);
           displayMessage("Time Sync", "Broadcast to", msg, 2000);
@@ -242,6 +270,7 @@ void setup() {
         displayMessage("Time Warning", "NTP timeout", "Continuing...", 2000);
       }
     }
+    #endif // BASE_STATION
     
     setLED(getColorGreen());
     
@@ -323,6 +352,27 @@ void loop() {
     
     #ifdef SENSOR_NODE
     // Sensor stays in RX mode continuously
+    
+    // Request time sync every 3 hours
+    static uint32_t lastTimeSyncRequest = 0;
+    const uint32_t TIME_SYNC_INTERVAL = 3 * 60 * 60 * 1000;  // 3 hours in milliseconds
+    
+    if (millis() - lastTimeSyncRequest >= TIME_SYNC_INTERVAL) {
+      LOGI("SYNC", "Requesting time sync (3 hour interval)");
+      
+      // Send announcement packet to request time sync
+      CommandPacket announceCmd;
+      announceCmd.syncWord = COMMAND_SYNC_WORD;
+      announceCmd.commandType = CMD_SENSOR_ANNOUNCE;
+      announceCmd.targetSensorId = 1;  // Target base station
+      announceCmd.sequenceNumber = 1;
+      announceCmd.dataLength = 1;
+      announceCmd.data[0] = sensorConfig.sensorId;
+      announceCmd.checksum = 0;
+      
+      Radio.Send((uint8_t*)&announceCmd, sizeof(CommandPacket));
+      lastTimeSyncRequest = millis();
+    }
     #endif
     
     // Get configured interval and apply forced interval if command was recently received

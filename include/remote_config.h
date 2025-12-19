@@ -17,6 +17,8 @@ enum CommandType : uint8_t {
     CMD_FACTORY_RESET = 0x08,     // Factory reset
     CMD_SET_LORA_PARAMS = 0x09,   // Set LoRa radio parameters (frequency, SF, BW, etc.)
     CMD_TIME_SYNC = 0x0A,         // Synchronize sensor time (epoch + tz offset)
+    CMD_SENSOR_ANNOUNCE = 0x0B,   // Sensor announces itself on startup
+    CMD_BASE_WELCOME = 0x0C,      // Base station responds with time and config
     CMD_ACK = 0xA0,               // Acknowledgment
     CMD_NACK = 0xA1               // Negative acknowledgment
 };

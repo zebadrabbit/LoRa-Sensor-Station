@@ -278,6 +278,41 @@ void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr) {
     
     recordRxPacket(rssi);
     
+    // Check if it's a command packet (sensor announcement)
+    if (size >= sizeof(CommandPacket)) {
+      CommandPacket* cmd = (CommandPacket*)payload;
+      if (cmd->syncWord == COMMAND_SYNC_WORD && cmd->commandType == CMD_SENSOR_ANNOUNCE) {
+        // Extract sensor ID from announcement payload
+        uint8_t announcingSensorId = (cmd->dataLength > 0) ? cmd->data[0] : cmd->targetSensorId;
+        LOGI("ANNOUNCE", "Sensor %d announced itself on startup", announcingSensorId);
+        
+        // Use existing time sync mechanism instead of direct send
+        time_t now = time(nullptr);
+        if (now > 1000000000) {  // Valid time
+          NTPConfig ntpConfig = configStorage.getNTPConfig();
+          uint8_t payload[6];
+          memcpy(&payload[0], &now, sizeof(uint32_t));
+          int16_t tz = ntpConfig.tzOffsetMinutes;
+          memcpy(&payload[4], &tz, sizeof(int16_t));
+          
+          // Queue time sync command using the existing reliable mechanism
+          extern RemoteConfigManager remoteConfigManager;
+          if (remoteConfigManager.queueCommand(announcingSensorId, CMD_TIME_SYNC, payload, 6)) {
+            LOGI("ANNOUNCE", "Queued time sync for sensor %d (epoch=%lu, tz=%d)", 
+                 announcingSensorId, (unsigned long)now, (int)tz);
+          } else {
+            LOGW("ANNOUNCE", "Failed to queue time sync for sensor %d", announcingSensorId);
+          }
+        } else {
+          LOGW("ANNOUNCE", "Cannot send time sync to sensor %d - NTP not synced", 
+               announcingSensorId);
+        }
+        
+        // Continue processing packet normally
+        // Don't return here - let it fall through to regular packet processing
+      }
+    }
+    
     // Only check for mesh packets if mesh is enabled
     BaseStationConfig baseConfig = configStorage.getBaseStationConfig();
     LOGD("MESH", "Mesh enabled: %s", baseConfig.meshEnabled ? "YES" : "NO");
@@ -790,7 +825,15 @@ void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr) {
       CommandPacket* cmd = (CommandPacket*)payload;
       
       if (cmd->syncWord == COMMAND_SYNC_WORD) {
-        Serial.printf("Command received: type=%d, seq=%d\n", cmd->commandType, cmd->sequenceNumber);
+        Serial.printf("Command received: type=%d, target=%d, seq=%d\n", cmd->commandType, cmd->targetSensorId, cmd->sequenceNumber);
+        
+        // Check if command is for this sensor
+        SensorConfig sensorConfig = configStorage.getSensorConfig();
+        if (cmd->targetSensorId != sensorConfig.sensorId) {
+          Serial.printf("Command not for this sensor (target=%d, my_id=%d) - ignoring\n", cmd->targetSensorId, sensorConfig.sensorId);
+          lora_idle = true;
+          return;
+        }
         
         // Validate checksum using the remote_config checksum function
         extern RemoteConfigManager remoteConfigManager;
@@ -806,6 +849,40 @@ void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr) {
               // Simple ping: ACK via immediate telemetry
               Serial.println("Ping command received - responding with ACK telemetry");
               success = true;
+              break;
+            }
+            
+            case CMD_BASE_WELCOME: {
+              // Base station welcome packet with time sync
+              Serial.println("Welcome packet received from base station!");
+              if (cmd->dataLength >= 6) {
+                uint32_t epochSec;
+                int16_t tzOffsetMin;
+                memcpy(&epochSec, &cmd->data[0], sizeof(uint32_t));
+                memcpy(&tzOffsetMin, &cmd->data[4], sizeof(int16_t));
+                Serial.printf("Time sync from welcome: epoch=%lu, tzOffset=%d min\n", 
+                             (unsigned long)epochSec, (int)tzOffsetMin);
+                
+                // Apply system time
+                struct timeval tv;
+                tv.tv_sec = epochSec;
+                tv.tv_usec = 0;
+                settimeofday(&tv, NULL);
+                #ifdef SENSOR_NODE
+                setSensorLastTimeSyncEpoch(epochSec);
+                #endif
+                
+                success = true;
+                Serial.println("System time updated from base station welcome!");
+                
+                // Visual feedback
+                extern void blinkLED(uint32_t color, int times, int delayMs);
+                extern uint32_t getColorGreen();
+                blinkLED(getColorGreen(), 3, 200);
+              } else {
+                Serial.println("Welcome packet has no time sync data");
+                success = true;  // Still acknowledge the welcome
+              }
               break;
             }
             
