@@ -66,7 +66,7 @@ struct FailedCommand {
 
 #define COMMAND_SYNC_WORD 0xCDEF
 #define MAX_RETRY_COUNT 3
-#define COMMAND_TIMEOUT_MS 10000  // 10 seconds
+#define COMMAND_TIMEOUT_MS 12000  // 12 seconds
 
 // Command queue for each sensor
 class RemoteConfigManager {

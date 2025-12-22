@@ -227,15 +227,42 @@ void RemoteConfigManager::handleAck(uint8_t sensorId, uint8_t sequenceNumber, ui
 }
 
 void RemoteConfigManager::processRetries() {
-    // Check all queues for commands that need retry due to timeout
-    for (int i = 0; i < 256; i++) {
-        if (!commandQueues[i].empty()) {
-            QueuedCommand& cmd = commandQueues[i].front();
-            
-            if (cmd.waitingForAck && (millis() - cmd.lastAttempt > cmd.timeout)) {
-                LOGD("CMD", "Retry timeout check for sensor %d", i);
-                cmd.waitingForAck = false;
-            }
+    // Check all queues for commands that need retry due to timeout.
+    // NOTE: This is critical because getPendingCommand() is not called while we're waiting for ACK,
+    // so timeouts must be advanced here.
+    const uint32_t now = millis();
+    for (int sensorId = 0; sensorId < 256; sensorId++) {
+        if (commandQueues[sensorId].empty()) {
+            continue;
+        }
+
+        QueuedCommand& cmd = commandQueues[sensorId].front();
+        if (!cmd.waitingForAck) {
+            continue;
+        }
+
+        if ((uint32_t)(now - cmd.lastAttempt) <= cmd.timeout) {
+            continue;
+        }
+
+        LOGW("CMD", "Command timeout for sensor %d (seq %d), retry %d/%d",
+             sensorId, cmd.packet.sequenceNumber, cmd.retryCount + 1, MAX_RETRY_COUNT);
+
+        cmd.waitingForAck = false;
+        cmd.retryCount++;
+
+        if (cmd.retryCount >= MAX_RETRY_COUNT) {
+            LOGE("CMD", "COMMAND FAILED: Max retries (%d) reached for sensor %d (seq %d)",
+                 MAX_RETRY_COUNT, sensorId, cmd.packet.sequenceNumber);
+            LOGW("CMD", "Command dropped - sensor may be out of range or offline");
+
+            // Track this failure
+            lastFailedCommand[sensorId].commandType = cmd.packet.commandType;
+            lastFailedCommand[sensorId].sequenceNumber = cmd.packet.sequenceNumber;
+            lastFailedCommand[sensorId].failedAtMs = now;
+            lastFailedCommand[sensorId].reason = 0;  // timeout
+
+            commandQueues[sensorId].pop();
         }
     }
 }

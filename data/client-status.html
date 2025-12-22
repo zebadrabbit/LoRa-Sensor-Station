@@ -142,7 +142,7 @@
                     const cmdStatus = cmd.waitingForAck ? 'PENDING ACK' : 'QUEUED';
                     const statusClass = cmd.waitingForAck ? 'badge-pending' : 'badge-success';
                     const ageSeconds = cmd.ageSeconds;
-                    const timeoutWarning = (cmd.waitingForAck && ageSeconds > 10) ? 
+                    const timeoutWarning = (cmd.waitingForAck && ageSeconds > 12) ? 
                         '<br><span class="badge bg-danger">⚠️ TIMEOUT - Will retry</span>' : '';
                     
                     commandHtml = `
@@ -160,7 +160,7 @@
                             </div>
                             <div class="mt-2 text-muted" style="font-size: 11px;">
                                 ${cmd.waitingForAck ? 'Last sent' : 'Queued for'}: ${formatLastSeen(ageSeconds)}
-                                ${cmd.waitingForAck ? ' • Waiting for ACK (10s timeout)' : ''}
+                                ${cmd.waitingForAck ? ' • Waiting for ACK (12s timeout)' : ''}
                             </div>
                         </div>
                     `;
