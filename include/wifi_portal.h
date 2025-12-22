@@ -40,14 +40,10 @@ public:
     
     // Public JSON generators (used by WebSocket)
     String generateSensorsJSON();
-    String generateStatsJSON();
     
     // Diagnostics hooks (used by LoRa comms)
     void diagnosticsRecordSent(uint8_t sensorId, uint8_t sequenceNumber);
     void diagnosticsRecordAck(uint8_t sensorId, uint8_t sequenceNumber, int16_t rssi, int8_t snr);
-
-    // Optional: check if diagnostics are active
-    bool isDiagnosticsActive();
 
 private:
     DNSServer dnsServer;
@@ -64,20 +60,6 @@ private:
     
     // Setup dashboard routes (base station)
     void setupDashboard();
-    
-    // HTML page handlers
-    String generateMainPage();
-    String generateSensorConfigPage();
-    String generateBaseStationConfigPage();
-    String generateSuccessPage(const String& message);
-    
-    // Dashboard page handlers
-    String generateDashboardPage();
-    String generateHistoryJSON(uint8_t sensorId, uint32_t timeRange);
-    String generateAlertsPage();
-    String generateAlertsConfigJSON();
-    String generateMQTTPage();
-    String generateMQTTConfigJSON();
     
     // Handle form submissions
     void handleModeSelection(AsyncWebServerRequest *request);

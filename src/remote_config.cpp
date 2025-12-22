@@ -5,6 +5,13 @@
 static RemoteConfigManager* instance = nullptr;
 
 void RemoteConfigManager::init() {
+    if (mutex == nullptr) {
+        mutex = xSemaphoreCreateMutex();
+        if (mutex == nullptr) {
+            LOGE("CMD", "RemoteConfigManager: failed to create mutex; concurrency issues may occur");
+        }
+    }
+
     nextSequenceNumber = 1;
     instance = this;
     
@@ -34,8 +41,14 @@ uint16_t RemoteConfigManager::calculateChecksum(const uint8_t* data, size_t leng
 }
 
 bool RemoteConfigManager::queueCommand(uint8_t sensorId, CommandType cmdType, const uint8_t* data, uint8_t dataLen) {
+    // Never block for long here: this can be called from web handlers.
+    if (mutex != nullptr && !lock(pdMS_TO_TICKS(25))) {
+        return false;
+    }
+
     if (dataLen > 248) {
         LOGE("CMD", "Command data too large: %d bytes", dataLen);
+        if (mutex != nullptr) unlock();
         return false;
     }
     
@@ -67,13 +80,19 @@ bool RemoteConfigManager::queueCommand(uint8_t sensorId, CommandType cmdType, co
     
     // Don't send immediately - wait for next telemetry from sensor
     // Commands will be sent when sensor is in RX window (after telemetry)
-    
+
+    if (mutex != nullptr) unlock();
     return true;
 }
 
-CommandPacket* RemoteConfigManager::getPendingCommand(uint8_t sensorId) {
+bool RemoteConfigManager::getPendingCommand(uint8_t sensorId, CommandPacket& outPacket) {
+    if (mutex != nullptr && !lock(portMAX_DELAY)) {
+        return false;
+    }
+
     if (commandQueues[sensorId].empty()) {
-        return nullptr;
+        if (mutex != nullptr) unlock();
+        return false;
     }
     
     QueuedCommand& cmd = commandQueues[sensorId].front();
@@ -99,13 +118,15 @@ CommandPacket* RemoteConfigManager::getPendingCommand(uint8_t sensorId) {
                 lastFailedCommand[sensorId].reason = 0;  // timeout
                 
                 commandQueues[sensorId].pop();
-                return nullptr;
+                if (mutex != nullptr) unlock();
+                return false;
             }
             
             LOGI("CMD", "Retrying command to sensor %d...", sensorId);
         } else {
             // Still waiting, don't send yet
-            return nullptr;
+            if (mutex != nullptr) unlock();
+            return false;
         }
     }
     
@@ -118,12 +139,19 @@ CommandPacket* RemoteConfigManager::getPendingCommand(uint8_t sensorId) {
     lastSentCommand[sensorId].sequenceNumber = cmd.packet.sequenceNumber;
     lastSentCommand[sensorId].statusCode = 0;
     lastSentCommand[sensorId].atMs = cmd.lastAttempt;
-    
-    return &cmd.packet;
+
+    // Copy packet out so callers don't hold a pointer into the queue.
+    outPacket = cmd.packet;
+    if (mutex != nullptr) unlock();
+    return true;
 }
 
 void RemoteConfigManager::markCommandAcked(uint8_t sensorId, uint8_t sequenceNumber) {
+    if (mutex != nullptr && !lock(portMAX_DELAY)) {
+        return;
+    }
     if (commandQueues[sensorId].empty()) {
+        if (mutex != nullptr) unlock();
         return;
     }
     
@@ -148,10 +176,16 @@ void RemoteConfigManager::markCommandAcked(uint8_t sensorId, uint8_t sequenceNum
         }
         commandQueues[sensorId].pop();
     }
+
+    if (mutex != nullptr) unlock();
 }
 
 void RemoteConfigManager::markCommandFailed(uint8_t sensorId, uint8_t sequenceNumber, uint8_t statusCode) {
+    if (mutex != nullptr && !lock(portMAX_DELAY)) {
+        return;
+    }
     if (commandQueues[sensorId].empty()) {
+        if (mutex != nullptr) unlock();
         return;
     }
     
@@ -180,6 +214,8 @@ void RemoteConfigManager::markCommandFailed(uint8_t sensorId, uint8_t sequenceNu
             commandQueues[sensorId].pop();
         }
     }
+
+    if (mutex != nullptr) unlock();
 }
 
 void RemoteConfigManager::processAck(const AckPacket* ack) {
@@ -227,6 +263,9 @@ void RemoteConfigManager::handleAck(uint8_t sensorId, uint8_t sequenceNumber, ui
 }
 
 void RemoteConfigManager::processRetries() {
+    if (mutex != nullptr && !lock(portMAX_DELAY)) {
+        return;
+    }
     // Check all queues for commands that need retry due to timeout.
     // NOTE: This is critical because getPendingCommand() is not called while we're waiting for ACK,
     // so timeouts must be advanced here.
@@ -265,29 +304,52 @@ void RemoteConfigManager::processRetries() {
             commandQueues[sensorId].pop();
         }
     }
+
+    if (mutex != nullptr) unlock();
 }
 
 void RemoteConfigManager::clearCommands(uint8_t sensorId) {
+    if (mutex != nullptr && !lock(portMAX_DELAY)) {
+        return;
+    }
     while (!commandQueues[sensorId].empty()) {
         commandQueues[sensorId].pop();
     }
     LOGI("CMD", "Cleared command queue for sensor %d", sensorId);
+
+    if (mutex != nullptr) unlock();
 }
 
 uint8_t RemoteConfigManager::getQueuedCount(uint8_t sensorId) {
-    return commandQueues[sensorId].size();
+    // Don't ever block the webserver for long; return a safe default if busy.
+    if (mutex != nullptr && !lock(pdMS_TO_TICKS(5))) {
+        return 0;
+    }
+    uint8_t count = commandQueues[sensorId].size();
+    if (mutex != nullptr) unlock();
+    return count;
 }
 
 uint8_t RemoteConfigManager::getRetryCount(uint8_t sensorId) {
-    if (commandQueues[sensorId].empty()) {
+    if (mutex != nullptr && !lock(pdMS_TO_TICKS(5))) {
         return 0;
     }
-    return commandQueues[sensorId].front().retryCount;
+    if (commandQueues[sensorId].empty()) {
+        if (mutex != nullptr) unlock();
+        return 0;
+    }
+    uint8_t retries = commandQueues[sensorId].front().retryCount;
+    if (mutex != nullptr) unlock();
+    return retries;
 }
 
 bool RemoteConfigManager::getCommandInfo(uint8_t sensorId, uint8_t& commandType, uint8_t& seqNum, 
                                          uint8_t& retries, bool& waitingAck, uint32_t& ageMs) {
+    if (mutex != nullptr && !lock(pdMS_TO_TICKS(5))) {
+        return false;
+    }
     if (commandQueues[sensorId].empty()) {
+        if (mutex != nullptr) unlock();
         return false;
     }
     
@@ -301,14 +363,19 @@ bool RemoteConfigManager::getCommandInfo(uint8_t sensorId, uint8_t& commandType,
     ageMs = (cmd.lastAttempt > 0)
               ? (millis() - cmd.lastAttempt)
               : (millis() - cmd.queuedAt);
-    
+
+    if (mutex != nullptr) unlock();
     return true;
 }
 
 bool RemoteConfigManager::getLastFailedCommand(uint8_t sensorId, uint8_t& commandType, 
                                                uint8_t& seqNum, uint32_t& ageMs, uint8_t& reason) {
+    if (mutex != nullptr && !lock(pdMS_TO_TICKS(5))) {
+        return false;
+    }
     // Check if there's a recorded failure (failedAtMs > 0 means it's valid)
     if (lastFailedCommand[sensorId].failedAtMs == 0) {
+        if (mutex != nullptr) unlock();
         return false;
     }
     
@@ -316,28 +383,41 @@ bool RemoteConfigManager::getLastFailedCommand(uint8_t sensorId, uint8_t& comman
     seqNum = lastFailedCommand[sensorId].sequenceNumber;
     ageMs = millis() - lastFailedCommand[sensorId].failedAtMs;
     reason = lastFailedCommand[sensorId].reason;
-    
+
+    if (mutex != nullptr) unlock();
     return true;
 }
 
 bool RemoteConfigManager::getLastSentCommand(uint8_t sensorId, uint8_t& commandType, uint8_t& seqNum, uint32_t& ageMs) {
+    if (mutex != nullptr && !lock(pdMS_TO_TICKS(5))) {
+        return false;
+    }
     if (lastSentCommand[sensorId].atMs == 0) {
+        if (mutex != nullptr) unlock();
         return false;
     }
     commandType = lastSentCommand[sensorId].commandType;
     seqNum = lastSentCommand[sensorId].sequenceNumber;
     ageMs = millis() - lastSentCommand[sensorId].atMs;
+
+    if (mutex != nullptr) unlock();
     return true;
 }
 
 bool RemoteConfigManager::getLastAckedCommand(uint8_t sensorId, uint8_t& commandType, uint8_t& seqNum, uint8_t& statusCode, uint32_t& ageMs) {
+    if (mutex != nullptr && !lock(pdMS_TO_TICKS(5))) {
+        return false;
+    }
     if (lastAckedCommand[sensorId].atMs == 0) {
+        if (mutex != nullptr) unlock();
         return false;
     }
     commandType = lastAckedCommand[sensorId].commandType;
     seqNum = lastAckedCommand[sensorId].sequenceNumber;
     statusCode = lastAckedCommand[sensorId].statusCode;
     ageMs = millis() - lastAckedCommand[sensorId].atMs;
+
+    if (mutex != nullptr) unlock();
     return true;
 }
 

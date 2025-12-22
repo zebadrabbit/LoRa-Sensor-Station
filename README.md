@@ -61,6 +61,8 @@ Both devices feature OLED displays with automatic page cycling and inverse heade
 - **Browser Timezone Detection**: Automatically use browser's timezone
 - **Startup Sync**: Waits up to 30 seconds for NTP before broadcasting to sensors
 - **LoRa Time Commands**: CMD_TIME_SYNC with epoch timestamp and timezone offset
+- **Actionable failures**: UI shows the server-provided reason when sync fails (e.g., NTP not synced yet).
+- **Targeted sync**: Can request syncing a specific sensor (when known to the base).
 
 ### ⚙️ Runtime Configuration (v2.11)
 

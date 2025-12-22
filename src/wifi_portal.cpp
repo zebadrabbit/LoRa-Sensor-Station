@@ -15,6 +15,9 @@
 #include <Preferences.h>
 #include <map>
 
+// Forward declarations (helpers defined later in this file)
+String sanitizeString(const char* str);
+
 // Global instance
 WiFiPortal wifiPortal;
 
@@ -581,8 +584,90 @@ void WiFiPortal::setupDashboard() {
         request->send(200, "application/json", "{\"status\":\"ok\",\"uptime\":" + String(millis()) + "}");
     });
     
-    webServer.on("/api/sensors", HTTP_GET, [this](AsyncWebServerRequest *request) {
-        request->send(200, "application/json", generateSensorsJSON());
+    webServer.on("/api/sensors", HTTP_GET, [](AsyncWebServerRequest *request) {
+#ifdef BASE_STATION
+        extern SensorConfigManager sensorConfigManager;
+#endif
+
+        auto *response = request->beginResponseStream("application/json");
+        response->print("[");
+
+        bool first = true;
+        for (int i = 0; i < 10; i++) {
+            SensorInfo* sensor = getSensorByIndex(i);
+            if (sensor == NULL) continue;
+
+            if (!first) response->print(",");
+            first = false;
+
+            uint32_t ageSeconds = (millis() - sensor->lastSeen) / 1000;
+            String ageStr;
+            if (ageSeconds < 60) ageStr = String(ageSeconds) + "s ago";
+            else if (ageSeconds < 3600) ageStr = String(ageSeconds / 60) + "m ago";
+            else ageStr = String(ageSeconds / 3600) + "h ago";
+
+            response->print("{\"id\":");
+            response->print(sensor->sensorId);
+            response->print(",\"location\":\"");
+            response->print(sanitizeString(sensor->location));
+            response->print("\"");
+
+#ifdef BASE_STATION
+            SensorMetadata meta = sensorConfigManager.getSensorMetadata(sensor->sensorId);
+            SensorHealthScore health = sensorConfigManager.getHealthScore(sensor->sensorId);
+
+            const char* priorityStr = "Medium";
+            if (meta.priority == PRIORITY_HIGH) priorityStr = "High";
+            else if (meta.priority == PRIORITY_LOW) priorityStr = "Low";
+
+            response->print(",\"zone\":\"");
+            response->print(sanitizeString(sensor->zone));
+            response->print("\"");
+            response->print(",\"priority\":\"");
+            response->print(priorityStr);
+            response->print("\"");
+            response->print(",\"priorityLevel\":");
+            response->print((int)meta.priority);
+#endif
+
+            response->print(",\"battery\":");
+            response->print(sensor->lastBatteryPercent);
+            response->print(",\"charging\":");
+            response->print(sensor->powerState ? "true" : "false");
+            response->print(",\"rssi\":");
+            response->print(sensor->lastRssi);
+            response->print(",\"snr\":");
+            response->print(sensor->lastSnr);
+            response->print(",\"packets\":");
+            response->print(sensor->packetsReceived);
+            response->print(",\"ageSeconds\":");
+            response->print(ageSeconds);
+            response->print(",\"age\":\"");
+            response->print(ageStr);
+            response->print("\"");
+
+#ifdef BASE_STATION
+            response->print(",\"health\":{");
+            response->print("\"overall\":");
+            response->print(health.overallHealth, 2);
+            response->print(",\"communication\":");
+            response->print(health.communicationReliability, 2);
+            response->print(",\"battery\":");
+            response->print(health.batteryHealth, 2);
+            response->print(",\"quality\":");
+            response->print(health.readingQuality, 2);
+            response->print(",\"totalPackets\":");
+            response->print(health.totalPackets);
+            response->print(",\"failedPackets\":");
+            response->print(health.failedPackets);
+            response->print("}");
+#endif
+
+            response->print("}");
+        }
+
+        response->print("]");
+        request->send(response);
     });
     
     // Delete/forget a client
@@ -599,12 +684,32 @@ void WiFiPortal::setupDashboard() {
         request->send(success ? 200 : 404, "application/json", response);
     });
     
-    webServer.on("/api/stats", HTTP_GET, [this](AsyncWebServerRequest *request) {
-        request->send(200, "application/json", generateStatsJSON());
+    webServer.on("/api/stats", HTTP_GET, [](AsyncWebServerRequest *request) {
+        SystemStats* stats = getStats();
+        uint8_t activeClients = getActiveClientCount();
+
+        uint32_t successRate = 0;
+        if (stats->totalRxPackets + stats->totalRxInvalid > 0) {
+            successRate = (stats->totalRxPackets * 100) / (stats->totalRxPackets + stats->totalRxInvalid);
+        }
+
+        auto *response = request->beginResponseStream("application/json");
+        response->print("{\"activeSensors\":");
+        response->print(activeClients);
+        response->print(",\"totalRx\":");
+        response->print(stats->totalRxPackets);
+        response->print(",\"totalInvalid\":");
+        response->print(stats->totalRxInvalid);
+        response->print(",\"successRate\":");
+        response->print(successRate);
+        response->print(",\"uptime\":");
+        response->print(millis() / 1000);
+        response->print("}");
+        request->send(response);
     });
     
     // Historical data endpoint
-    webServer.on("/api/history", HTTP_GET, [this](AsyncWebServerRequest *request) {
+    webServer.on("/api/history", HTTP_GET, [](AsyncWebServerRequest *request) {
         if (!request->hasParam("sensorId")) {
             request->send(400, "application/json", "{\"error\":\"sensorId parameter required\"}");
             return;
@@ -620,7 +725,48 @@ void WiFiPortal::setupDashboard() {
             else if (range == "24h") timeRange = 86400;
         }
         
-        request->send(200, "application/json", generateHistoryJSON(sensorId, timeRange));
+        // Stream response (no huge String build)
+        ClientHistory* history = getClientHistory(sensorId);
+        if (history == NULL || history->count == 0) {
+            request->send(200, "application/json", "{\"error\":\"No data available\",\"data\":[]}");
+            return;
+        }
+
+        uint32_t currentTime = millis() / 1000;
+        uint32_t cutoffTime = 0;
+        if (timeRange > 0 && currentTime > timeRange) {
+            cutoffTime = currentTime - timeRange;
+        }
+
+        auto *response = request->beginResponseStream("application/json");
+        response->print("{\"sensorId\":");
+        response->print(sensorId);
+        response->print(",\"data\":[");
+
+        bool first = true;
+        uint16_t startIdx = (history->count < HISTORY_SIZE) ? 0 : history->index;
+        uint16_t count = (history->count < HISTORY_SIZE) ? history->count : HISTORY_SIZE;
+        for (uint16_t i = 0; i < count; i++) {
+            uint16_t idx = (startIdx + i) % HISTORY_SIZE;
+            ClientDataPoint* point = &history->data[idx];
+            if (timeRange > 0 && point->timestamp < cutoffTime) {
+                continue;
+            }
+            if (!first) response->print(",");
+            first = false;
+            response->print("{\"t\":");
+            response->print(point->timestamp);
+            response->print(",\"batt\":");
+            response->print(point->battery);
+            response->print(",\"rssi\":");
+            response->print(point->rssi);
+            response->print(",\"charging\":");
+            response->print(point->charging ? "true" : "false");
+            response->print("}");
+        }
+
+        response->print("]}");
+        request->send(response);
     });
     
     // Export endpoints
@@ -648,16 +794,13 @@ void WiFiPortal::setupDashboard() {
     });
     
     // Configuration pages - explicit routes needed since serveStatic can't handle /alerts -> /alerts.html mapping
-    // Use beginResponse/endResponse for proper connection management
-    // webServer.on("/alerts", HTTP_GET, [](AsyncWebServerRequest *request) {
-    //     AsyncWebServerResponse *response = request->beginResponse(LittleFS, "/alerts.html", "text/html");
-    //     response->addHeader("Connection", "close");
-    //     request->send(response);
-    // });
-
+    // Use beginResponse for better connection lifecycle control (helps avoid rare hangs/resource buildup).
     webServer.on("/alerts", HTTP_GET, [](AsyncWebServerRequest *request) {
-        request->send(LittleFS, "/alerts.html", "text/html");
-    });    
+        AsyncWebServerResponse *response = request->beginResponse(LittleFS, "/alerts.html", "text/html");
+        response->addHeader("Cache-Control", "no-cache");
+        response->addHeader("Connection", "close");
+        request->send(response);
+    });
     
     webServer.on("/security", HTTP_GET, [](AsyncWebServerRequest *request) {
         request->send(LittleFS, "/security.html", "text/html");
@@ -693,17 +836,18 @@ void WiFiPortal::setupDashboard() {
         uint8_t preambleLength = prefs.getUChar("preamble", 8);  // Default 8
         prefs.end();
         
-        String json = "{";
-        json += "\"networkId\":" + String(config.networkId) + ",";
-        json += "\"region\":\"US915\",";  // Placeholder - would need to add to config
-        json += "\"frequency\":" + String(frequency) + ",";
-        json += "\"spreadingFactor\":" + String(spreadingFactor) + ",";
-        json += "\"bandwidth\":" + String(bandwidth / 1000) + ",";  // Convert Hz to kHz
-        json += "\"txPower\":" + String(txPower) + ",";
-        json += "\"codingRate\":" + String(codingRate) + ",";
-        json += "\"preambleLength\":" + String(preambleLength);
-        json += "}";
-        request->send(200, "application/json", json);
+        auto *response = request->beginResponseStream("application/json");
+        StaticJsonDocument<384> doc;
+        doc["networkId"] = config.networkId;
+        doc["region"] = "US915";
+        doc["frequency"] = frequency;
+        doc["spreadingFactor"] = spreadingFactor;
+        doc["bandwidth"] = bandwidth / 1000;  // Hz -> kHz
+        doc["txPower"] = txPower;
+        doc["codingRate"] = codingRate;
+        doc["preambleLength"] = preambleLength;
+        serializeJson(doc, *response);
+        request->send(response);
     });
     
 #ifdef BASE_STATION
@@ -882,8 +1026,42 @@ void WiFiPortal::setupDashboard() {
     #endif // BASE_STATION
     
     // Alerts API endpoints
-    webServer.on("/api/alerts/config", HTTP_GET, [this](AsyncWebServerRequest *request) {
-        request->send(200, "application/json", generateAlertsConfigJSON());
+    // Use a streamed JSON response to avoid heap churn/fragmentation from large String concatenations.
+    webServer.on("/api/alerts/config", HTTP_GET, [](AsyncWebServerRequest *request) {
+        AlertConfig* config = alertManager.getConfig();
+
+        auto *response = request->beginResponseStream("application/json");
+
+        // Size: includes multiple credential fields (webhook, SMTP, email). Keep some headroom.
+        StaticJsonDocument<2048> doc;
+        doc["teamsEnabled"] = config->teamsEnabled;
+        doc["teamsWebhook"] = config->teamsWebhook;
+
+        doc["emailEnabled"] = config->emailEnabled;
+        doc["smtpServer"] = config->smtpServer;
+        doc["smtpPort"] = config->smtpPort;
+        doc["emailUser"] = config->emailUser;
+        doc["emailPassword"] = config->emailPassword;
+        doc["emailFrom"] = config->emailFrom;
+        doc["emailTo"] = config->emailTo;
+        doc["emailTLS"] = config->emailTLS;
+
+        doc["tempHigh"] = config->tempHighThreshold;
+        doc["tempLow"] = config->tempLowThreshold;
+        doc["batteryLow"] = config->batteryLowThreshold;
+        doc["batteryCritical"] = config->batteryCriticalThreshold;
+        doc["timeout"] = config->sensorTimeoutMinutes;
+        doc["rateLimit"] = config->rateLimitSeconds;
+
+        doc["alertTempHigh"] = config->alertTempHigh;
+        doc["alertTempLow"] = config->alertTempLow;
+        doc["alertBatteryLow"] = config->alertBatteryLow;
+        doc["alertBatteryCritical"] = config->alertBatteryCritical;
+        doc["alertSensorOffline"] = config->alertSensorOffline;
+        doc["alertSensorOnline"] = config->alertSensorOnline;
+
+        serializeJson(doc, *response);
+        request->send(response);
     });
     
     webServer.on("/api/alerts/config", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL,
@@ -910,8 +1088,22 @@ void WiFiPortal::setupDashboard() {
     });
     
     // MQTT API endpoints
-    webServer.on("/api/mqtt/config", HTTP_GET, [this](AsyncWebServerRequest *request) {
-        request->send(200, "application/json", generateMQTTConfigJSON());
+    webServer.on("/api/mqtt/config", HTTP_GET, [](AsyncWebServerRequest *request) {
+        MQTTConfig* config = mqttClient.getConfig();
+        auto *response = request->beginResponseStream("application/json");
+
+        StaticJsonDocument<512> doc;
+        doc["enabled"] = config->enabled;
+        doc["broker"] = config->broker;
+        doc["port"] = config->port;
+        doc["username"] = config->username;
+        doc["password"] = config->password;
+        doc["topicPrefix"] = config->topicPrefix;
+        doc["haDiscovery"] = config->homeAssistantDiscovery;
+        doc["qos"] = config->qos;
+
+        serializeJson(doc, *response);
+        request->send(response);
     });
     
     webServer.on("/api/mqtt/config", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL,
@@ -928,14 +1120,15 @@ void WiFiPortal::setupDashboard() {
         request->send(connected ? 200 : 500, "application/json", response);
     });
     
-    webServer.on("/api/mqtt/stats", HTTP_GET, [this](AsyncWebServerRequest *request) {
-        String json = "{";
-        json += "\"connected\":" + String(mqttClient.isConnected() ? "true" : "false") + ",";
-        json += "\"publishes\":" + String(mqttClient.getPublishCount()) + ",";
-        json += "\"failures\":" + String(mqttClient.getFailedPublishCount()) + ",";
-        json += "\"reconnects\":" + String(mqttClient.getReconnectCount());
-        json += "}";
-        request->send(200, "application/json", json);
+    webServer.on("/api/mqtt/stats", HTTP_GET, [](AsyncWebServerRequest *request) {
+        auto *response = request->beginResponseStream("application/json");
+        StaticJsonDocument<192> doc;
+        doc["connected"] = mqttClient.isConnected();
+        doc["publishes"] = mqttClient.getPublishCount();
+        doc["failures"] = mqttClient.getFailedPublishCount();
+        doc["reconnects"] = mqttClient.getReconnectCount();
+        serializeJson(doc, *response);
+        request->send(response);
     });
     
     // Time & NTP configuration page
@@ -944,7 +1137,7 @@ void WiFiPortal::setupDashboard() {
     });
     
     // Client status API
-    webServer.on("/api/client-status", HTTP_GET, [this](AsyncWebServerRequest *request) {
+    webServer.on("/api/client-status", HTTP_GET, [](AsyncWebServerRequest *request) {
         extern RemoteConfigManager remoteConfigManager;
         extern ClientInfo* getAllClients();
         extern uint8_t getActiveClientCount();
@@ -976,7 +1169,8 @@ void WiFiPortal::setupDashboard() {
             return out;
         };
         
-        String json = "{\"clients\":[";
+        auto *response = request->beginResponseStream("application/json");
+        response->print("{\"clients\":[");
         
         ClientInfo* allClients = getAllClients();
         bool first = true;
@@ -984,56 +1178,74 @@ void WiFiPortal::setupDashboard() {
         // Iterate through all possible client slots (MAX_CLIENTS = 10)
         for (uint8_t i = 0; i < 10; i++) {
             if (allClients[i].clientId != 0) {  // Client exists
-                if (!first) json += ",";
+                if (!first) response->print(",");
                 first = false;
                 
                 ClientInfo& client = allClients[i];
                 uint32_t ageSeconds = (millis() - client.lastSeen) / 1000;
                 
-                json += "{";
-                json += "\"clientId\":" + String(client.clientId) + ",";
-                json += "\"active\":" + String(client.active ? "true" : "false") + ",";
-                json += "\"location\":\"" + escapeJson(client.location) + "\",";
-                json += "\"zone\":\"" + escapeJson(client.zone) + "\",";
-                json += "\"battery\":" + String(client.lastBatteryPercent) + ",";
-                json += "\"charging\":" + String(client.powerState ? "true" : "false") + ",";
-                json += "\"rssi\":" + String(client.lastRssi) + ",";
-                json += "\"snr\":" + String(client.lastSnr) + ",";
-                json += "\"packetsReceived\":" + String(client.packetsReceived) + ",";
-                json += "\"lastSeenSeconds\":" + String(ageSeconds) + ",";
-                json += "\"uptimeSeconds\":" + String(millis() / 1000) + ",";
+                response->print("{\"clientId\":");
+                response->print(client.clientId);
+                response->print(",\"active\":");
+                response->print(client.active ? "true" : "false");
+                response->print(",\"location\":\"");
+                response->print(escapeJson(client.location));
+                response->print("\"");
+                response->print(",\"zone\":\"");
+                response->print(escapeJson(client.zone));
+                response->print("\"");
+                response->print(",\"battery\":");
+                response->print(client.lastBatteryPercent);
+                response->print(",\"charging\":");
+                response->print(client.powerState ? "true" : "false");
+                response->print(",\"rssi\":");
+                response->print(client.lastRssi);
+                response->print(",\"snr\":");
+                response->print(client.lastSnr);
+                response->print(",\"packetsReceived\":");
+                response->print(client.packetsReceived);
+                response->print(",\"lastSeenSeconds\":");
+                response->print(ageSeconds);
+                response->print(",\"uptimeSeconds\":");
+                response->print(millis() / 1000);
                 
                 // Time sync info
                 if (client.lastTimeSyncMs > 0) {
                     uint32_t syncAge = (millis() - client.lastTimeSyncMs) / 1000;
-                    json += "\"lastTimeSync\":" + String(syncAge) + ",";
+                    response->print(",\"lastTimeSync\":");
+                    response->print(syncAge);
                 }
                 
                 // Pending commands
                 uint8_t queuedCount = remoteConfigManager.getQueuedCount(client.clientId);
-                json += "\"pendingCommands\":" + String(queuedCount) + ",";
-
+                response->print(",\"pendingCommands\":");
+                response->print(queuedCount);
                 // Last command send attempt (includes retries)
                 uint8_t lastSentType, lastSentSeq;
                 uint32_t lastSentAgeMs;
                 if (remoteConfigManager.getLastSentCommand(client.clientId, lastSentType, lastSentSeq, lastSentAgeMs)) {
-                    json += "\"lastCommandSent\":{";
-                    json += "\"commandType\":" + String(lastSentType) + ",";
-                    json += "\"sequenceNumber\":" + String(lastSentSeq) + ",";
-                    json += "\"ageSeconds\":" + String(lastSentAgeMs / 1000);
-                    json += "},";
+                    response->print(",\"lastCommandSent\":{\"commandType\":");
+                    response->print(lastSentType);
+                    response->print(",\"sequenceNumber\":");
+                    response->print(lastSentSeq);
+                    response->print(",\"ageSeconds\":");
+                    response->print(lastSentAgeMs / 1000);
+                    response->print("}");
                 }
 
                 // Last ACK/NACK observed
                 uint8_t lastAckType, lastAckSeq, lastAckStatus;
                 uint32_t lastAckAgeMs;
                 if (remoteConfigManager.getLastAckedCommand(client.clientId, lastAckType, lastAckSeq, lastAckStatus, lastAckAgeMs)) {
-                    json += "\"lastCommandAck\":{";
-                    json += "\"commandType\":" + String(lastAckType) + ",";
-                    json += "\"sequenceNumber\":" + String(lastAckSeq) + ",";
-                    json += "\"statusCode\":" + String(lastAckStatus) + ",";
-                    json += "\"ageSeconds\":" + String(lastAckAgeMs / 1000);
-                    json += "},";
+                    response->print(",\"lastCommandAck\":{\"commandType\":");
+                    response->print(lastAckType);
+                    response->print(",\"sequenceNumber\":");
+                    response->print(lastAckSeq);
+                    response->print(",\"statusCode\":");
+                    response->print(lastAckStatus);
+                    response->print(",\"ageSeconds\":");
+                    response->print(lastAckAgeMs / 1000);
+                    response->print("}");
                 }
                 
                 // Current pending command details
@@ -1041,40 +1253,46 @@ void WiFiPortal::setupDashboard() {
                 bool waitingAck;
                 uint32_t ageMs;
                 if (remoteConfigManager.getCommandInfo(client.clientId, cmdType, seqNum, retries, waitingAck, ageMs)) {
-                    json += "\"pendingCommand\":{";
-                    json += "\"commandType\":" + String(cmdType) + ",";
-                    json += "\"sequenceNumber\":" + String(seqNum) + ",";
-                    json += "\"retryCount\":" + String(retries) + ",";
-                    json += "\"waitingForAck\":" + String(waitingAck ? "true" : "false") + ",";
-                    json += "\"ageSeconds\":" + String(ageMs / 1000);
-                    json += "},";
+                    response->print(",\"pendingCommand\":{\"commandType\":");
+                    response->print(cmdType);
+                    response->print(",\"sequenceNumber\":");
+                    response->print(seqNum);
+                    response->print(",\"retryCount\":");
+                    response->print(retries);
+                    response->print(",\"waitingForAck\":");
+                    response->print(waitingAck ? "true" : "false");
+                    response->print(",\"ageSeconds\":");
+                    response->print(ageMs / 1000);
+                    response->print("}");
                 }
                 
                 // Last failed command
                 uint8_t failedCmdType, failedSeqNum, failReason;
                 uint32_t failedAgeMs;
                 if (remoteConfigManager.getLastFailedCommand(client.clientId, failedCmdType, failedSeqNum, failedAgeMs, failReason)) {
-                    json += "\"lastFailedCommand\":{";
-                    json += "\"commandType\":" + String(failedCmdType) + ",";
-                    json += "\"sequenceNumber\":" + String(failedSeqNum) + ",";
-                    json += "\"ageSeconds\":" + String(failedAgeMs / 1000) + ",";
-                    json += "\"reason\":" + String(failReason);  // 0=timeout, 1=NACK
-                    json += "},";
+                    response->print(",\"lastFailedCommand\":{\"commandType\":");
+                    response->print(failedCmdType);
+                    response->print(",\"sequenceNumber\":");
+                    response->print(failedSeqNum);
+                    response->print(",\"ageSeconds\":");
+                    response->print(failedAgeMs / 1000);
+                    response->print(",\"reason\":");
+                    response->print(failReason);  // 0=timeout, 1=NACK
+                    response->print("}");
                 }
                 
                 // Physical sensors attached to this client
-                json += "\"sensors\":[";
+                response->print(",\"sensors\":[");
                 extern PhysicalSensor* getSensor(uint8_t clientId, uint8_t sensorIndex);
                 bool firstSensor = true;
                 for (uint8_t s = 0; s < 16; s++) {  // MAX_SENSORS_PER_CLIENT
                     PhysicalSensor* sensor = getSensor(client.clientId, s);
                     if (sensor && sensor->active) {
-                        if (!firstSensor) json += ",";
+                        if (!firstSensor) response->print(",");
                         firstSensor = false;
                         
                         uint32_t sensorAge = (millis() - sensor->lastSeen) / 1000;
                         
-                        // Get type name
                         const char* typeName = "UNKNOWN";
                         const char* unit = "";
                         switch (sensor->type) {
@@ -1089,36 +1307,37 @@ void WiFiPortal::setupDashboard() {
                             case VALUE_GAS_RESISTANCE: typeName = "Gas"; unit = "Ω"; break;
                         }
                         
-                        json += "{";
-                        json += "\"type\":\"" + String(typeName) + "\",";
-                        json += "\"value\":" + String(sensor->lastValue, 2) + ",";
-                        json += "\"unit\":\"" + String(unit) + "\",";
-                        json += "\"ageSeconds\":" + String(sensorAge);
-                        json += "}";
+                        response->print("{\"type\":\"");
+                        response->print(typeName);
+                        response->print("\",\"value\":");
+                        response->print(sensor->lastValue, 2);
+                        response->print(",\"unit\":\"");
+                        response->print(unit);
+                        response->print("\",\"ageSeconds\":");
+                        response->print(sensorAge);
+                        response->print("}");
                     }
                 }
-                json += "]";  // End sensors array
-                
-                json += "}";  // End client object
+                response->print("]}");  // End sensors array + client object
             }
         }
-        
-        json += "]}";  // End clients array and root object
-        
-        request->send(200, "application/json", json);
+
+        response->print("]}");  // End clients array and root object
+        request->send(response);
     });
     
     // Time API endpoints
     webServer.on("/api/time/config", HTTP_GET, [this](AsyncWebServerRequest *request) {
         NTPConfig cfg = configStorage.getNTPConfig();
-        
-        String json = "{";
-        json += "\"enabled\":" + String(cfg.enabled ? "true" : "false") + ",";
-        json += "\"server\":\"" + String(cfg.server) + "\",";
-        json += "\"intervalSec\":" + String(cfg.intervalSec) + ",";
-        json += "\"tzOffsetMinutes\":" + String(cfg.tzOffsetMinutes);
-        json += "}";
-        request->send(200, "application/json", json);
+
+        auto *response = request->beginResponseStream("application/json");
+        StaticJsonDocument<256> doc;
+        doc["enabled"] = cfg.enabled;
+        doc["server"] = cfg.server;
+        doc["intervalSec"] = cfg.intervalSec;
+        doc["tzOffsetMinutes"] = cfg.tzOffsetMinutes;
+        serializeJson(doc, *response);
+        request->send(response);
     });
     
     webServer.on("/api/time/config", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL,
@@ -1154,38 +1373,83 @@ void WiFiPortal::setupDashboard() {
     
     webServer.on("/api/time/sync", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL,
         [this](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
-            time_t now = time(nullptr);
-            if (now < 1000000000) {
-                request->send(500, "application/json", "{\"success\":false,\"error\":\"NTP not synced\"}");
+            String body = String((char*)data).substring(0, len);
+
+            StaticJsonDocument<256> doc;
+            DeserializationError error = deserializeJson(doc, body);
+            if (error) {
+                LOGW("TIME", "Time sync: invalid JSON body");
+                request->send(400, "application/json", "{\"success\":false,\"error\":\"Invalid JSON\"}");
                 return;
             }
-            
+
+            const bool all = doc["all"] | false;
+            const int sensorIdReq = doc["sensorId"] | -1;
+
+            time_t now = time(nullptr);
+            if (now < 1000000000) {
+                LOGW("TIME", "Time sync: NTP not synced (now=%ld)", (long)now);
+                request->send(500, "application/json", "{\"success\":false,\"error\":\"NTP not synced yet\"}");
+                return;
+            }
+
             NTPConfig cfg = configStorage.getNTPConfig();
+            int16_t tz = (int16_t)(doc["tzOffsetMinutes"] | cfg.tzOffsetMinutes);
+
             uint8_t payload[6];
-            memcpy(&payload[0], &now, sizeof(uint32_t));
-            int16_t tz = cfg.tzOffsetMinutes;
+            uint32_t epoch32 = (uint32_t)now;
+            memcpy(&payload[0], &epoch32, sizeof(uint32_t));
             memcpy(&payload[4], &tz, sizeof(int16_t));
-            
+
             extern RemoteConfigManager remoteConfigManager;
             extern ClientInfo* getAllClients();
-            
+
             int sent = 0;
-            // Send to all clients that have ever been seen (active or not)
+            int targets = 0;
+
             ClientInfo* allClients = getAllClients();
             for (uint8_t i = 0; i < 10; i++) {  // MAX_CLIENTS = 10
-                if (allClients[i].clientId != 0) {  // Client exists (has been seen)
-                    if (remoteConfigManager.queueCommand(allClients[i].clientId, CMD_TIME_SYNC, payload, 6)) {
-                        sent++;
-                        Serial.printf("Queued time sync for sensor %d (active=%d)\n", 
-                                    allClients[i].clientId, allClients[i].active);
-                    }
+                const uint8_t cid = allClients[i].clientId;
+                if (cid == 0) continue;
+
+                if (!all && sensorIdReq >= 0 && cid != (uint8_t)sensorIdReq) {
+                    continue;
+                }
+
+                targets++;
+                if (remoteConfigManager.queueCommand(cid, CMD_TIME_SYNC, payload, 6)) {
+                    sent++;
+                    Serial.printf("Queued time sync for sensor %d (active=%d)\n", cid, allClients[i].active);
+                } else {
+                    LOGW("TIME", "Time sync: failed to queue command for sensor %d", cid);
                 }
             }
-            
-            String response = "{\"success\":true,\"commandsSent\":" + String(sent) + 
-                            ",\"epoch\":" + String((unsigned long)now) + 
-                            ",\"tzOffset\":" + String((int)tz) + "}";
-            request->send(200, "application/json", response);
+
+            if (targets == 0) {
+                String msg = (sensorIdReq >= 0 && !all)
+                  ? "Requested sensorId not known to base yet"
+                  : "No known clients to sync";
+                LOGW("TIME", "Time sync: %s", msg.c_str());
+                request->send(404, "application/json", String("{\"success\":false,\"error\":\"") + msg + "\"}");
+                return;
+            }
+
+            if (sent == 0) {
+                LOGW("TIME", "Time sync: 0/%d commands queued", targets);
+                request->send(500, "application/json", "{\"success\":false,\"error\":\"Failed to queue time sync commands\"}");
+                return;
+            }
+
+            StaticJsonDocument<192> resp;
+            resp["success"] = true;
+            resp["commandsSent"] = sent;
+            resp["targets"] = targets;
+            resp["epoch"] = (uint32_t)epoch32;
+            resp["tzOffset"] = (int)tz;
+
+            auto *response = request->beginResponseStream("application/json");
+            serializeJson(resp, *response);
+            request->send(response);
         });
     
     // Remote configuration API
@@ -1651,129 +1915,6 @@ String WiFiPortal::generateSensorsJSON() {
     return json;
 }
 
-String WiFiPortal::generateStatsJSON() {
-    SystemStats* stats = getStats();
-    uint8_t activeClients = getActiveClientCount();  // Count clients, not physical sensors
-    
-    uint32_t successRate = 0;
-    if (stats->totalRxPackets + stats->totalRxInvalid > 0) {
-        successRate = (stats->totalRxPackets * 100) / (stats->totalRxPackets + stats->totalRxInvalid);
-    }
-    
-    String json = "{";
-    json += "\"activeSensors\":" + String(activeClients) + ",";  // Keep field name for compatibility
-    json += "\"totalRx\":" + String(stats->totalRxPackets) + ",";
-    json += "\"totalInvalid\":" + String(stats->totalRxInvalid) + ",";
-    json += "\"successRate\":" + String(successRate) + ",";
-    json += "\"uptime\":" + String(millis() / 1000);
-    json += "}";
-    
-    return json;
-}
-
-String WiFiPortal::generateHistoryJSON(uint8_t sensorId, uint32_t timeRange) {
-    // For backward compatibility, treat sensorId as clientId
-    // Return client telemetry history (battery/RSSI over time)
-    ClientHistory* history = getClientHistory(sensorId);
-    
-    Serial.printf("📈 API /api/history: clientId=%d, history=%p\n", sensorId, history);
-    
-    if (history == NULL || history->count == 0) {
-        Serial.printf("📈 History %s (count=%d)\n", 
-                     history == NULL ? "is NULL" : "has zero count",
-                     history ? history->count : 0);
-        return "{\"error\":\"No data available\",\"data\":[]}";
-    }
-    
-    Serial.printf("📈 History found: count=%d, index=%d\n", history->count, history->index);
-    
-    uint32_t currentTime = millis() / 1000;
-    uint32_t cutoffTime = 0;
-    
-    // Only apply time filter if we have enough uptime to cover the range
-    if (timeRange > 0) {
-        if (currentTime > timeRange) {
-            cutoffTime = currentTime - timeRange;
-        }
-        // else cutoffTime stays 0, showing all data when uptime < requested range
-    }
-    
-    Serial.printf("📈 Time filtering: current=%u, range=%u, cutoff=%u\n", 
-                 currentTime, timeRange, cutoffTime);
-    
-    String json = "{\"sensorId\":" + String(sensorId) + ",\"data\":[";
-    bool first = true;
-    int skipped = 0;
-    int included = 0;
-    
-    // Iterate through ring buffer in chronological order
-    uint16_t startIdx = (history->count < HISTORY_SIZE) ? 0 : history->index;
-    uint16_t count = (history->count < HISTORY_SIZE) ? history->count : HISTORY_SIZE;
-    
-    for (uint16_t i = 0; i < count; i++) {
-        uint16_t idx = (startIdx + i) % HISTORY_SIZE;
-        ClientDataPoint* point = &history->data[idx];
-        
-        Serial.printf("📈 Point[%d]: ts=%u, batt=%d%%, rssi=%d dBm, charging=%s\n",
-                     idx, point->timestamp, point->battery, point->rssi, point->charging ? "YES" : "NO");
-        
-        // Skip if outside time range
-        if (timeRange > 0 && point->timestamp < cutoffTime) {
-            Serial.printf("📈 SKIPPED (ts %u < cutoff %u)\n", point->timestamp, cutoffTime);
-            skipped++;
-            continue;
-        }
-        
-        included++;
-        
-        if (!first) json += ",";
-        first = false;
-        
-        json += "{";
-        json += "\"t\":" + String(point->timestamp) + ",";
-        json += "\"batt\":" + String(point->battery) + ",";
-        json += "\"rssi\":" + String(point->rssi) + ",";
-        json += "\"charging\":" + String(point->charging ? "true" : "false");
-        json += "}";
-    }
-    
-    Serial.printf("📈 Result: included=%d, skipped=%d, total=%d\n", included, skipped, count);
-    
-    json += "]}";
-    return json;
-}
-
-String WiFiPortal::generateAlertsConfigJSON() {
-    AlertConfig* config = alertManager.getConfig();
-    
-    String json = "{";
-    json += "\"teamsEnabled\":" + String(config->teamsEnabled ? "true" : "false") + ",";
-    json += "\"teamsWebhook\":\"" + String(config->teamsWebhook) + "\",";
-    json += "\"emailEnabled\":" + String(config->emailEnabled ? "true" : "false") + ",";
-    json += "\"smtpServer\":\"" + String(config->smtpServer) + "\",";
-    json += "\"smtpPort\":" + String(config->smtpPort) + ",";
-    json += "\"emailUser\":\"" + String(config->emailUser) + "\",";
-    json += "\"emailPassword\":\"" + String(config->emailPassword) + "\",";
-    json += "\"emailFrom\":\"" + String(config->emailFrom) + "\",";
-    json += "\"emailTo\":\"" + String(config->emailTo) + "\",";
-    json += "\"emailTLS\":" + String(config->emailTLS ? "true" : "false") + ",";
-    json += "\"tempHigh\":" + String(config->tempHighThreshold, 1) + ",";
-    json += "\"tempLow\":" + String(config->tempLowThreshold, 1) + ",";
-    json += "\"batteryLow\":" + String(config->batteryLowThreshold) + ",";
-    json += "\"batteryCritical\":" + String(config->batteryCriticalThreshold) + ",";
-    json += "\"timeout\":" + String(config->sensorTimeoutMinutes) + ",";
-    json += "\"rateLimit\":" + String(config->rateLimitSeconds) + ",";
-    json += "\"alertTempHigh\":" + String(config->alertTempHigh ? "true" : "false") + ",";
-    json += "\"alertTempLow\":" + String(config->alertTempLow ? "true" : "false") + ",";
-    json += "\"alertBatteryLow\":" + String(config->alertBatteryLow ? "true" : "false") + ",";
-    json += "\"alertBatteryCritical\":" + String(config->alertBatteryCritical ? "true" : "false") + ",";
-    json += "\"alertSensorOffline\":" + String(config->alertSensorOffline ? "true" : "false") + ",";
-    json += "\"alertSensorOnline\":" + String(config->alertSensorOnline ? "true" : "false");
-    json += "}";
-    
-    return json;
-}
-
 void WiFiPortal::handleAlertsConfigUpdate(AsyncWebServerRequest *request, uint8_t *data, size_t len) {
     String body = "";
     for (size_t i = 0; i < len; i++) {
@@ -1888,25 +2029,6 @@ bool WiFiPortal::testTeamsWebhook() {
 }
 
 #ifdef BASE_STATION
-/**
- * @brief Generate MQTT configuration JSON
- */
-String WiFiPortal::generateMQTTConfigJSON() {
-    MQTTConfig* config = mqttClient.getConfig();
-    
-    String json = "{";
-    json += "\"enabled\":" + String(config->enabled ? "true" : "false") + ",";
-    json += "\"broker\":\"" + String(config->broker) + "\",";
-    json += "\"port\":" + String(config->port) + ",";
-    json += "\"username\":\"" + String(config->username) + "\",";
-    json += "\"password\":\"" + String(config->password) + "\",";
-    json += "\"topicPrefix\":\"" + String(config->topicPrefix) + "\",";
-    json += "\"haDiscovery\":" + String(config->homeAssistantDiscovery ? "true" : "false") + ",";
-    json += "\"qos\":" + String(config->qos);
-    json += "}";
-    
-    return json;
-}
 #endif // BASE_STATION
 
 /**

@@ -3,6 +3,8 @@
 
 #include <Arduino.h>
 #include <queue>
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 
 // Command types for remote configuration
 enum CommandType : uint8_t {
@@ -76,8 +78,9 @@ public:
     // Queue a command to send to a sensor
     bool queueCommand(uint8_t sensorId, CommandType cmdType, const uint8_t* data, uint8_t dataLen);
     
-    // Get next pending command for a sensor (returns NULL if none)
-    CommandPacket* getPendingCommand(uint8_t sensorId);
+    // Get next pending command for a sensor (returns false if none)
+    // Copies the packet out so callers don't hold pointers into the queue across threads/cores.
+    bool getPendingCommand(uint8_t sensorId, CommandPacket& outPacket);
     
     // Mark command as acknowledged
     void markCommandAcked(uint8_t sensorId, uint8_t sequenceNumber);
@@ -121,6 +124,18 @@ public:
     uint16_t calculateChecksum(const uint8_t* data, size_t length);
     
 private:
+    SemaphoreHandle_t mutex = nullptr;
+
+    inline bool lock(TickType_t ticksToWait) {
+        return (mutex != nullptr) && (xSemaphoreTake(mutex, ticksToWait) == pdTRUE);
+    }
+
+    inline void unlock() {
+        if (mutex != nullptr) {
+            xSemaphoreGive(mutex);
+        }
+    }
+
     std::queue<QueuedCommand> commandQueues[256]; // One queue per sensor ID
     FailedCommand lastFailedCommand[256];          // Track last failed command per sensor
 

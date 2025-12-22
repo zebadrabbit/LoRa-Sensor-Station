@@ -311,6 +311,15 @@ bool AlertManager::sendTeamsAlert(const String& title, const String& message, co
     
     // For Microsoft Teams webhooks, we need to accept their certificate
     client.setInsecure();
+
+    // Prevent rare long stalls (DNS/TLS/connect/write/read) from blocking the main loop
+    // or the AsyncWebServer callback for too long and triggering a watchdog reset.
+    client.setTimeout(5); // seconds
+#if defined(ARDUINO_ARCH_ESP32)
+    client.setHandshakeTimeout(5); // seconds
+#endif
+    http.setReuse(false);
+    http.setTimeout(5000); // ms
     
     http.begin(client, config.teamsWebhook);
     http.addHeader("Content-Type", "application/json");
@@ -451,6 +460,8 @@ bool AlertManager::sendEmailAlert(const String& subject, const String& message) 
     
     // Create SMTP session
     SMTPSession smtp;
+    // Avoid long stalls on unreachable SMTP servers / DNS issues.
+    smtp.setTCPTimeout(5); // seconds
     
     // Set the session config
     Session_Config sessionConfig;

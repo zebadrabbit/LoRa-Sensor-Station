@@ -399,7 +399,7 @@ void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr) {
               }
               
               if (wifiPortal.isDashboardActive()) {
-                wifiPortal.broadcastSensorUpdate();
+                pendingWebSocketBroadcast = true;
               }
               
               Serial.printf("Sensor ID: %d\n", received.sensorId);
@@ -1224,21 +1224,20 @@ void handlePendingCommandSend() {
 // Send command immediately to sensor (sensor is always listening)
 void sendCommandNow(uint8_t sensorId) {
   extern RemoteConfigManager remoteConfigManager;
-  
-  CommandPacket* cmd = remoteConfigManager.getPendingCommand(sensorId);
-  
-  if (cmd == nullptr) {
+
+  CommandPacket cmd;
+  if (!remoteConfigManager.getPendingCommand(sensorId, cmd)) {
     return;  // No command or still waiting for ACK
   }
   
   Serial.printf("🚀 Sending command type %d to sensor %d (seq %d, retry %d, targetSensorId=%d)\n", 
-               cmd->commandType, sensorId, cmd->sequenceNumber,
-               remoteConfigManager.getRetryCount(sensorId), cmd->targetSensorId);
+               cmd.commandType, sensorId, cmd.sequenceNumber,
+               remoteConfigManager.getRetryCount(sensorId), cmd.targetSensorId);
   
   // CRITICAL DEBUG: Verify targetSensorId matches the queue ID
-  if (cmd->targetSensorId != sensorId) {
+  if (cmd.targetSensorId != sensorId) {
     Serial.printf("⚠️ WARNING: Mismatch! Queue sensorId=%d but packet targetSensorId=%d\n", 
-                 sensorId, cmd->targetSensorId);
+                 sensorId, cmd.targetSensorId);
   }
   
   size_t cmdSize = sizeof(CommandPacket);
@@ -1247,9 +1246,9 @@ void sendCommandNow(uint8_t sensorId) {
   Radio.Standby();
   
   // Diagnostics hook: record command send for link testing
-  wifiPortal.diagnosticsRecordSent(sensorId, cmd->sequenceNumber);
+  wifiPortal.diagnosticsRecordSent(sensorId, cmd.sequenceNumber);
   
-  Radio.Send((uint8_t*)cmd, cmdSize);
+  Radio.Send((uint8_t*)&cmd, cmdSize);
   lora_idle = false;
 }
 

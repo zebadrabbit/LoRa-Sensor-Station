@@ -253,58 +253,7 @@ void setup() {
     LOGI("MESH", "Initializing Mesh Router");
     LOGI("MESH", "Mesh Enabled: %s", baseConfig.meshEnabled ? "YES" : "NO");
     meshRouter.begin(1, true);  // Base station ID = 1
-    
-    #ifdef BASE_STATION
-    // Wait for NTP sync and broadcast time to all sensors on startup
-    NTPConfig ntpConfig = configStorage.getNTPConfig();
-    if (ntpConfig.enabled) {
-      LOGI("TIME", "Waiting for NTP sync before broadcasting to sensors...");
-      displayMessage("Time Sync", "Waiting for", "NTP...", 0);
-      
-      // Wait up to 30 seconds for NTP to sync
-      uint32_t ntpWaitStart = millis();
-      while (millis() - ntpWaitStart < 30000) {
-        time_t now = time(nullptr);
-        if (now > 1000000000) {  // Valid time (after year 2001)
-          setLastNtpSyncEpoch(now);
-          LOGI("TIME", "NTP synced at startup: %lu", (unsigned long)now);
-          
-          // Broadcast time to all active sensors only
-          extern RemoteConfigManager remoteConfigManager;
-          extern uint8_t getActiveClientCount();
-          extern ClientInfo* getClientByIndex(uint8_t index);
-          
-          uint8_t payload[6];
-          memcpy(&payload[0], &now, sizeof(uint32_t));
-          int16_t tz = ntpConfig.tzOffsetMinutes;
-          memcpy(&payload[4], &tz, sizeof(int16_t));
-          
-          int sent = 0;
-          uint8_t activeCount = getActiveClientCount();
-          for (uint8_t i = 0; i < activeCount; i++) {
-            ClientInfo* client = getClientByIndex(i);
-            if (client && client->active) {
-              if (remoteConfigManager.queueCommand(client->clientId, CMD_TIME_SYNC, payload, 6)) {
-                sent++;
-              }
-            }
-          }
-          LOGI("TIME", "Startup time broadcast queued for %d active sensors (epoch=%lu, tz=%d)", sent, (unsigned long)now, (int)tz);
-          char msg[32];
-          snprintf(msg, sizeof(msg), "%d sensors", sent);
-          displayMessage("Time Sync", "Broadcast to", msg, 2000);
-          break;
-        }
-        delay(100);
-      }
-      
-      if (getLastNtpSyncEpoch() == 0) {
-        LOGW("TIME", "NTP sync timeout - continuing without time");
-        displayMessage("Time Warning", "NTP timeout", "Continuing...", 2000);
-      }
-    }
-    #endif // BASE_STATION
-    
+
     setLED(getColorGreen());
     
   } else {

@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Built-in power-on blink using `LED_BUILTIN` (GPIO35), configurable via `include/config.h`.
 - Base station command/status observability improvements (queue age tracking + richer client status reporting).
+- Streamed JSON responses for high-traffic dashboard endpoints to reduce heap churn (and improve UI responsiveness).
+- Time sync API now supports per-sensor sync requests and returns actionable error details.
 
 ### Fixed
 
@@ -18,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Base station queued-command reliability: periodic idle "kick" schedules a send attempt so commands don’t remain queued indefinitely.
 - Buzzer reliability: patterns are timer-driven and self-stopping so a stalled main loop won’t leave a long tone running.
 - LittleFS logging robustness: guarded/serialized filesystem access and fail-safe behavior to avoid panics during log writes.
+- Web UI stability under load: avoid doing WebSocket broadcasts directly from LoRa RX callback paths (deferred to main loop).
+- Remote command queue concurrency safety: mutex-protected queue access and copy-out `getPendingCommand()` API (no pointers into queue).
+- Alerts delivery reliability: explicit network timeouts to avoid long blocking in Teams/SMTP paths.
+- PlatformIO config hygiene: replaced deprecated `src_filter` with `build_src_filter`.
+- WiFiPortal cleanup: removed stale/legacy declarations and unused JSON generator methods that were no longer referenced.
 
 ## [2.17.0] - 2025-12-19
 
