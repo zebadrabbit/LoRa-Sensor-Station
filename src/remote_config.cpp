@@ -7,6 +7,13 @@ static RemoteConfigManager* instance = nullptr;
 void RemoteConfigManager::init() {
     nextSequenceNumber = 1;
     instance = this;
+    
+    // Clear failed command tracking
+    memset(lastFailedCommand, 0, sizeof(lastFailedCommand));
+
+    // Clear last command event tracking
+    memset(lastSentCommand, 0, sizeof(lastSentCommand));
+    memset(lastAckedCommand, 0, sizeof(lastAckedCommand));
 }
 
 uint16_t RemoteConfigManager::calculateChecksum(const uint8_t* data, size_t length) {
@@ -48,6 +55,7 @@ bool RemoteConfigManager::queueCommand(uint8_t sensorId, CommandType cmdType, co
     cmd.packet.checksum = calculateChecksum((const uint8_t*)&cmd.packet, checksumLength);
     
     cmd.retryCount = 0;
+    cmd.queuedAt = millis();
     cmd.lastAttempt = 0;
     cmd.timeout = COMMAND_TIMEOUT_MS;
     cmd.waitingForAck = false;
@@ -57,11 +65,8 @@ bool RemoteConfigManager::queueCommand(uint8_t sensorId, CommandType cmdType, co
     LOGI("CMD", "Queued command type %d for sensor %d (seq %d)", 
                   cmdType, sensorId, cmd.packet.sequenceNumber);
     
-    // Send immediately since sensor is always listening
-    #ifdef BASE_STATION
-    extern void sendCommandNow(uint8_t sensorId);
-    sendCommandNow(sensorId);
-    #endif
+    // Don't send immediately - wait for next telemetry from sensor
+    // Commands will be sent when sensor is in RX window (after telemetry)
     
     return true;
 }
@@ -86,6 +91,13 @@ CommandPacket* RemoteConfigManager::getPendingCommand(uint8_t sensorId) {
                 LOGE("CMD", "COMMAND FAILED: Max retries (%d) reached for sensor %d (seq %d)", 
                              MAX_RETRY_COUNT, sensorId, cmd.packet.sequenceNumber);
                 LOGW("CMD", "Command dropped - sensor may be out of range or offline");
+                
+                // Track this failure
+                lastFailedCommand[sensorId].commandType = cmd.packet.commandType;
+                lastFailedCommand[sensorId].sequenceNumber = cmd.packet.sequenceNumber;
+                lastFailedCommand[sensorId].failedAtMs = millis();
+                lastFailedCommand[sensorId].reason = 0;  // timeout
+                
                 commandQueues[sensorId].pop();
                 return nullptr;
             }
@@ -100,6 +112,12 @@ CommandPacket* RemoteConfigManager::getPendingCommand(uint8_t sensorId) {
     // Mark as sent and waiting for ACK
     cmd.lastAttempt = millis();
     cmd.waitingForAck = true;
+
+    // Record last send attempt (includes retries)
+    lastSentCommand[sensorId].commandType = cmd.packet.commandType;
+    lastSentCommand[sensorId].sequenceNumber = cmd.packet.sequenceNumber;
+    lastSentCommand[sensorId].statusCode = 0;
+    lastSentCommand[sensorId].atMs = cmd.lastAttempt;
     
     return &cmd.packet;
 }
@@ -112,6 +130,16 @@ void RemoteConfigManager::markCommandAcked(uint8_t sensorId, uint8_t sequenceNum
     QueuedCommand& cmd = commandQueues[sensorId].front();
     if (cmd.packet.sequenceNumber == sequenceNumber) {
         LOGI("CMD", "Command ACKed for sensor %d (seq %d)", sensorId, sequenceNumber);
+
+        // Record last ACK observed
+        lastAckedCommand[sensorId].commandType = cmd.packet.commandType;
+        lastAckedCommand[sensorId].sequenceNumber = sequenceNumber;
+        lastAckedCommand[sensorId].statusCode = 0;
+        lastAckedCommand[sensorId].atMs = millis();
+        
+        // Clear any failed command state on success
+        lastFailedCommand[sensorId].failedAtMs = 0;
+        
         // Record time-sync ACKs for display if applicable
         if (cmd.packet.commandType == CMD_TIME_SYNC) {
             extern void recordClientTimeSync(uint8_t clientId);
@@ -122,19 +150,33 @@ void RemoteConfigManager::markCommandAcked(uint8_t sensorId, uint8_t sequenceNum
     }
 }
 
-void RemoteConfigManager::markCommandFailed(uint8_t sensorId, uint8_t sequenceNumber) {
+void RemoteConfigManager::markCommandFailed(uint8_t sensorId, uint8_t sequenceNumber, uint8_t statusCode) {
     if (commandQueues[sensorId].empty()) {
         return;
     }
     
     QueuedCommand& cmd = commandQueues[sensorId].front();
     if (cmd.packet.sequenceNumber == sequenceNumber) {
-        LOGW("CMD", "Command NACK for sensor %d (seq %d)", sensorId, sequenceNumber);
+        LOGW("CMD", "Command NACK/failure for sensor %d (seq %d, status=%d)", sensorId, sequenceNumber, statusCode);
+
+        // Record last NACK/failure observed (only when we actually got a response)
+        lastAckedCommand[sensorId].commandType = cmd.packet.commandType;
+        lastAckedCommand[sensorId].sequenceNumber = sequenceNumber;
+        lastAckedCommand[sensorId].statusCode = statusCode;
+        lastAckedCommand[sensorId].atMs = millis();
+
         cmd.waitingForAck = false;
         cmd.retryCount++;
         
         if (cmd.retryCount >= MAX_RETRY_COUNT) {
             LOGW("CMD", "Max retries after NACK, dropping command");
+            
+            // Track this failure
+            lastFailedCommand[sensorId].commandType = cmd.packet.commandType;
+            lastFailedCommand[sensorId].sequenceNumber = cmd.packet.sequenceNumber;
+            lastFailedCommand[sensorId].failedAtMs = millis();
+            lastFailedCommand[sensorId].reason = 1;  // NACK
+            
             commandQueues[sensorId].pop();
         }
     }
@@ -166,7 +208,7 @@ void RemoteConfigManager::processAck(const AckPacket* ack) {
             LOGD("CMD", "ACK data (%d bytes): %s", ack->dataLength, hex.c_str());
         }
     } else if (ack->commandType == CMD_NACK) {
-        markCommandFailed(ack->sensorId, ack->sequenceNumber);
+        markCommandFailed(ack->sensorId, ack->sequenceNumber, ack->statusCode);
         LOGW("CMD", "NACK from sensor %d: error code=%d", ack->sensorId, ack->statusCode);
     }
 }
@@ -179,7 +221,7 @@ void RemoteConfigManager::handleAck(uint8_t sensorId, uint8_t sequenceNumber, ui
         LOGI("CMD", "Command executed successfully by sensor %d (seq %d)", sensorId, sequenceNumber);
     } else {
         // Error
-        markCommandFailed(sensorId, sequenceNumber);
+        markCommandFailed(sensorId, sequenceNumber, status);
         LOGW("CMD", "Command failed on sensor %d (seq %d): error code=%d", sensorId, sequenceNumber, status);
     }
 }
@@ -214,6 +256,62 @@ uint8_t RemoteConfigManager::getRetryCount(uint8_t sensorId) {
         return 0;
     }
     return commandQueues[sensorId].front().retryCount;
+}
+
+bool RemoteConfigManager::getCommandInfo(uint8_t sensorId, uint8_t& commandType, uint8_t& seqNum, 
+                                         uint8_t& retries, bool& waitingAck, uint32_t& ageMs) {
+    if (commandQueues[sensorId].empty()) {
+        return false;
+    }
+    
+    const QueuedCommand& cmd = commandQueues[sensorId].front();
+    commandType = cmd.packet.commandType;
+    seqNum = cmd.packet.sequenceNumber;
+    retries = cmd.retryCount;
+    waitingAck = cmd.waitingForAck;
+    // If the command has never been sent, report how long it's been queued.
+    // If it has been sent at least once, report age since the last send attempt.
+    ageMs = (cmd.lastAttempt > 0)
+              ? (millis() - cmd.lastAttempt)
+              : (millis() - cmd.queuedAt);
+    
+    return true;
+}
+
+bool RemoteConfigManager::getLastFailedCommand(uint8_t sensorId, uint8_t& commandType, 
+                                               uint8_t& seqNum, uint32_t& ageMs, uint8_t& reason) {
+    // Check if there's a recorded failure (failedAtMs > 0 means it's valid)
+    if (lastFailedCommand[sensorId].failedAtMs == 0) {
+        return false;
+    }
+    
+    commandType = lastFailedCommand[sensorId].commandType;
+    seqNum = lastFailedCommand[sensorId].sequenceNumber;
+    ageMs = millis() - lastFailedCommand[sensorId].failedAtMs;
+    reason = lastFailedCommand[sensorId].reason;
+    
+    return true;
+}
+
+bool RemoteConfigManager::getLastSentCommand(uint8_t sensorId, uint8_t& commandType, uint8_t& seqNum, uint32_t& ageMs) {
+    if (lastSentCommand[sensorId].atMs == 0) {
+        return false;
+    }
+    commandType = lastSentCommand[sensorId].commandType;
+    seqNum = lastSentCommand[sensorId].sequenceNumber;
+    ageMs = millis() - lastSentCommand[sensorId].atMs;
+    return true;
+}
+
+bool RemoteConfigManager::getLastAckedCommand(uint8_t sensorId, uint8_t& commandType, uint8_t& seqNum, uint8_t& statusCode, uint32_t& ageMs) {
+    if (lastAckedCommand[sensorId].atMs == 0) {
+        return false;
+    }
+    commandType = lastAckedCommand[sensorId].commandType;
+    seqNum = lastAckedCommand[sensorId].sequenceNumber;
+    statusCode = lastAckedCommand[sensorId].statusCode;
+    ageMs = millis() - lastAckedCommand[sensorId].atMs;
+    return true;
 }
 
 // Command builder implementations

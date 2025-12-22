@@ -24,7 +24,9 @@ void enterRxMode();
 
 #ifdef BASE_STATION
 void handlePendingWebSocketBroadcast();  // Handle WebSocket broadcast from main loop
-void checkCommandRetries();  // Check for commands that need retry
+void handlePendingCommandSend();  // Send scheduled command after RX hold-down
+void checkCommandRetries();  // Maintain retry timers (does NOT force-send)
+void sendBroadcastWakePing();  // Send a broadcast ping that wakes client displays (no ACK expected)
 #endif
 
 #ifdef SENSOR_NODE

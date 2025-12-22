@@ -5,6 +5,20 @@ All notable changes to the LoRa Sensor Station project will be documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.18.0] - 2025-12-22
+
+### Added
+
+- Built-in power-on blink using `LED_BUILTIN` (GPIO35), configurable via `include/config.h`.
+- Base station command/status observability improvements (queue age tracking + richer client status reporting).
+
+### Fixed
+
+- Command status age reporting: queued-but-never-sent commands now report queued age (instead of misleading "last sent: 0s").
+- Base station queued-command reliability: periodic idle "kick" schedules a send attempt so commands don’t remain queued indefinitely.
+- Buzzer reliability: patterns are timer-driven and self-stopping so a stalled main loop won’t leave a long tone running.
+- LittleFS logging robustness: guarded/serialized filesystem access and fail-safe behavior to avoid panics during log writes.
+
 ## [2.17.0] - 2025-12-19
 
 ### Added

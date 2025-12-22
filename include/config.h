@@ -16,6 +16,31 @@
   #define USER_BUTTON 0  // Built-in USER button on Heltec V3
 #endif
 
+// Built-in single-color LED (Heltec V3 exposes LED_BUILTIN = GPIO35 via Arduino core).
+// Some boards wire the LED active-low; set this to 1 in build flags if your LED is inverted.
+#ifndef BUILTIN_LED_ACTIVE_LOW
+  #define BUILTIN_LED_ACTIVE_LOW 0
+#endif
+
+// Simple power-on blink using LED_BUILTIN (independent of any WS2812/NeoPixel).
+#ifndef ENABLE_BUILTIN_POWERON_BLINK
+  #define ENABLE_BUILTIN_POWERON_BLINK 1
+#endif
+
+#ifndef BUILTIN_POWERON_BLINKS
+  #define BUILTIN_POWERON_BLINKS 2
+#endif
+
+#ifndef BUILTIN_POWERON_BLINK_MS
+  #define BUILTIN_POWERON_BLINK_MS 80
+#endif
+
+// Buzzer (sensor nodes only)
+// NOTE: Avoid Heltec V3 OLED I2C pins (commonly GPIO 17/18). Default to GPIO 7.
+#ifndef BUZZER_PIN
+  #define BUZZER_PIN 7
+#endif
+
 // Display Configuration
 #define DISPLAY_TIMEOUT_MS      300000  // 5 minutes in milliseconds
 #define DISPLAY_PAGE_CYCLE_MS   10000   // 10 seconds per page

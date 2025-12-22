@@ -158,6 +158,19 @@ void WiFiPortal::setupWebServer() {
         request->send(LittleFS, "/success.html", "text/html");
     });
     
+    // Static CSS files - MUST be before onNotFound to prevent 404 catch-all
+    webServer.on("/setup.css", HTTP_GET, [](AsyncWebServerRequest *request) {
+        request->send(LittleFS, "/setup.css", "text/css");
+    });
+    
+    webServer.on("/style.css", HTTP_GET, [](AsyncWebServerRequest *request) {
+        request->send(LittleFS, "/style.css", "text/css");
+    });
+    
+    webServer.on("/bootstrap-custom.css", HTTP_GET, [](AsyncWebServerRequest *request) {
+        request->send(LittleFS, "/bootstrap-custom.css", "text/css");
+    });
+    
     // Catch-all for captive portal
     webServer.onNotFound([](AsyncWebServerRequest *request) {
         Serial.print("Request (404): ");
@@ -658,6 +671,13 @@ void WiFiPortal::setupDashboard() {
         request->send(LittleFS, "/runtime-config.html", "text/html");
     });
     
+    webServer.on("/client-status", HTTP_GET, [](AsyncWebServerRequest *request) {
+        Serial.println("Serving /client-status route");
+        AsyncWebServerResponse *response = request->beginResponse(LittleFS, "/client-status.html", "text/html");
+        response->addHeader("Cache-Control", "no-cache");
+        request->send(response);
+    });
+    
     // LoRa configuration API endpoints
     webServer.on("/api/lora/config", HTTP_GET, [](AsyncWebServerRequest *request) {
         BaseStationConfig config = configStorage.getBaseStationConfig();
@@ -923,6 +943,171 @@ void WiFiPortal::setupDashboard() {
         request->send(LittleFS, "/time.html", "text/html");
     });
     
+    // Client status API
+    webServer.on("/api/client-status", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        extern RemoteConfigManager remoteConfigManager;
+        extern ClientInfo* getAllClients();
+        extern uint8_t getActiveClientCount();
+
+        auto escapeJson = [](const char* in) -> String {
+            if (in == nullptr) return "";
+            String out;
+            for (size_t i = 0; in[i] != '\0'; i++) {
+                const char c = in[i];
+                switch (c) {
+                    case '"': out += "\\\""; break;
+                    case '\\': out += "\\\\"; break;
+                    case '\b': out += "\\b"; break;
+                    case '\f': out += "\\f"; break;
+                    case '\n': out += "\\n"; break;
+                    case '\r': out += "\\r"; break;
+                    case '\t': out += "\\t"; break;
+                    default:
+                        if ((uint8_t)c < 0x20) {
+                            char buf[7];
+                            snprintf(buf, sizeof(buf), "\\u%04X", (unsigned int)(uint8_t)c);
+                            out += buf;
+                        } else {
+                            out += c;
+                        }
+                        break;
+                }
+            }
+            return out;
+        };
+        
+        String json = "{\"clients\":[";
+        
+        ClientInfo* allClients = getAllClients();
+        bool first = true;
+        
+        // Iterate through all possible client slots (MAX_CLIENTS = 10)
+        for (uint8_t i = 0; i < 10; i++) {
+            if (allClients[i].clientId != 0) {  // Client exists
+                if (!first) json += ",";
+                first = false;
+                
+                ClientInfo& client = allClients[i];
+                uint32_t ageSeconds = (millis() - client.lastSeen) / 1000;
+                
+                json += "{";
+                json += "\"clientId\":" + String(client.clientId) + ",";
+                json += "\"active\":" + String(client.active ? "true" : "false") + ",";
+                json += "\"location\":\"" + escapeJson(client.location) + "\",";
+                json += "\"zone\":\"" + escapeJson(client.zone) + "\",";
+                json += "\"battery\":" + String(client.lastBatteryPercent) + ",";
+                json += "\"charging\":" + String(client.powerState ? "true" : "false") + ",";
+                json += "\"rssi\":" + String(client.lastRssi) + ",";
+                json += "\"snr\":" + String(client.lastSnr) + ",";
+                json += "\"packetsReceived\":" + String(client.packetsReceived) + ",";
+                json += "\"lastSeenSeconds\":" + String(ageSeconds) + ",";
+                json += "\"uptimeSeconds\":" + String(millis() / 1000) + ",";
+                
+                // Time sync info
+                if (client.lastTimeSyncMs > 0) {
+                    uint32_t syncAge = (millis() - client.lastTimeSyncMs) / 1000;
+                    json += "\"lastTimeSync\":" + String(syncAge) + ",";
+                }
+                
+                // Pending commands
+                uint8_t queuedCount = remoteConfigManager.getQueuedCount(client.clientId);
+                json += "\"pendingCommands\":" + String(queuedCount) + ",";
+
+                // Last command send attempt (includes retries)
+                uint8_t lastSentType, lastSentSeq;
+                uint32_t lastSentAgeMs;
+                if (remoteConfigManager.getLastSentCommand(client.clientId, lastSentType, lastSentSeq, lastSentAgeMs)) {
+                    json += "\"lastCommandSent\":{";
+                    json += "\"commandType\":" + String(lastSentType) + ",";
+                    json += "\"sequenceNumber\":" + String(lastSentSeq) + ",";
+                    json += "\"ageSeconds\":" + String(lastSentAgeMs / 1000);
+                    json += "},";
+                }
+
+                // Last ACK/NACK observed
+                uint8_t lastAckType, lastAckSeq, lastAckStatus;
+                uint32_t lastAckAgeMs;
+                if (remoteConfigManager.getLastAckedCommand(client.clientId, lastAckType, lastAckSeq, lastAckStatus, lastAckAgeMs)) {
+                    json += "\"lastCommandAck\":{";
+                    json += "\"commandType\":" + String(lastAckType) + ",";
+                    json += "\"sequenceNumber\":" + String(lastAckSeq) + ",";
+                    json += "\"statusCode\":" + String(lastAckStatus) + ",";
+                    json += "\"ageSeconds\":" + String(lastAckAgeMs / 1000);
+                    json += "},";
+                }
+                
+                // Current pending command details
+                uint8_t cmdType, seqNum, retries;
+                bool waitingAck;
+                uint32_t ageMs;
+                if (remoteConfigManager.getCommandInfo(client.clientId, cmdType, seqNum, retries, waitingAck, ageMs)) {
+                    json += "\"pendingCommand\":{";
+                    json += "\"commandType\":" + String(cmdType) + ",";
+                    json += "\"sequenceNumber\":" + String(seqNum) + ",";
+                    json += "\"retryCount\":" + String(retries) + ",";
+                    json += "\"waitingForAck\":" + String(waitingAck ? "true" : "false") + ",";
+                    json += "\"ageSeconds\":" + String(ageMs / 1000);
+                    json += "},";
+                }
+                
+                // Last failed command
+                uint8_t failedCmdType, failedSeqNum, failReason;
+                uint32_t failedAgeMs;
+                if (remoteConfigManager.getLastFailedCommand(client.clientId, failedCmdType, failedSeqNum, failedAgeMs, failReason)) {
+                    json += "\"lastFailedCommand\":{";
+                    json += "\"commandType\":" + String(failedCmdType) + ",";
+                    json += "\"sequenceNumber\":" + String(failedSeqNum) + ",";
+                    json += "\"ageSeconds\":" + String(failedAgeMs / 1000) + ",";
+                    json += "\"reason\":" + String(failReason);  // 0=timeout, 1=NACK
+                    json += "},";
+                }
+                
+                // Physical sensors attached to this client
+                json += "\"sensors\":[";
+                extern PhysicalSensor* getSensor(uint8_t clientId, uint8_t sensorIndex);
+                bool firstSensor = true;
+                for (uint8_t s = 0; s < 16; s++) {  // MAX_SENSORS_PER_CLIENT
+                    PhysicalSensor* sensor = getSensor(client.clientId, s);
+                    if (sensor && sensor->active) {
+                        if (!firstSensor) json += ",";
+                        firstSensor = false;
+                        
+                        uint32_t sensorAge = (millis() - sensor->lastSeen) / 1000;
+                        
+                        // Get type name
+                        const char* typeName = "UNKNOWN";
+                        const char* unit = "";
+                        switch (sensor->type) {
+                            case VALUE_TEMPERATURE: typeName = "Temp"; unit = "°C"; break;
+                            case VALUE_HUMIDITY: typeName = "Humidity"; unit = "%"; break;
+                            case VALUE_PRESSURE: typeName = "Pressure"; unit = "hPa"; break;
+                            case VALUE_LIGHT: typeName = "Light"; unit = "lux"; break;
+                            case VALUE_VOLTAGE: typeName = "Voltage"; unit = "V"; break;
+                            case VALUE_CURRENT: typeName = "Current"; unit = "mA"; break;
+                            case VALUE_POWER: typeName = "Power"; unit = "mW"; break;
+                            case VALUE_ENERGY: typeName = "Energy"; unit = "mWh"; break;
+                            case VALUE_GAS_RESISTANCE: typeName = "Gas"; unit = "Ω"; break;
+                        }
+                        
+                        json += "{";
+                        json += "\"type\":\"" + String(typeName) + "\",";
+                        json += "\"value\":" + String(sensor->lastValue, 2) + ",";
+                        json += "\"unit\":\"" + String(unit) + "\",";
+                        json += "\"ageSeconds\":" + String(sensorAge);
+                        json += "}";
+                    }
+                }
+                json += "]";  // End sensors array
+                
+                json += "}";  // End client object
+            }
+        }
+        
+        json += "]}";  // End clients array and root object
+        
+        request->send(200, "application/json", json);
+    });
+    
     // Time API endpoints
     webServer.on("/api/time/config", HTTP_GET, [this](AsyncWebServerRequest *request) {
         NTPConfig cfg = configStorage.getNTPConfig();
@@ -982,16 +1167,17 @@ void WiFiPortal::setupDashboard() {
             memcpy(&payload[4], &tz, sizeof(int16_t));
             
             extern RemoteConfigManager remoteConfigManager;
-            extern uint8_t getActiveClientCount();
-            extern ClientInfo* getClientByIndex(uint8_t index);
+            extern ClientInfo* getAllClients();
             
             int sent = 0;
-            uint8_t activeCount = getActiveClientCount();
-            for (uint8_t i = 0; i < activeCount; i++) {
-                ClientInfo* client = getClientByIndex(i);
-                if (client && client->active) {
-                    if (remoteConfigManager.queueCommand(client->clientId, CMD_TIME_SYNC, payload, 6)) {
+            // Send to all clients that have ever been seen (active or not)
+            ClientInfo* allClients = getAllClients();
+            for (uint8_t i = 0; i < 10; i++) {  // MAX_CLIENTS = 10
+                if (allClients[i].clientId != 0) {  // Client exists (has been seen)
+                    if (remoteConfigManager.queueCommand(allClients[i].clientId, CMD_TIME_SYNC, payload, 6)) {
                         sent++;
+                        Serial.printf("Queued time sync for sensor %d (active=%d)\n", 
+                                    allClients[i].clientId, allClients[i].active);
                     }
                 }
             }

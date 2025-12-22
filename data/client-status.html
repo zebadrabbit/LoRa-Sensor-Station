@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Client Status - LoRa Base</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/bootstrap-custom.css">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <style>
+        .status-card {
+            margin-bottom: 15px;
+            border-left: 4px solid #6c757d;
+        }
+        .status-card.active { border-left-color: #28a745; }
+        .status-card.warning { border-left-color: #ffc107; }
+        .status-card.error { border-left-color: #dc3545; }
+        .status-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+        .badge-success { background: #28a745; color: white; }
+        .badge-pending { background: #ffc107; color: black; }
+        .badge-error { background: #dc3545; color: white; }
+        .badge-inactive { background: #6c757d; color: white; }
+        .sensor-list {
+            font-size: 12px;
+            margin-top: 8px;
+        }
+        .sensor-item {
+            padding: 4px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .command-info {
+            background: #f8f9fa;
+            padding: 8px;
+            border-radius: 4px;
+            margin-top: 8px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="header">
+            <h1>📋 Client Status Monitor</h1>
+            <p>Real-time status of all connected clients and pending commands</p>
+        </div>
+        
+        <!-- Navigation Menu -->
+        <div class="nav-menu">
+            <a href="/" class="nav-btn">📊 Dashboard</a>
+            <a href="/client-status" class="nav-btn active">📋 Client Status</a>
+            <a href="/alerts" class="nav-btn">🔔 Alerts</a>
+            <a href="/mqtt" class="nav-btn">📡 MQTT</a>
+            <a href="/time" class="nav-btn">⏱️ Time</a>
+            <a href="/security" class="nav-btn">🔒 Security</a>
+            <a href="/lora-settings" class="nav-btn">📻 LoRa Settings</a>
+        </div>
+        
+        <div class="mb-3 mt-3">
+            <button class="btn btn-primary btn-sm" onclick="refreshStatus()">🔄 Refresh</button>
+            <span class="ms-3 text-muted" id="lastUpdate"></span>
+        </div>
+
+        <div id="clientList"></div>
+        
+        <div id="noClients" class="alert alert-info" style="display: none;">
+            No clients have been seen yet.
+        </div>
+    </div>
+
+    <script>
+        let refreshInterval;
+
+        function getCommandTypeName(type) {
+            const types = {
+                0x00: 'PING',
+                0x01: 'GET_CONFIG',
+                0x02: 'SET_INTERVAL',
+                0x03: 'SET_LOCATION',
+                0x04: 'SET_TEMP_THRESH',
+                0x05: 'SET_BATTERY_THRESH',
+                0x06: 'SET_MESH_CONFIG',
+                0x07: 'RESTART',
+                0x08: 'FACTORY_RESET',
+                0x09: 'SET_LORA_PARAMS',
+                0x0A: 'TIME_SYNC',
+                0x0B: 'SENSOR_ANNOUNCE',
+                0x0C: 'BASE_WELCOME'
+            };
+            return types[type] || 'UNKNOWN';
+        }
+
+        function formatLastSeen(seconds) {
+            if (seconds < 60) return seconds + 's ago';
+            if (seconds < 3600) return Math.floor(seconds / 60) + 'm ago';
+            if (seconds < 86400) return Math.floor(seconds / 3600) + 'h ago';
+            return Math.floor(seconds / 86400) + 'd ago';
+        }
+
+        async function refreshStatus() {
+            try {
+                const response = await fetch('/api/client-status');
+                const data = await response.json();
+                
+                if (data.clients.length === 0) {
+                    document.getElementById('clientList').innerHTML = '';
+                    document.getElementById('noClients').style.display = 'block';
+                } else {
+                    document.getElementById('noClients').style.display = 'none';
+                    renderClients(data.clients);
+                }
+                
+                document.getElementById('lastUpdate').textContent = 
+                    'Last updated: ' + new Date().toLocaleTimeString();
+            } catch (error) {
+                console.error('Failed to fetch client status:', error);
+            }
+        }
+
+        function renderClients(clients) {
+            const container = document.getElementById('clientList');
+            container.innerHTML = '';
+            
+            clients.forEach(client => {
+                const card = document.createElement('div');
+                const cardClass = client.active ? 'active' : 
+                                (client.pendingCommands > 0 ? 'warning' : 'error');
+                card.className = `card status-card ${cardClass}`;
+                
+                const statusBadge = client.active ? 
+                    '<span class="status-badge badge-success">ACTIVE</span>' :
+                    '<span class="status-badge badge-inactive">OFFLINE</span>';
+                
+                let commandHtml = '';
+                if (client.pendingCommand) {
+                    const cmd = client.pendingCommand;
+                    const cmdStatus = cmd.waitingForAck ? 'PENDING ACK' : 'QUEUED';
+                    const statusClass = cmd.waitingForAck ? 'badge-pending' : 'badge-success';
+                    const ageSeconds = cmd.ageSeconds;
+                    const timeoutWarning = (cmd.waitingForAck && ageSeconds > 10) ? 
+                        '<br><span class="badge bg-danger">⚠️ TIMEOUT - Will retry</span>' : '';
+                    
+                    commandHtml = `
+                        <div class="command-info">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <strong>Command:</strong> ${getCommandTypeName(cmd.commandType)}
+                                    <span class="status-badge ${statusClass} ms-2">${cmdStatus}</span>
+                                    ${timeoutWarning}
+                                </div>
+                                <div class="text-end text-muted" style="font-size: 11px;">
+                                    Seq #${cmd.sequenceNumber}<br>
+                                    Retry ${cmd.retryCount}/3
+                                </div>
+                            </div>
+                            <div class="mt-2 text-muted" style="font-size: 11px;">
+                                ${cmd.waitingForAck ? 'Last sent' : 'Queued for'}: ${formatLastSeen(ageSeconds)}
+                                ${cmd.waitingForAck ? ' • Waiting for ACK (10s timeout)' : ''}
+                            </div>
+                        </div>
+                    `;
+                } else if (client.lastFailedCommand) {
+                    const failed = client.lastFailedCommand;
+                    const reasonText = failed.reason === 0 ? 'Timeout (No Response)' : 'NACK from Sensor';
+                    
+                    commandHtml = `
+                        <div class="command-info" style="background: #fff3cd; border-left: 3px solid #dc3545;">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <strong>❌ Last Failed:</strong> ${getCommandTypeName(failed.commandType)}
+                                    <span class="badge bg-danger ms-2">FAILED</span>
+                                </div>
+                                <div class="text-end text-muted" style="font-size: 11px;">
+                                    Seq #${failed.sequenceNumber}
+                                </div>
+                            </div>
+                            <div class="mt-2 text-muted" style="font-size: 11px;">
+                                Failed ${formatLastSeen(failed.ageSeconds)} • ${reasonText}
+                            </div>
+                        </div>
+                    `;
+                }
+
+                // Always show last command activity (if known), even when no command is pending
+                let lastCmdHtml = '';
+                if (client.lastCommandSent || client.lastCommandAck) {
+                    const sent = client.lastCommandSent;
+                    const ack = client.lastCommandAck;
+
+                    const sentLine = sent ?
+                        `<div><strong>Last Sent:</strong> ${getCommandTypeName(sent.commandType)} (Seq #${sent.sequenceNumber}) • ${formatLastSeen(sent.ageSeconds)}</div>`
+                        : '';
+
+                    const ackBadge = ack ?
+                        (ack.statusCode === 0 ? '<span class="status-badge badge-success ms-2">ACK</span>' : '<span class="status-badge badge-error ms-2">NACK</span>')
+                        : '';
+
+                    const ackLine = ack ?
+                        `<div><strong>Last Ack:</strong> ${getCommandTypeName(ack.commandType)} (Seq #${ack.sequenceNumber}) ${ackBadge} • ${formatLastSeen(ack.ageSeconds)}${ack.statusCode !== 0 ? ` • code ${ack.statusCode}` : ''}</div>`
+                        : '';
+
+                    lastCmdHtml = `
+                        <div class="command-info" style="margin-top: 8px;">
+                            ${sentLine}
+                            ${ackLine}
+                        </div>
+                    `;
+                }
+                
+                let sensorsHtml = '';
+                if (client.sensors && client.sensors.length > 0) {
+                    sensorsHtml = '<div class="sensor-list"><strong>Sensors:</strong>';
+                    client.sensors.forEach(s => {
+                        sensorsHtml += `
+                            <div class="sensor-item">
+                                <span class="badge bg-secondary">${s.type}</span>
+                                ${s.value.toFixed(2)} ${s.unit}
+                                <small class="text-muted">(${formatLastSeen(s.ageSeconds)})</small>
+                            </div>
+                        `;
+                    });
+                    sensorsHtml += '</div>';
+                }
+                
+                card.innerHTML = `
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            Client ${client.clientId} ${statusBadge}
+                            ${client.pendingCommands > 0 ? 
+                                `<span class="badge bg-warning text-dark">${client.pendingCommands} queued</span>` : ''}
+                        </h5>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <small>
+                                    <strong>Location:</strong> ${client.location || 'Not set'}<br>
+                                    <strong>Zone:</strong> ${(client.zone && client.zone.length) ? client.zone : 'Not set'}<br>
+                                    <strong>Last Seen:</strong> ${formatLastSeen(client.lastSeenSeconds)}<br>
+                                    <strong>Battery:</strong> ${client.battery}% 
+                                    ${client.charging ? '⚡' : ''}<br>
+                                    <strong>RSSI:</strong> ${client.rssi} dBm | 
+                                    <strong>SNR:</strong> ${client.snr} dB
+                                </small>
+                            </div>
+                            <div class="col-md-6">
+                                <small>
+                                    <strong>Packets:</strong> ${client.packetsReceived}<br>
+                                    <strong>Uptime:</strong> ${formatLastSeen(client.uptimeSeconds)}<br>
+                                    ${client.lastTimeSync ? 
+                                        `<strong>Time Sync:</strong> ${formatLastSeen(client.lastTimeSync)}<br>` : ''}
+                                </small>
+                            </div>
+                        </div>
+                        ${commandHtml}
+                        ${lastCmdHtml}
+                        ${sensorsHtml}
+                    </div>
+                `;
+                
+                container.appendChild(card);
+            });
+        }
+
+        // Initial load
+        refreshStatus();
+        
+        // Auto-refresh every 5 seconds
+        refreshInterval = setInterval(refreshStatus, 5000);
+    </script>
+</body>
+</html>

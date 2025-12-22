@@ -21,14 +21,15 @@ This project implements a LoRa-based sensor network with:
 - **Advanced Button Controls**: Multi-click detection with immediate ping functionality
 - **Sensor Health Monitoring**: Automatic timeout detection and alerting
 
-Both devices feature OLED displays with automatic page cycling, inverse headers, and WS2812 LED indicators.
+Both devices feature OLED displays with automatic page cycling and inverse headers.
 
 ## Hardware
 
 - **Board**: Heltec WiFi LoRa 32 V3 (ESP32-S3)
 - **Radio**: SX1262 LoRa transceiver
 - **Display**: 128x64 OLED (SSD1306)
-- **LED**: WS2812 NeoPixel (GPIO48)
+- **Built-in LED**: `LED_BUILTIN` (GPIO35, single-color)
+- **Optional external RGB LED**: WS2812/NeoPixel data (GPIO48)
 - **Sensors**: Thermistor (10kΩ NTC) for temperature
 - **Power**: Battery monitoring via ADC
 
@@ -202,7 +203,7 @@ include/
 ├── config_storage.h      # NVS persistent storage (includes NTP config)
 ├── wifi_portal.h         # Captive portal web interface
 ├── data_types.h          # Multi-sensor packet format + legacy support
-├── led_control.h         # WS2812 LED interface
+├── led_control.h         # Status LED interface (optional WS2812)
 ├── display_control.h     # OLED display + button control
 ├── sensor_readings.h     # ADC and sensor interfaces
 ├── lora_comm.h           # LoRa communication + mesh routing
@@ -240,8 +241,8 @@ data/                      # Web interface files (served via LittleFS)
 ├── lora-settings.js      # LoRa config + reboot orchestration
 ├── runtime-config.html   # Per-sensor configuration page
 ├── runtime-config.js     # LoRa command sending + status polling
-├── pico-custom.css       # Dark mode theme + form styling
-└── style.css             # Additional styles
+├── bootstrap-custom.css  # Dark mode theme + dashboard styling
+└── setup.css             # Captive portal setup styling (no CDN deps)
 ```
 
 ## Radio Configuration
@@ -359,9 +360,12 @@ After upload, each device will:
 - SCL: GPIO 42
 - VEXT: GPIO 36 (power control)
 
-### LED (WS2812)
+### LEDs
 
-- Data: GPIO 48
+- Built-in LED: `LED_BUILTIN` (GPIO35, single-color)
+- Optional external WS2812/NeoPixel: Data GPIO 48
+
+Power-on blink (built-in LED) is controlled via `ENABLE_BUILTIN_POWERON_BLINK` and related macros in `include/config.h`.
 
 ### Sensors
 
@@ -389,7 +393,9 @@ Both devices implement a 5-minute display timeout:
 - Press the USER button to wake the display
 - Button press also cycles to the next page when display is active
 
-## LED Color Codes
+## LED Behavior
+
+If you have an external WS2812/NeoPixel connected (GPIO48), color-coded status is used. Otherwise, the built-in single-color LED will blink for key events.
 
 ### Base Station (based on received sensor battery):
 

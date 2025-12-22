@@ -45,29 +45,29 @@ void SecurityManager::generateKey() {
     Serial.println("🔑 Generating new encryption key...");
     
     // Use ESP32 hardware random number generator
-    for (int i = 0; i < AES_KEY_SIZE; i++) {
+    for (int i = 0; i < LORA_AES_KEY_SIZE; i++) {
         config.encryptionKey[i] = (uint8_t)esp_random();
     }
     
     Serial.print("🔑 Key: ");
-    for (int i = 0; i < AES_KEY_SIZE; i++) {
+    for (int i = 0; i < LORA_AES_KEY_SIZE; i++) {
         Serial.printf("%02X", config.encryptionKey[i]);
     }
     Serial.println();
 }
 
 void SecurityManager::setKey(const uint8_t* key) {
-    memcpy(config.encryptionKey, key, AES_KEY_SIZE);
+    memcpy(config.encryptionKey, key, LORA_AES_KEY_SIZE);
     Serial.println("🔑 Encryption key updated");
 }
 
 void SecurityManager::getKey(uint8_t* key) {
-    memcpy(key, config.encryptionKey, AES_KEY_SIZE);
+    memcpy(key, config.encryptionKey, LORA_AES_KEY_SIZE);
 }
 
 void SecurityManager::generateIV(uint8_t* iv) {
     // Generate random IV using hardware RNG
-    for (int i = 0; i < AES_BLOCK_SIZE; i++) {
+    for (int i = 0; i < LORA_AES_BLOCK_SIZE; i++) {
         iv[i] = (uint8_t)esp_random();
     }
 }
@@ -75,16 +75,23 @@ void SecurityManager::generateIV(uint8_t* iv) {
 void SecurityManager::calculateHMAC(const uint8_t* data, uint16_t length, uint8_t* hmac) {
     // Simple HMAC using key XOR with data
     // For production, use proper HMAC-SHA256 (truncated)
-    uint8_t hash[AES_BLOCK_SIZE] = {0};
+    uint8_t hash[LORA_AES_BLOCK_SIZE] = {0};
+    
+    // Defensive check (should never happen with compile-time constants)
+    if (LORA_AES_BLOCK_SIZE == 0 || LORA_AES_KEY_SIZE == 0) {
+        Serial.println("❌ CRITICAL: AES constants are zero!");
+        memset(hmac, 0, HMAC_SIZE);
+        return;
+    }
     
     // XOR data with key repeatedly
     for (uint16_t i = 0; i < length; i++) {
-        hash[i % AES_BLOCK_SIZE] ^= data[i];
+        hash[i % LORA_AES_BLOCK_SIZE] ^= data[i];
     }
     
     // XOR with key again
-    for (int i = 0; i < AES_BLOCK_SIZE; i++) {
-        hash[i] ^= config.encryptionKey[i % AES_KEY_SIZE];
+    for (int i = 0; i < LORA_AES_BLOCK_SIZE; i++) {
+        hash[i] ^= config.encryptionKey[i % LORA_AES_KEY_SIZE];
     }
     
     // Copy first HMAC_SIZE bytes
@@ -138,8 +145,14 @@ uint16_t SecurityManager::encryptPacket(const uint8_t* plaintext, uint16_t lengt
     // Generate random IV
     generateIV(encrypted->iv);
     
+    // Defensive check
+    if (LORA_AES_BLOCK_SIZE == 0) {
+        Serial.println("❌ CRITICAL: AES_BLOCK_SIZE is zero!");
+        return 0;
+    }
+    
     // Pad plaintext to AES block size
-    uint16_t paddedLength = ((length + AES_BLOCK_SIZE - 1) / AES_BLOCK_SIZE) * AES_BLOCK_SIZE;
+    uint16_t paddedLength = ((length + LORA_AES_BLOCK_SIZE - 1) / LORA_AES_BLOCK_SIZE) * LORA_AES_BLOCK_SIZE;
     uint8_t paddedData[256];
     memcpy(paddedData, plaintext, length);
     
@@ -152,11 +165,11 @@ uint16_t SecurityManager::encryptPacket(const uint8_t* plaintext, uint16_t lengt
     // Initialize mbedTLS AES context
     mbedtls_aes_context aes_ctx;
     mbedtls_aes_init(&aes_ctx);
-    mbedtls_aes_setkey_enc(&aes_ctx, config.encryptionKey, AES_KEY_SIZE * 8);
+    mbedtls_aes_setkey_enc(&aes_ctx, config.encryptionKey, LORA_AES_KEY_SIZE * 8);
     
     // Encrypt data using AES-128-CBC
-    uint8_t iv_copy[AES_BLOCK_SIZE];
-    memcpy(iv_copy, encrypted->iv, AES_BLOCK_SIZE);
+    uint8_t iv_copy[LORA_AES_BLOCK_SIZE];
+    memcpy(iv_copy, encrypted->iv, LORA_AES_BLOCK_SIZE);
     
     int ret = mbedtls_aes_crypt_cbc(&aes_ctx, MBEDTLS_AES_ENCRYPT, paddedLength,
                                      iv_copy, paddedData, encrypted->payload);
@@ -190,7 +203,7 @@ uint16_t SecurityManager::encryptPacket(const uint8_t* plaintext, uint16_t lengt
                   encrypted->sequenceNumber, length, paddedLength);
     
     // Total size = header(16) + payload + IV(16)
-    return 16 + paddedLength + AES_BLOCK_SIZE;
+    return 16 + paddedLength + LORA_AES_BLOCK_SIZE;
 }
 
 uint16_t SecurityManager::decryptPacket(const EncryptedPacket* encrypted, uint8_t* plaintext, uint16_t maxLength) {
@@ -237,11 +250,11 @@ uint16_t SecurityManager::decryptPacket(const EncryptedPacket* encrypted, uint8_
     // Initialize mbedTLS AES context
     mbedtls_aes_context aes_ctx;
     mbedtls_aes_init(&aes_ctx);
-    mbedtls_aes_setkey_dec(&aes_ctx, config.encryptionKey, AES_KEY_SIZE * 8);
+    mbedtls_aes_setkey_dec(&aes_ctx, config.encryptionKey, LORA_AES_KEY_SIZE * 8);
     
     // Decrypt data using AES-128-CBC
-    uint8_t iv_copy[AES_BLOCK_SIZE];
-    memcpy(iv_copy, encrypted->iv, AES_BLOCK_SIZE);
+    uint8_t iv_copy[LORA_AES_BLOCK_SIZE];
+    memcpy(iv_copy, encrypted->iv, LORA_AES_BLOCK_SIZE);
     
     uint8_t decrypted[256];
     int ret = mbedtls_aes_crypt_cbc(&aes_ctx, MBEDTLS_AES_DECRYPT, encrypted->payloadSize,
@@ -256,7 +269,7 @@ uint16_t SecurityManager::decryptPacket(const EncryptedPacket* encrypted, uint8_
     
     // Remove PKCS7 padding
     uint8_t padValue = decrypted[encrypted->payloadSize - 1];
-    if (padValue > AES_BLOCK_SIZE || padValue == 0) {
+    if (padValue > LORA_AES_BLOCK_SIZE || padValue == 0) {
         Serial.println("⚠️ Invalid padding");
         return 0;
     }
@@ -365,7 +378,7 @@ bool SecurityManager::saveConfig() {
     
     prefs.putBool("encrypt", config.encryptionEnabled);
     prefs.putBool("whitelist", config.whitelistEnabled);
-    prefs.putBytes("key", config.encryptionKey, AES_KEY_SIZE);
+    prefs.putBytes("key", config.encryptionKey, LORA_AES_KEY_SIZE);
     prefs.putUChar("wlCount", config.whitelistCount);
     prefs.putBytes("wlList", config.whitelist, config.whitelistCount);
     prefs.putUInt("seqNum", config.sequenceNumber);
@@ -379,6 +392,7 @@ bool SecurityManager::saveConfig() {
 bool SecurityManager::loadConfig() {
     Preferences prefs;
     if (!prefs.begin("security", true)) {
+        Serial.println("⚠️ Failed to open security preferences");
         return false;
     }
     
@@ -387,11 +401,39 @@ bool SecurityManager::loadConfig() {
         return false;  // No config found
     }
     
+    // Load with validation
     config.encryptionEnabled = prefs.getBool("encrypt", false);
     config.whitelistEnabled = prefs.getBool("whitelist", false);
-    prefs.getBytes("key", config.encryptionKey, AES_KEY_SIZE);
+    
+    // Validate key size before loading
+    size_t keySize = prefs.getBytesLength("key");
+    if (keySize != LORA_AES_KEY_SIZE) {
+        Serial.printf("⚠️ NVS corruption detected: key size=%d, expected=%d\n", keySize, LORA_AES_KEY_SIZE);
+        prefs.end();
+        return false;
+    }
+    
+    size_t bytesRead = prefs.getBytes("key", config.encryptionKey, LORA_AES_KEY_SIZE);
+    if (bytesRead != LORA_AES_KEY_SIZE) {
+        Serial.printf("⚠️ NVS corruption: read %d bytes, expected %d\n", bytesRead, LORA_AES_KEY_SIZE);
+        prefs.end();
+        return false;
+    }
+    
     config.whitelistCount = prefs.getUChar("wlCount", 0);
-    prefs.getBytes("wlList", config.whitelist, config.whitelistCount);
+    
+    // Validate whitelist count
+    if (config.whitelistCount > MAX_WHITELIST_SIZE) {
+        Serial.printf("⚠️ NVS corruption: whitelist count=%d, max=%d\n", config.whitelistCount, MAX_WHITELIST_SIZE);
+        config.whitelistCount = 0;
+        prefs.end();
+        return false;
+    }
+    
+    if (config.whitelistCount > 0) {
+        prefs.getBytes("wlList", config.whitelist, config.whitelistCount);
+    }
+    
     config.sequenceNumber = prefs.getUInt("seqNum", 0);
     
     prefs.end();

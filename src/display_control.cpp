@@ -26,6 +26,11 @@ static bool buttonHeld = false;
 static bool factoryResetTriggered = false;
 static bool immediatePingRequested = false;
 
+// Command notification state
+static bool showingCommandNotif = false;
+static uint32_t commandNotifStartTime = 0;
+static const uint32_t COMMAND_NOTIF_DURATION = 2000; // 2 seconds
+
 #ifdef BASE_STATION
   #define NUM_PAGES 8  // + Time & NTP
 #else
@@ -601,6 +606,9 @@ void displayBaseStationPage() {
     }
   }
   
+  // Draw command notification overlay (if active)
+  updateCommandNotification();
+  
   display.display();
 }
 #endif // BASE_STATION
@@ -785,6 +793,79 @@ void displaySensorPage() {
     }
   }
   
+  // Draw command notification overlay (if active)
+  updateCommandNotification();
+  
   display.display();
 }
 #endif // SENSOR_NODE
+
+// Show command received notification (sensor nodes)
+void showCommandNotification() {
+  #ifdef SENSOR_NODE
+  showingCommandNotif = true;
+  commandNotifStartTime = millis();
+  
+  if (!displayOn) {
+    wakeDisplay();
+  }
+
+  // Render immediately so the user sees it right away, even if the main loop
+  // is busy after command processing.
+  display.clear();
+  const int boxWidth = 90;
+  const int boxHeight = 20;
+  const int boxX = (128 - boxWidth) / 2; // Center horizontally
+  const int boxY = (64 - boxHeight) / 2; // Center vertically
+  
+  // Draw filled rectangle as background
+  display.setColor(BLACK);
+  display.fillRect(boxX, boxY, boxWidth, boxHeight);
+  
+  // Draw border
+  display.setColor(WHITE);
+  display.drawRect(boxX, boxY, boxWidth, boxHeight);
+  display.drawRect(boxX + 1, boxY + 1, boxWidth - 2, boxHeight - 2);
+  
+  // Draw text centered
+  display.setFont(ArialMT_Plain_10);
+  display.setTextAlignment(TEXT_ALIGN_CENTER);
+  display.drawString(64, boxY + 5, "Cmd Recv'd");
+  display.setTextAlignment(TEXT_ALIGN_LEFT); // Reset alignment
+  display.display();
+  #endif
+}
+
+// Update command notification - call this in display loop
+void updateCommandNotification() {
+  #ifdef SENSOR_NODE
+  if (showingCommandNotif) {
+    // Check if notification should be dismissed
+    if (millis() - commandNotifStartTime >= COMMAND_NOTIF_DURATION) {
+      showingCommandNotif = false;
+      return;
+    }
+    
+    // Draw notification box overlay
+    const int boxWidth = 90;
+    const int boxHeight = 20;
+    const int boxX = (128 - boxWidth) / 2; // Center horizontally
+    const int boxY = (64 - boxHeight) / 2; // Center vertically
+    
+    // Draw filled rectangle as background
+    display.setColor(BLACK);
+    display.fillRect(boxX, boxY, boxWidth, boxHeight);
+    
+    // Draw border
+    display.setColor(WHITE);
+    display.drawRect(boxX, boxY, boxWidth, boxHeight);
+    display.drawRect(boxX + 1, boxY + 1, boxWidth - 2, boxHeight - 2);
+    
+    // Draw text centered
+    display.setFont(ArialMT_Plain_10);
+    display.setTextAlignment(TEXT_ALIGN_CENTER);
+    display.drawString(64, boxY + 5, "Cmd Recv'd");
+    display.setTextAlignment(TEXT_ALIGN_LEFT); // Reset alignment
+  }
+  #endif
+}

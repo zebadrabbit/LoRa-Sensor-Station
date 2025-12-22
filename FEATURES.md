@@ -2,7 +2,37 @@
 
 ## Version History
 
-### v2.16.0 (December 15, 2025) - Current Version
+### v2.18.0 (December 22, 2025) - Current Version
+
+- ✅ **Reliability & UX Hardening**
+- ✅ Command queue status now reports correct age (queued vs last sent)
+- ✅ Base station periodic command-send "kick" prevents stuck queued commands
+- ✅ Timer-driven buzzer patterns (won’t get stuck ON if the loop stalls)
+- ✅ Built-in LED power-on blink (`LED_BUILTIN` / GPIO35)
+
+### v2.17.0 (December 19, 2025)
+
+- ✅ **Dashboard UI Enhancements**
+- ✅ Enhanced chart visibility (300px → 400px height)
+- ✅ Dark theme chart colors optimized for readability
+- ✅ Brighter line colors (#8b9bff), better gradients, enhanced tooltips
+- ✅ Client card grid layout (3-column, col-md-4)
+- ✅ Dark theme client cards with lighter background (#353d52)
+- ✅ Proper grid height matching across rows
+- ✅ **Critical Bug Fixes**
+- ✅ Time filter unsigned integer underflow (1h/6h/24h filters now work)
+- ✅ Shows all data when uptime < requested range (graceful handling)
+- ✅ Sensor timezone application fixed (UTC + offset calculation)
+- ✅ Chart canvas restoration (temp/battery/RSSI charts re-added)
+- ✅ **Startup & Time Sync Protocol**
+- ✅ Sensor startup announcement (CMD_SENSOR_ANNOUNCE on boot)
+- ✅ Automatic time sync via reliable command queue
+- ✅ 3-hour periodic sync for accuracy maintenance
+- ✅ Fixed page indicators (1/8 through 8/8 on base station)
+- ✅ Sensor summary page (active count, newest/oldest sensors)
+- ✅ WiFi monitoring with RSSI display (page 7/8)
+
+### v2.16.0 (December 15, 2025)
 
 - ✅ **LoRa Settings Coordinated Reboot** 🎯 COMPLETED
 - ✅ ACK tracking system for multi-sensor coordination
@@ -726,24 +756,31 @@
 
 ## 🔵 Current Focus - Phase 3: Advanced Features
 
-### Recently Completed (v2.16.0):
+### Recently Completed (v2.17.0):
 
-- [x] **LoRa Settings Coordinated Reboot** ✅ COMPLETED
-- [x] ACK tracking for all sensors before base station reboot ✅
-- [x] Real-time progress monitoring in web UI ✅
-- [x] 20-second timeout with partial ACK handling ✅
-- [x] `/api/lora/reboot-status` endpoint for live status ✅
-- [x] Frontend modal with per-sensor ACK display ✅
-- [x] Sensors auto-reboot 5s after ACK, base 8s after all ACKs ✅
-- [x] **UNBLOCKED**: /lora-settings page now fully functional ✅
+- [x] **Dashboard UI Enhancements** ✅ COMPLETED
+- [x] Chart height increased to 400px for better visibility ✅
+- [x] Dark theme optimized colors (brighter blues, better gradients) ✅
+- [x] Client card 3-column grid layout ✅
+- [x] Dark theme client cards with consistent styling ✅
+- [x] **Critical Bug Fixes** ✅ COMPLETED
+- [x] Time filter underflow fixed (1h/6h/24h now work correctly) ✅
+- [x] Sensor timezone application fixed (UTC offset properly applied) ✅
+- [x] Chart canvases restored (temp/battery/RSSI) ✅
+- [x] **Startup Protocol** ✅ COMPLETED
+- [x] Sensor announcement on boot with automatic time sync ✅
+- [x] 3-hour periodic sync for accuracy ✅
+- [x] Base station display pages fixed (1/8 through 8/8) ✅
+- [x] Sensor summary page and WiFi monitoring with RSSI ✅
 
-### Previous Milestones (v2.15.0-v2.15.3):
+### Previous Milestones (v2.15.0-v2.16.0):
 
-- [x] I2C Sensor Implementations (BME680, BH1750, INA219) ✅
-- [x] UI Standardization (semantic HTML, pico-custom.css) ✅
-- [x] Runtime Config UX (loading states, auto-refresh) ✅
-- [x] Location sync between sensor and base station ✅
-- [x] Display improvements (welcome pages, 10s cycle) ✅
+- [x] LoRa Settings Coordinated Reboot (v2.16.0) ✅
+- [x] I2C Sensor Implementations - BME680, BH1750, INA219 (v2.15.0) ✅
+- [x] UI Standardization - semantic HTML, pico-custom.css (v2.15.3) ✅
+- [x] Runtime Config UX - loading states, auto-refresh (v2.15.3) ✅
+- [x] Location sync between sensor and base station (v2.15.3) ✅
+- [x] Display improvements - welcome pages, 10s cycle (v2.15.0) ✅
 
 ### Next Priority Options:
 
@@ -819,8 +856,8 @@
 | Display Enhancements        | Low        | Medium       | ⭐⭐⭐⭐       | ✅ Completed v2.15.0             |
 | UI Standardization/UX       | Low        | Medium       | ⭐⭐⭐⭐       | ✅ Completed v2.15.3             |
 | **LoRa Settings Sync**      | **Medium** | **CRITICAL** | **⭐⭐⭐⭐⭐** | **✅ Completed v2.16.0**         |
-| **Hardware Sensor Testing** | **Low**    | **High**     | **⭐⭐⭐⭐⭐** | **🟡 RECOMMENDED NEXT**          |
-| **Mesh Network Testing**    | **Low**    | **High**     | **⭐⭐⭐⭐**   | **🟢 READY FOR TESTING**         |
+| **Dashboard UI/UX**         | **Low**    | **Medium**   | **⭐⭐⭐⭐**   | **✅ Completed v2.17.0**         |
+| **Startup Protocol/Sync**   | **Low**    | **High**     | **⭐⭐⭐⭐**   | **✅ Completed v2.17.0**         |
 | **Hardware Sensor Testing** | **Low**    | **High**     | **⭐⭐⭐⭐⭐** | **🟡 RECOMMENDED NEXT**          |
 | **Mesh Network Testing**    | **Low**    | **High**     | **⭐⭐⭐⭐**   | **🟢 READY FOR TESTING**         |
 | **Runtime Config Web UI**   | **Medium** | **Medium**   | **⭐⭐⭐⭐**   | **🔵 FUTURE**                    |
@@ -834,7 +871,21 @@
 
 ## Detailed Version History
 
-### v2.15.0 (December 14, 2025) - CURRENT
+### v2.17.0 (December 19, 2025) - CURRENT
+
+- ✅ Dashboard UI Enhancements: 400px charts, dark theme colors, 3-column grid
+- ✅ Critical Bug Fixes: Time filter underflow, sensor timezone application
+- ✅ Startup Protocol: Sensor announcement, automatic time sync, 3-hour periodic sync
+- ✅ Display Improvements: Fixed page indicators (8 pages), sensor summary, WiFi RSSI monitoring
+
+### v2.16.0 (December 18, 2025)
+
+- ✅ LoRa Settings Coordinated Reboot with ACK tracking
+- ✅ Real-time progress monitoring in web UI
+- ✅ Sensor ID filtering and target validation
+- ✅ /lora-settings page now fully functional
+
+### v2.15.0 (December 14, 2025)
 
 - ✅ I2C Sensor Support: BME680, BH1750, INA219
 - ✅ Multi-sensor MQTT publishing
@@ -994,12 +1045,16 @@
 - ✅ Statistics tracking
 - ✅ Signal strength graphing
 
----10.0 (production)  
-**Status**: v2.11.0 - Architecture Refactor Complete + Multi-Sensor Ready  
-**Environment**: Lab Phase 2** ⭐ HIGHEST PRIORITY - Encryption (AES-128), whitelist, enhanced security 2. **Additional Sensor Types** - DS18B20 temperature (hardware arriving), BME680 environmental, BH1750 light 3. **Runtimapabilities:\*\*
+---
+
+**Current Status**: v2.17.0 - Dashboard UI Polish + Critical Bug Fixes  
+**Environment**: Lab Testing with AC Power  
+**Flash Usage**: Base Station 43.7% (1,460,953 bytes), RAM: 33.2% (108,792 bytes)
+
+**Current Capabilities:**
 
 - ✅ Real-time sensor monitoring via WebSocket
-- ✅ Historical data visualization (Chart.js)
+- ✅ Historical data visualization (Chart.js) with dark theme
 - ✅ MQTT publishing with Home Assistant integration
 - ✅ Modular sensor architecture (plug-and-play JST connectors)
 - ✅ Variable-length packets (up to 16 sensor values)
@@ -1012,12 +1067,38 @@
 - ✅ LittleFS filesystem (stable, no memory issues)
 - ✅ Client/Sensor separation (proper data model)
 - ✅ Independent history tracking (device vs sensors)
+- ✅ LoRa settings coordination with multi-sensor ACK tracking
+- ✅ Sensor startup announcement with automatic time sync
+- ✅ Network encryption (AES-128-CBC) with whitelist security
 
 **Recommended Next Steps (Lab Use):**
 
-1. **LoRa Settings Sync** 🔴 BLOCKING - Complete coordinated reboot protocol for changing radio parameters
-2. **Hardware Testing** 🟡 VALIDATE - Test BME680, BH1750, INA219 with actual hardware (arriving next week)
-3. **Mesh Network Testing** 🟢 READY - 3-node topology testing, code complete (v3.0.0)
-4. **Runtime Config Web UI** 🔵 FUTURE - Web interface for all remote commands
-5. **Additional Sensor Types** 🔵 FUTURE - DS18B20 1-Wire temperature (Phase 3)
-6. **Cloud Data Storage** 🔵 FUTURE - InfluxDB/ThingSpeak for long-term analytics
+1. **Hardware Testing** 🟡 HIGHEST PRIORITY - Validate I2C sensors with actual hardware
+
+   - Test BME680, BH1750, INA219 with real sensors
+   - Verify multi-sensor packets over LoRa
+   - Validate MQTT publishing with all sensor types
+   - Test LoRa settings changes with multiple devices
+   - **VALIDATES**: All Phase 2 I2C sensor code (v2.15.0)
+
+2. **Mesh Network Testing** 🟢 READY FOR TESTING - 3-node topology validation
+
+   - Code complete (v3.0.0), needs field testing
+   - Validate route discovery and forwarding
+   - Test self-healing on node failure
+   - Measure range extension through relay
+   - Web dashboard mesh status page
+   - **ADVANTAGE**: Already implemented, minimal effort to validate
+
+3. **Additional Sensor Types** 🔵 FUTURE - Expand sensor library (Phase 3-5)
+
+   - DS18B20 1-Wire temperature (Phase 3)
+   - DHT22 humidity sensor (Phase 4)
+   - Additional ADC sensors (photoresistor, soil moisture) (Phase 5)
+   - **DEPENDS ON**: Hardware availability
+
+4. **Advanced Features** 🔵 DEFERRED
+   - Deep Sleep Mode (not needed for lab use with AC power)
+   - SD Card Logging (no hardware available)
+   - OTA Firmware Updates (USB updates preferred)
+   - Cloud Data Storage (InfluxDB/ThingSpeak)

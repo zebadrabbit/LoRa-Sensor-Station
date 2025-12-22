@@ -40,4 +40,8 @@ void drawSignalGraph(int16_t* rssiHistory, uint8_t size, int x, int y, int width
 void drawBatteryIcon(uint8_t percent, int x, int y);
 void drawWifiStatus(bool connected, int x, int y);
 
+// Command notification
+void showCommandNotification();
+void updateCommandNotification();
+
 #endif // DISPLAY_CONTROL_H

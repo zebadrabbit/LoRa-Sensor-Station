@@ -50,9 +50,18 @@ struct __attribute__((packed)) AckPacket {
 struct QueuedCommand {
     CommandPacket packet;
     uint8_t retryCount;
+    uint32_t queuedAt;
     uint32_t lastAttempt;
     uint32_t timeout;
     bool waitingForAck;
+};
+
+// Failed command tracking
+struct FailedCommand {
+    uint8_t commandType;
+    uint8_t sequenceNumber;
+    uint32_t failedAtMs;
+    uint8_t reason;  // 0=timeout, 1=NACK
 };
 
 #define COMMAND_SYNC_WORD 0xCDEF
@@ -74,7 +83,7 @@ public:
     void markCommandAcked(uint8_t sensorId, uint8_t sequenceNumber);
     
     // Mark command as failed (for retry)
-    void markCommandFailed(uint8_t sensorId, uint8_t sequenceNumber);
+    void markCommandFailed(uint8_t sensorId, uint8_t sequenceNumber, uint8_t statusCode);
     
     // Process ACK/NACK received from sensor (old method - for compatibility)
     void processAck(const AckPacket* ack);
@@ -94,11 +103,37 @@ public:
     // Get retry count for current command
     uint8_t getRetryCount(uint8_t sensorId);
     
+    // Get command info for status display
+    bool getCommandInfo(uint8_t sensorId, uint8_t& commandType, uint8_t& seqNum, 
+                       uint8_t& retries, bool& waitingAck, uint32_t& ageMs);
+    
+    // Get last failed command info
+    bool getLastFailedCommand(uint8_t sensorId, uint8_t& commandType, uint8_t& seqNum, 
+                             uint32_t& ageMs, uint8_t& reason);
+
+    // Get last attempted send (includes retries). Useful for UI.
+    bool getLastSentCommand(uint8_t sensorId, uint8_t& commandType, uint8_t& seqNum, uint32_t& ageMs);
+
+    // Get last ACK/NACK observed from device (piggyback or explicit).
+    bool getLastAckedCommand(uint8_t sensorId, uint8_t& commandType, uint8_t& seqNum, uint8_t& statusCode, uint32_t& ageMs);
+    
     // Checksum calculation (public for sensor use)
     uint16_t calculateChecksum(const uint8_t* data, size_t length);
     
 private:
     std::queue<QueuedCommand> commandQueues[256]; // One queue per sensor ID
+    FailedCommand lastFailedCommand[256];          // Track last failed command per sensor
+
+    struct CommandEvent {
+        uint8_t commandType;
+        uint8_t sequenceNumber;
+        uint8_t statusCode;   // only meaningful for ACK/NACK events
+        uint32_t atMs;        // millis() when event occurred
+    };
+
+    CommandEvent lastSentCommand[256];
+    CommandEvent lastAckedCommand[256];
+
     uint8_t nextSequenceNumber;
 };
 

@@ -3,6 +3,9 @@
 #include <LittleFS.h>
 #include <stdarg.h>
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
+
 static LoggerConfig g_cfg = {
   LOG_INFO,
   true,
@@ -11,6 +14,10 @@ static LoggerConfig g_cfg = {
   "/logs.txt",
   "/logs.txt"
 };
+
+static SemaphoreHandle_t g_fsMutex = nullptr;
+static bool g_lfsReady = false;
+static bool g_lfsRepairAttempted = false;
 
 static void formatTimestamp(char* buf, size_t len) {
   time_t now = time(nullptr);
@@ -36,7 +43,14 @@ static const char* levelToStr(LogLevel level) {
 void loggerBegin(const LoggerConfig& cfg) {
   g_cfg = cfg;
   if (g_cfg.toLittleFS) {
-    LittleFS.begin(true);
+    if (g_fsMutex == nullptr) {
+      g_fsMutex = xSemaphoreCreateMutex();
+    }
+    g_lfsReady = LittleFS.begin(true);
+    if (!g_lfsReady) {
+      // If LittleFS can't mount even after auto-format, disable FS logging to avoid panics.
+      g_cfg.toLittleFS = false;
+    }
   }
 }
 
@@ -44,11 +58,41 @@ void loggerSetLevel(LogLevel level) { g_cfg.level = level; }
 LogLevel loggerGetLevel() { return g_cfg.level; }
 
 static void writeToLittleFS(const String& line) {
-  if (!g_cfg.toLittleFS) return;
-  File f = LittleFS.open(g_cfg.littlefsPath ? g_cfg.littlefsPath : "/logs.txt", FILE_APPEND);
-  if (!f) return;
-  f.println(line);
-  f.close();
+  if (!g_cfg.toLittleFS || !g_lfsReady) return;
+
+  // Never touch the filesystem from ISR context.
+  // (Some radio/WiFi callbacks may run in high-priority contexts depending on the stack.)
+  #if defined(ESP32)
+    if (xPortInIsrContext()) return;
+  #endif
+
+  if (g_fsMutex != nullptr) {
+    if (xSemaphoreTake(g_fsMutex, pdMS_TO_TICKS(50)) != pdTRUE) {
+      return;
+    }
+  }
+
+  const char* path = g_cfg.littlefsPath ? g_cfg.littlefsPath : "/logs.txt";
+  File f = LittleFS.open(path, FILE_APPEND);
+
+  // If open fails, attempt a one-time remount/format and retry.
+  if (!f && !g_lfsRepairAttempted) {
+    g_lfsRepairAttempted = true;
+    LittleFS.end();
+    g_lfsReady = LittleFS.begin(true);
+    if (g_lfsReady) {
+      f = LittleFS.open(path, FILE_APPEND);
+    }
+  }
+
+  if (f) {
+    f.println(line);
+    f.close();
+  }
+
+  if (g_fsMutex != nullptr) {
+    xSemaphoreGive(g_fsMutex);
+  }
 }
 
 static void writeToSD(const String& line) {

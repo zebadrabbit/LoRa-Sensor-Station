@@ -14,6 +14,7 @@
 #endif
 #ifdef SENSOR_NODE
 #include "remote_config.h"
+#include "buzzer.h"
 #endif
 #include <Arduino.h>
 #include <sys/time.h>
@@ -28,6 +29,8 @@ static uint16_t currentNetworkId = 0;  // Current network ID for validation
 static bool pendingWebSocketBroadcast = false;  // Flag to trigger broadcast from main loop
 static bool pendingCommandSend = false;  // Flag to send command from main loop
 static uint8_t pendingCommandSensorId = 0;
+static uint32_t pendingCommandReadyAtMs = 0;
+static const uint32_t BASE_RX_TO_TX_HOLDDOWN_MS = 120;  // allow radio to settle after RX before TX
 #endif
 
 #ifdef SENSOR_NODE
@@ -36,7 +39,8 @@ uint8_t lastCommandAckStatus = 0;     // Status of last command (0=success, non-
 static bool pendingAckSend = false;   // Flag to send immediate telemetry with ACK
 static uint32_t forcedIntervalUntil = 0;  // Timestamp until which to use forced 10s interval
 static const uint32_t FORCED_INTERVAL_MS = 10000;  // 10 seconds
-static const uint32_t FORCED_INTERVAL_DURATION = 60000;  // Keep forced interval for 60 seconds after command
+static const uint32_t FORCED_INTERVAL_DURATION = 30000;  // Keep forced interval for 30 seconds after command
+static uint32_t ackFieldsValidUntil = 0;  // keep lastCommandSeq/ackStatus valid for a short window
 #endif
 
 // Calculate LoRa sync word from network ID
@@ -44,6 +48,34 @@ static const uint32_t FORCED_INTERVAL_DURATION = 60000;  // Keep forced interval
 uint8_t calculateSyncWord(uint16_t networkId) {
     return 0x12 + (networkId % 244);  // 0x12 to 0xFF (244 values)
 }
+
+// Forward declarations
+#ifdef BASE_STATION
+void sendCommandNow(uint8_t sensorId);
+
+// Broadcast wake ping: wakes all listening sensors and shows "Cmd Recv'd".
+// This is intentionally NOT queued/tracked for ACKs to avoid collisions.
+void sendBroadcastWakePing() {
+  CommandPacket cmd;
+  cmd.syncWord = COMMAND_SYNC_WORD;
+  cmd.commandType = CMD_PING;
+  cmd.targetSensorId = 0xFF;  // broadcast
+  cmd.sequenceNumber = 0;     // not tracked/acked
+  cmd.dataLength = 0;
+  memset(cmd.data, 0, sizeof(cmd.data));
+
+  extern RemoteConfigManager remoteConfigManager;
+  size_t checksumLength = sizeof(CommandPacket) - sizeof(uint16_t);
+  cmd.checksum = remoteConfigManager.calculateChecksum((const uint8_t*)&cmd, checksumLength);
+
+  // Preempt RX and transmit immediately.
+  Radio.Standby();
+  delay(20);
+  Radio.Send((uint8_t*)&cmd, sizeof(CommandPacket));
+  lora_idle = false;
+  LOGI("CMD", "Broadcast wake ping sent (CMD_PING, target=0xFF)");
+}
+#endif
 
 // Extern declarations
 
@@ -236,9 +268,14 @@ void OnTxDone() {
   recordTxSuccess();
   #ifdef SENSOR_NODE
     blinkLED(getColorBlue(), 2, 100);
-    // Clear ACK fields after sending them once
-    lastProcessedCommandSeq = 0;
-    lastCommandAckStatus = 0;
+    // Keep ACK fields alive briefly so the base has multiple chances to observe them.
+    // They are cleared when the forced ACK window expires.
+    if (lastProcessedCommandSeq != 0 && ackFieldsValidUntil != 0 && (int32_t)(millis() - ackFieldsValidUntil) >= 0) {
+      lastProcessedCommandSeq = 0;
+      lastCommandAckStatus = 0;
+      ackFieldsValidUntil = 0;
+      forcedIntervalUntil = 0;
+    }
     // Go back to RX mode to listen for commands
     // Use Standby to properly reset radio state after TX
     Radio.Standby();
@@ -735,6 +772,50 @@ void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr) {
           pendingWebSocketBroadcast = true;  // Set flag instead of calling from ISR
         }
         
+        #ifdef BASE_STATION
+        // Check if this multi-sensor telemetry packet contains an ACK for a previous command
+        extern RemoteConfigManager remoteConfigManager;
+        if (received.header.lastCommandSeq != 0) {
+          Serial.printf("ACK received from sensor %d (seq %d, status %d)\n",
+                       received.header.sensorId, received.header.lastCommandSeq, 
+                       received.header.ackStatus);
+          
+          // Clear the command from queue
+          remoteConfigManager.handleAck(received.header.sensorId, received.header.lastCommandSeq, 
+                                       received.header.ackStatus);
+          
+          // Diagnostics hook: record observed ACK with link stats
+          wifiPortal.diagnosticsRecordAck(received.header.sensorId, received.header.lastCommandSeq, rssi, snr);
+          
+          if (received.header.ackStatus == 0) {
+            Serial.println("✅ Command executed successfully!");
+            
+            // Check if this is a LoRa settings ACK and update tracking
+            extern void updateLoRaRebootTracking(uint8_t sensorId);
+            updateLoRaRebootTracking(received.header.sensorId);
+          } else {
+            Serial.printf("❌ Command failed with error code: %d\n", received.header.ackStatus);
+          }
+        }
+        
+        Serial.printf("DEBUG: Telemetry received from sensor %d\n", received.header.sensorId);
+        
+        // Schedule any pending commands shortly after RX completes.
+        // Do NOT transmit from inside this callback.
+        if (remoteConfigManager.getQueuedCount(received.header.sensorId) > 0) {
+          if (!pendingCommandSend) {
+            pendingCommandSend = true;
+            pendingCommandSensorId = received.header.sensorId;
+            pendingCommandReadyAtMs = millis() + BASE_RX_TO_TX_HOLDDOWN_MS;
+            Serial.printf("📬 Sensor %d has pending commands; scheduling send in %lu ms...\n",
+                         pendingCommandSensorId, (unsigned long)BASE_RX_TO_TX_HOLDDOWN_MS);
+          } else {
+            Serial.printf("📬 Pending command already scheduled; skipping schedule for sensor %d\n",
+                         received.header.sensorId);
+          }
+        }
+        #endif
+        
         Serial.printf("Sensor ID: %d\n", received.header.sensorId);
         Serial.printf("Value Count: %d\n", received.header.valueCount);
         for (int i = 0; i < received.header.valueCount; i++) {
@@ -761,37 +842,6 @@ void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr) {
         Serial.printf("RSSI: %d dBm\n", rssi);
         Serial.printf("SNR: %d dB\n", snr);
         Serial.println("====================\n");
-        
-        #ifdef BASE_STATION
-        // Check if this telemetry packet contains an ACK for a previous command
-        extern RemoteConfigManager remoteConfigManager;
-        if (received.header.lastCommandSeq != 0) {
-          Serial.printf("ACK received from sensor %d (seq %d, status %d)\n",
-                       received.header.sensorId, received.header.lastCommandSeq, 
-                       received.header.ackStatus);
-          
-          // Clear the command from queue
-          remoteConfigManager.handleAck(received.header.sensorId, received.header.lastCommandSeq, 
-                                       received.header.ackStatus);
-          
-          // Diagnostics hook: record observed ACK with link stats
-          wifiPortal.diagnosticsRecordAck(received.header.sensorId, received.header.lastCommandSeq, rssi, snr);
-          
-          if (received.header.ackStatus == 0) {
-            Serial.println("Command executed successfully!");
-            
-            // Check if this is a LoRa settings ACK and update tracking
-            extern void updateLoRaRebootTracking(uint8_t sensorId);
-            updateLoRaRebootTracking(received.header.sensorId);
-          } else {
-            Serial.printf("Command failed with error code: %d\n", received.header.ackStatus);
-          }
-        }
-        
-        // Check if there are pending commands for this sensor
-        // Commands are now sent immediately when queued, not here
-        Serial.printf("DEBUG: Telemetry received from sensor %d\n", received.header.sensorId);
-        #endif
         
         // LED feedback based on battery level
         if (received.header.batteryPercent > 80) {
@@ -829,7 +879,8 @@ void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr) {
         
         // Check if command is for this sensor
         SensorConfig sensorConfig = configStorage.getSensorConfig();
-        if (cmd->targetSensorId != sensorConfig.sensorId) {
+        const bool isBroadcast = (cmd->targetSensorId == 0xFF);
+        if (!isBroadcast && cmd->targetSensorId != sensorConfig.sensorId) {
           Serial.printf("Command not for this sensor (target=%d, my_id=%d) - ignoring\n", cmd->targetSensorId, sensorConfig.sensorId);
           lora_idle = true;
           return;
@@ -843,6 +894,23 @@ void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr) {
         if (cmd->checksum == expectedChecksum) {
           // Process command and save ACK status for next telemetry packet
           bool success = false;
+          
+          // Show visual notification on OLED
+          extern void showCommandNotification();
+          showCommandNotification();
+
+          // Happy beep for received commands
+          buzzerPlayCommandReceived();
+
+          // Special case: broadcast ping is used as a "wake screens" signal.
+          // Do not force telemetry/ACKs to avoid multi-sensor collisions.
+          if (isBroadcast && cmd->commandType == CMD_PING) {
+            Serial.println("Broadcast wake ping received - waking display only (no ACK)");
+            blinkLED(getColorBlue(), 1, 80);
+            Radio.Rx(0);
+            lora_idle = true;
+            return;
+          }
           
           switch (cmd->commandType) {
             case CMD_PING: {
@@ -1036,9 +1104,10 @@ void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr) {
           lastProcessedCommandSeq = cmd->sequenceNumber;
           lastCommandAckStatus = success ? 0 : 2; // 0 = success, 2 = execution failed
           
-          // Activate forced interval mode for 60 seconds to allow quick follow-up commands
+          // Activate forced interval mode briefly so the base has multiple chances to see the ACK
           forcedIntervalUntil = millis() + FORCED_INTERVAL_DURATION;
-          Serial.printf("🕐 Forced 10s interval activated for next 60 seconds (until %lu)\n", forcedIntervalUntil);
+          ackFieldsValidUntil = forcedIntervalUntil;
+          Serial.printf("🕐 Forced 10s interval activated for next 30 seconds (until %lu)\n", forcedIntervalUntil);
           
           Serial.printf("Command processed. ACK will be sent in next telemetry (seq %d, status %d)\n", 
                        lastProcessedCommandSeq, lastCommandAckStatus);
@@ -1058,7 +1127,8 @@ void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr) {
           
           // Activate forced interval mode even on checksum error
           forcedIntervalUntil = millis() + FORCED_INTERVAL_DURATION;
-          Serial.printf("🕐 Forced 10s interval activated for next 60 seconds (until %lu)\n", forcedIntervalUntil);
+          ackFieldsValidUntil = forcedIntervalUntil;
+          Serial.printf("🕐 Forced 10s interval activated for next 30 seconds (until %lu)\n", forcedIntervalUntil);
           
           blinkLED(getColorRed(), 3, 50);
           // Trigger immediate telemetry send with NACK
@@ -1068,14 +1138,15 @@ void OnRxDone(uint8_t *payload, uint16_t size, int16_t rssi, int8_t snr) {
           lora_idle = true;
         }
       } else {
-        // Not a command for us, go back to RX mode
-        Serial.println("Not our command, back to RX");
+        // Not a command for us, stay in RX mode
+        LOGD("RX", "Not our command, continuing to listen");
         Radio.Rx(0);
         lora_idle = true;
       }
     } else {
-      // Invalid command packet, go back to sleep
-      Radio.Sleep();
+      // Invalid command packet, stay in RX mode
+      LOGW("RX", "Invalid command packet, continuing to listen");
+      Radio.Rx(0);
       lora_idle = true;
     }
     
@@ -1099,9 +1170,9 @@ void OnRxTimeout() {
     lora_idle = true;
   #endif
   #ifdef SENSOR_NODE
-    // No command received, go back to sleep
-    Serial.println("RX timeout - no commands received");
-    Radio.Sleep();
+    // Stay in RX mode - sensor should always be listening for commands
+    LOGD("RX", "RX timeout - continuing to listen");
+    Radio.Rx(0);
     lora_idle = true;
   #endif
 }
@@ -1132,6 +1203,24 @@ void handlePendingWebSocketBroadcast() {
   }
 }
 
+// Send scheduled command after RX hold-down (main loop only)
+void handlePendingCommandSend() {
+  if (!pendingCommandSend) {
+    return;
+  }
+  // Wait for hold-down time
+  if ((int32_t)(millis() - pendingCommandReadyAtMs) < 0) {
+    return;
+  }
+
+  uint8_t sensorId = pendingCommandSensorId;
+  pendingCommandSend = false;
+  pendingCommandSensorId = 0;
+  pendingCommandReadyAtMs = 0;
+
+  sendCommandNow(sensorId);
+}
+
 // Send command immediately to sensor (sensor is always listening)
 void sendCommandNow(uint8_t sensorId) {
   extern RemoteConfigManager remoteConfigManager;
@@ -1142,9 +1231,15 @@ void sendCommandNow(uint8_t sensorId) {
     return;  // No command or still waiting for ACK
   }
   
-  Serial.printf("Sending command type %d to sensor %d (seq %d, retry %d)\n", 
-               cmd->commandType, cmd->targetSensorId, cmd->sequenceNumber,
-               remoteConfigManager.getRetryCount(sensorId));
+  Serial.printf("🚀 Sending command type %d to sensor %d (seq %d, retry %d, targetSensorId=%d)\n", 
+               cmd->commandType, sensorId, cmd->sequenceNumber,
+               remoteConfigManager.getRetryCount(sensorId), cmd->targetSensorId);
+  
+  // CRITICAL DEBUG: Verify targetSensorId matches the queue ID
+  if (cmd->targetSensorId != sensorId) {
+    Serial.printf("⚠️ WARNING: Mismatch! Queue sensorId=%d but packet targetSensorId=%d\n", 
+                 sensorId, cmd->targetSensorId);
+  }
   
   size_t cmdSize = sizeof(CommandPacket);
   
@@ -1161,11 +1256,37 @@ void sendCommandNow(uint8_t sensorId) {
 // Check all sensors for commands that need retry
 void checkCommandRetries() {
   extern RemoteConfigManager remoteConfigManager;
-  
-  // Check sensors 1-10 (common sensor ID range)
-  for (uint8_t sensorId = 1; sensorId <= 10; sensorId++) {
-    if (remoteConfigManager.getQueuedCount(sensorId) > 0) {
-      sendCommandNow(sensorId);
+
+  // Only update retry state (timeouts). Actual sends happen after we receive telemetry
+  // from a sensor and schedule a send during its RX window.
+  remoteConfigManager.processRetries();
+
+  // Reliability kick: if a command has been queued but we haven't managed to schedule a send
+  // (e.g., missed RX scheduling), periodically schedule one attempt when the radio is idle.
+  static uint32_t lastKickMs = 0;
+  if (!pendingCommandSend && isLoRaIdle() && (millis() - lastKickMs) > 1000) {
+    extern ClientInfo* getAllClients();
+    ClientInfo* allClients = getAllClients();
+    for (uint8_t i = 0; i < 10; i++) {
+      const uint8_t clientId = allClients[i].clientId;
+      if (clientId == 0) {
+        continue;
+      }
+      if (remoteConfigManager.getQueuedCount(clientId) == 0) {
+        continue;
+      }
+
+      uint8_t cmdType, seqNum, retries;
+      bool waitingAck;
+      uint32_t ageMs;
+      if (remoteConfigManager.getCommandInfo(clientId, cmdType, seqNum, retries, waitingAck, ageMs) && !waitingAck) {
+        pendingCommandSend = true;
+        pendingCommandSensorId = clientId;
+        pendingCommandReadyAtMs = millis();
+        lastKickMs = millis();
+        Serial.printf("📬 Kick-scheduling pending command send for sensor %d\n", pendingCommandSensorId);
+        break;
+      }
     }
   }
 }
@@ -1183,6 +1304,14 @@ bool shouldSendImmediateAck() {
 
 // Get the effective transmit interval (may be forced to 10s after command reception)
 uint32_t getEffectiveTransmitInterval(uint32_t configuredInterval) {
+  // Clear ACK fields and forced mode once the window expires
+  if (ackFieldsValidUntil != 0 && (int32_t)(millis() - ackFieldsValidUntil) >= 0) {
+    lastProcessedCommandSeq = 0;
+    lastCommandAckStatus = 0;
+    ackFieldsValidUntil = 0;
+    forcedIntervalUntil = 0;
+  }
+
   // If we're in forced interval mode and it hasn't expired
   if (millis() < forcedIntervalUntil) {
     // Use the shorter of: configured interval or forced 10s interval

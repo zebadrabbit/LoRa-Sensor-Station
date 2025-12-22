@@ -24,8 +24,8 @@
 #include "mbedtls/md.h"
 
 // Security configuration
-#define AES_KEY_SIZE 16          // 128-bit key
-#define AES_BLOCK_SIZE 16        // 128-bit blocks
+#define LORA_AES_KEY_SIZE 16     // 128-bit key
+#define LORA_AES_BLOCK_SIZE 16   // 128-bit blocks
 #define MAX_WHITELIST_SIZE 32    // Maximum whitelisted devices
 #define HMAC_SIZE 8              // Truncated HMAC for space efficiency
 
@@ -33,12 +33,12 @@
  * @brief Security configuration stored in NVS
  */
 struct SecurityConfig {
-    bool encryptionEnabled;                  // Enable/disable encryption
-    bool whitelistEnabled;                   // Enable/disable whitelist
-    uint8_t encryptionKey[AES_KEY_SIZE];    // 128-bit AES key
-    uint8_t whitelistCount;                  // Number of whitelisted devices
-    uint8_t whitelist[MAX_WHITELIST_SIZE];   // Whitelisted sensor IDs
-    uint32_t sequenceNumber;                 // Replay prevention counter
+    bool encryptionEnabled;                      // Enable/disable encryption
+    bool whitelistEnabled;                       // Enable/disable whitelist
+    uint8_t encryptionKey[LORA_AES_KEY_SIZE];   // 128-bit AES key
+    uint8_t whitelistCount;                      // Number of whitelisted devices
+    uint8_t whitelist[MAX_WHITELIST_SIZE];       // Whitelisted sensor IDs
+    uint32_t sequenceNumber;                     // Replay prevention counter
 };
 
 /**
@@ -55,7 +55,7 @@ struct EncryptedPacket {
     uint8_t hmac[HMAC_SIZE];
     uint8_t payload[200];  // Maximum encrypted payload
     uint16_t payloadSize;
-    uint8_t iv[AES_BLOCK_SIZE];  // Initialization vector
+    uint8_t iv[LORA_AES_BLOCK_SIZE];  // Initialization vector
 };
 
 /**

@@ -24,6 +24,7 @@
 #include "sensor_manager.h"
 #include "thermistor_sensor.h"
 #include "remote_config.h"
+#include "buzzer.h"
 #endif
 
 // Global Variables
@@ -50,9 +51,31 @@ const char* FIRMWARE_VERSION = "v3.0.0 - Mesh Network Support";
 // ============================================================================
 // SETUP
 // ============================================================================
+static void builtinPowerOnBlink() {
+#if defined(ENABLE_BUILTIN_POWERON_BLINK) && (ENABLE_BUILTIN_POWERON_BLINK != 0)
+  #ifdef LED_BUILTIN
+    pinMode(LED_BUILTIN, OUTPUT);
+    const uint8_t onLevel  = (BUILTIN_LED_ACTIVE_LOW ? LOW : HIGH);
+    const uint8_t offLevel = (BUILTIN_LED_ACTIVE_LOW ? HIGH : LOW);
+    digitalWrite(LED_BUILTIN, offLevel);
+    for (int i = 0; i < (int)BUILTIN_POWERON_BLINKS; i++) {
+      digitalWrite(LED_BUILTIN, onLevel);
+      delay((int)BUILTIN_POWERON_BLINK_MS);
+      digitalWrite(LED_BUILTIN, offLevel);
+      delay((int)BUILTIN_POWERON_BLINK_MS);
+    }
+  #endif
+#endif
+}
+
 void setup() {
   Serial.begin(115200);
   delay(1000);
+
+  // Early, simple power-on indicator on the built-in LED (GPIO35 / LED_BUILTIN).
+  // This is separate from the optional WS2812 status LED logic.
+  builtinPowerOnBlink();
+
   // Initialize unified logger (Serial + LittleFS optional)
   LoggerConfig logCfg;
   logCfg.level = LOG_INFO;
@@ -69,7 +92,13 @@ void setup() {
   // Initialize LED and display early
   initLED();
   initDisplay();
-  
+
+  #ifdef SENSOR_NODE
+    // Non-blocking piezo buzzer
+    buzzerInit(BUZZER_PIN);
+    buzzerPlayStartupChime();
+  #endif
+
   // Initialize configuration storage
   configStorage.begin();
   
@@ -117,6 +146,10 @@ void setup() {
     meshRouter.setForwardingEnabled(sensorConfig.meshForwarding);
     
     #ifdef SENSOR_NODE
+    // Non-blocking piezo buzzer
+    // buzzerInit(BUZZER_PIN);
+    // buzzerPlayStartupChime();
+
     // Initialize sensor manager
     Serial.println("\n=== Initializing Sensor Manager ===");
     sensorManager.begin();
@@ -296,7 +329,10 @@ void loop() {
     delay(2000);
     ESP.restart();
   }
-  
+
+  #ifdef SENSOR_NODE
+  #endif
+
   #ifdef BASE_STATION
   // Check for LoRa settings reboot timeout (if not all sensors ACKed within 20s)
   extern void checkLoRaRebootTimeout();
@@ -320,10 +356,14 @@ void loop() {
   }
   
   Radio.IrqProcess();
+
   
   #ifdef BASE_STATION
   // Handle any pending WebSocket broadcasts from LoRa ISR
   handlePendingWebSocketBroadcast();
+
+  // Send any scheduled command after RX hold-down
+  handlePendingCommandSend();
   
   // Check for commands that need retry (every loop)
   checkCommandRetries();
@@ -528,8 +568,18 @@ void loop() {
       #endif // SENSOR_NODE
     }
   } else if (mode == MODE_BASE_STATION) {
-    // Base station mode: Enter RX mode when idle
-    enterRxMode();
+    // Base station mode
+    // Double-click ping: broadcast wake ping to all listening sensors
+    bool wakePing = shouldSendImmediatePing();
+    if (wakePing) {
+      clearImmediatePingFlag();
+      #ifdef BASE_STATION
+      sendBroadcastWakePing();
+      #endif
+    } else {
+      // Enter RX mode when idle
+      enterRxMode();
+    }
     
     BaseStationConfig baseConfig = configStorage.getBaseStationConfig();
     NTPConfig ntp = configStorage.getNTPConfig();
